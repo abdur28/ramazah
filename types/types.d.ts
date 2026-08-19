@@ -1,27 +1,22 @@
-import { Timestamp } from 'firebase/firestore';
 
 // ============ USER TYPES ============
 
 export type UserRole = 'user' | 'admin';
 export type SignInMethod = 'email' | 'google';
-export type CurrencyCode = 'rub' | 'usd';
+export type CurrencyCode = 'ngn' | 'usd' | 'egp';
 
 export interface UserProfile {
-  uid: string;
+  uid: string;            // profiles.id (auth.users.id)
   email: string;
   displayName?: string;
   photoURL?: string;
-  
-  // Role
+  phone?: string;
+
   role: UserRole;
-  
-  // Sign-in method
-  signInMethod: SignInMethod;
-  
-  // Additional fields
+
   emailVerified: boolean;
-  
-  // Optional address
+
+  // Default address, denormalised from the addresses table for convenience.
   address?: {
     fullName: string;
     phone: string;
@@ -31,19 +26,17 @@ export interface UserProfile {
     zipCode: string;
     country: string;
   };
-  
-  preferences?: UserPreferences;
-  
-  // Relations (stored as arrays of IDs)
-  orders: string[];
-  wishlistItems: string[];
-  
-  // Preferences
-  emailOptIn?: boolean;
 
+  preferences?: UserPreferences;
+
+  emailOptIn?: boolean;
   status?: 'active' | 'inactive';
-  
-  // Timestamps
+
+  // Relations now live in their own tables; kept optional for legacy callers.
+  orders?: string[];
+  wishlistItems?: string[];
+  signInMethod?: SignInMethod;
+
   createdAt: any;
   updatedAt: any;
 }
@@ -72,8 +65,8 @@ export interface Address {
   zipCode: string;
   country: string;
   isDefault: boolean;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============ PRODUCT TYPES ============
@@ -88,16 +81,32 @@ export interface ProductImage {
   isPrimary: boolean;
 }
 
+export interface ProductOptionValue {
+  value: string;
+  hex?: string;   // colour swatches only
+}
+
+export interface ProductOptionDef {
+  name: string;                    // 'Weight', 'Grind', 'Shade', 'Colour', 'Size'
+  values: ProductOptionValue[];
+}
+
 export interface ProductVariant {
   id: string;
-  size?: string;
-  color?: Color;
   sku: string;
+  label?: string;                       // rendered axes, e.g. '250g / Ground'
+  options?: Record<string, string>;     // { Weight: '250g', Grind: 'Ground' }
   prices?: ProductPrice[];
   stockCount: number;
   inStock: boolean;
-  imagePublicIds?: string[];
   weight?: number;
+  expiryDate?: string;
+
+  // Legacy apparel axes, derived from options named Size/Colour when present.
+  // Empty for most of the catalog; the storefront redesign should drop them.
+  size?: string;
+  color?: Color;
+  imagePublicIds?: string[];
 }
 
 export interface Product {
@@ -122,6 +131,12 @@ export interface Product {
   lowStockAlert?: number;
   
   tags: string[];
+  options?: ProductOptionDef[];
+  isPerishable?: boolean;
+  ratingAvg?: number;
+  ratingCount?: number;
+
+  // Legacy apparel axes — see ProductVariant above.
   colors: Color[];
   sizes: string[];
   materials?: string[];
@@ -258,6 +273,13 @@ export interface OrderItem {
   price: number;
   currency: CurrencyCode;
   quantity: number;
+  lineTotal?: number;
+
+  // Snapshot of the variant at purchase time.
+  variantLabel?: string;              // '250g / Ground'
+  options?: Record<string, string>;
+
+  // Legacy apparel axes, derived from options when present.
   size?: string;
   color?: Color;
   imageUrl: string;
@@ -337,6 +359,10 @@ export interface CreateOrderData {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+
+  discountCode?: string;
+  /** Pass a stable key per checkout attempt so retries return the original order. */
+  idempotencyKey?: string;
 }
 
 // ============ WISHLIST TYPES ============
@@ -345,7 +371,7 @@ export interface WishlistItem {
   id: string;
   userId: string;
   productId: string;
-  addedAt: Timestamp;
+  addedAt: string;
 }
 
 // ============ FILTER & QUERY TYPES ============

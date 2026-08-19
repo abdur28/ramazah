@@ -1,12 +1,7 @@
 import { create } from "zustand";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = () => createClient();
 import { AdminMailerDataStore, EmailRecipient, EmailCampaign, EmailStats } from '@/types/admin';
 import { getProductsByIds } from "@/lib/products";
 
@@ -65,37 +60,28 @@ const useAdminMailer = create<AdminMailerDataStore>((set, get) => ({
     }));
     
     try {
-      let usersQuery = query(collection(db, 'users'));
-      
-      // Filter by email notification preferences if specified
+      let q = supabase()
+        .from('profiles')
+        .select('id, email, display_name, preferences, email_opt_in, created_at');
+
       if (emailType) {
-        usersQuery = query(
-          usersQuery,
-          where(`preferences.emailNotifications.${emailType}`, '==', true)
-        );
+        // Match inside the preferences jsonb column.
+        q = q.eq(`preferences->emailNotifications->>${emailType}`, 'true');
       } else {
-        // Get users who opted in for ANY email type
-        usersQuery = query(
-          usersQuery,
-          where('emailOptIn', '==', true)
-        );
+        q = q.eq('email_opt_in', true);
       }
-      
-      usersQuery = query(usersQuery, orderBy('createdAt', 'desc'));
-      
-      const snapshot = await getDocs(usersQuery);
-      
-      const recipients: EmailRecipient[] = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          email: data.email,
-          displayName: data.displayName,
-          firstName: data.displayName?.split(' ')[0],
-          preferences: data.preferences,
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
-        };
-      });
+
+      const { data, error } = await q.order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+
+      const recipients: EmailRecipient[] = (data ?? []).map((row: any) => ({
+        id: row.id,
+        email: row.email,
+        displayName: row.display_name,
+        firstName: row.display_name?.split(' ')[0],
+        preferences: row.preferences,
+        createdAt: row.created_at,
+      }));
       
       set(state => ({
         emailRecipients: recipients,
@@ -129,18 +115,22 @@ const useAdminMailer = create<AdminMailerDataStore>((set, get) => ({
     }));
     
     try {
-      // Fetch all users
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const users = usersSnapshot.docs.map(doc => doc.data());
-      
-      // Calculate stats
+      const { data, error } = await supabase()
+        .from('profiles').select('email_opt_in, preferences');
+      if (error) throw new Error(error.message);
+
+      const users = data ?? [];
+      const optedInto = (type: string) =>
+        users.filter((u: any) => u.preferences?.emailNotifications?.[type]).length;
+
       const stats: EmailStats = {
         totalUsers: users.length,
-        totalOptedIn: users.filter(u => u.emailOptIn).length,
-        promotionsOptedIn: users.filter(u => u.preferences?.emailNotifications?.promotions).length,
-        newArrivalsOptedIn: users.filter(u => u.preferences?.emailNotifications?.newArrivals).length,
-        newsletterOptedIn: users.filter(u => u.preferences?.emailNotifications?.newsletter).length,
-        totalCampaigns: 0, // Would come from campaigns collection
+        totalOptedIn: users.filter((u: any) => u.email_opt_in).length,
+        promotionsOptedIn: optedInto('promotions'),
+        newArrivalsOptedIn: optedInto('newArrivals'),
+        newsletterOptedIn: optedInto('newsletter'),
+        // No campaigns table yet — the feature is still a stub.
+        totalCampaigns: 0,
         campaignsThisMonth: 0,
         emailsSentTotal: 0,
         emailsSentThisMonth: 0

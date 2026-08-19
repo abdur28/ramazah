@@ -53,7 +53,7 @@ export default function AddToCartSection({
 
     setIsTogglingWishlist(true);
     try {
-      await toggleWishlist(product.id, user.uid);
+      await toggleWishlist(product.id, user.id);
     } catch (error) {
       console.error("Failed to toggle wishlist:", error);
     } finally {
@@ -89,7 +89,7 @@ export default function AddToCartSection({
         if (selectedVariant.color) cartItem.color = selectedVariant.color;
       }
 
-      await addItem(cartItem, user?.uid);
+      await addItem(cartItem, user?.id);
 
       setTimeout(() => setIsAdding(false), 1000);
     } catch (error) {

@@ -1,90 +1,62 @@
 // lib/auth/server.ts
-import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
-import { adminAuth } from '@/lib/firebase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { UserRole } from '@/types/types';
-import { getUserProfile } from '../firebase/auth';
-
-const COOKIE_NAME = 'auth-token';
 
 export interface AuthUser {
   uid: string;
   email: string | undefined;
   role: UserRole;
+  displayName?: string;
+  photoURL?: string;
 }
 
 /**
- * Get current authenticated user in Server Component
- * Returns null if not authenticated
+ * Current user in a Server Component, or null.
+ * These guards are UX and convenience — RLS is the actual security boundary,
+ * because a mobile client never executes them.
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(COOKIE_NAME)?.value;
+  const supabase = await createClient();
 
-    if (!sessionCookie) {
-      return null;
-    }
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
 
-    // Verify session cookie
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const user = await getUserProfile(decodedClaims.uid);
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, email, display_name, photo_url, role')
+    .eq('id', user.id)
+    .maybeSingle();
 
-    if (!user) {
-      return null;
-    }
+  if (!profile) return null;
 
-    return {
-      uid: user.uid,
-      email: user.email,
-      role: (user.role as UserRole) || 'user',
-    };
-  } catch (error) {
-    // Invalid or expired session
-    return null;
-  }
+  return {
+    uid: profile.id,
+    email: profile.email ?? user.email,
+    role: (profile.role as UserRole) || 'user',
+    displayName: profile.display_name ?? undefined,
+    photoURL: profile.photo_url ?? undefined,
+  };
 }
 
-/**
- * Require authentication in Server Component
- * Redirects to login if not authenticated
- */
 export async function requireAuth(redirectUrl?: string): Promise<AuthUser> {
   const user = await getCurrentUser();
-
   if (!user) {
-    redirect(`/auth/login${redirectUrl ? `?redirect=${redirectUrl}` : ''}`);
+    redirect(`/auth/login${redirectUrl ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''}`);
   }
-
   return user;
 }
 
-/**
- * Require admin role in Server Component
- * Redirects to home if not admin
- */
 export async function requireAdmin(redirectUrl?: string): Promise<AuthUser> {
   const user = await requireAuth(redirectUrl);
-
-  if (user.role !== 'admin') {
-    notFound();
-  }
-
+  if (user.role !== 'admin') notFound();
   return user;
 }
 
-/**
- * Check if current user is admin
- */
 export async function isAdmin(): Promise<boolean> {
-  const user = await getCurrentUser();
-  return user?.role === 'admin';
+  return (await getCurrentUser())?.role === 'admin';
 }
 
-/**
- * Check if user is authenticated
- */
 export async function isAuthenticated(): Promise<boolean> {
-  const user = await getCurrentUser();
-  return user !== null;
+  return (await getCurrentUser()) !== null;
 }

@@ -5,7 +5,7 @@ import {
   getWishlist as getWishlistFirebase
 } from '@/lib/products';
 import { getUserOrders } from '@/lib/orders';
-import { updateUserProfile, getUserProfile, updateUserEmail, updateUserPassword } from '@/lib/firebase/auth';
+import { updateUserProfile, getUserProfile, updateUserEmail, updateUserPassword } from '@/lib/supabase/auth';
 import type { Product, UserPreferences, Order } from '@/types/types';
 
 interface DashboardState {

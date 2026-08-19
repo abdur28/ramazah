@@ -41,12 +41,12 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
 
   // Handle quantity change
   const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
-    await updateQuantity(itemId, newQuantity, user?.uid);
+    await updateQuantity(itemId, newQuantity, user?.id);
   };
 
   // Handle remove item
   const handleRemoveItem = async (itemId: string) => {
-    await removeItem(itemId, user?.uid);
+    await removeItem(itemId, user?.id);
   };
 
   return (

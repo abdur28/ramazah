@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { createClient } from '@/lib/supabase/client';
 import {
   AdminAnalyticsDataStore,
   AdminAnalytics,
@@ -75,6 +74,55 @@ const generateMockTransactions = (): Transaction[] => {
 /**
  * Admin hook for analytics data
  */
+const supabase = () => createClient();
+
+/**
+ * The aggregations below read camelCase fields. These loaders map Supabase rows
+ * into that shape so the calculation logic stays untouched.
+ */
+async function loadUsers() {
+  const { data, error } = await supabase()
+    .from('profiles').select('id, email, display_name, role, status, created_at');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r: any) => ({
+    uid: r.id, email: r.email, displayName: r.display_name,
+    role: r.role, status: r.status, createdAt: r.created_at, address: undefined,
+  }));
+}
+
+async function loadOrders() {
+  const { data, error } = await supabase()
+    .from('orders')
+    .select('id, order_number, user_id, total, subtotal, status, payment_status, currency, created_at, payment_method, customer_name, customer_email');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r: any) => ({
+    id: r.id, orderNumber: r.order_number, userId: r.user_id,
+    total: Number(r.total), subtotal: Number(r.subtotal),
+    status: r.status, paymentStatus: r.payment_status,
+    currency: String(r.currency).toLowerCase(),
+    paymentMethod: r.payment_method,
+    customerName: r.customer_name, customerEmail: r.customer_email,
+    createdAt: r.created_at,
+  }));
+}
+
+async function loadProducts() {
+  // product_listing carries the variant-derived stock and price aggregates.
+  const { data, error } = await supabase()
+    .from('product_listing')
+    .select('id, name, category_path, total_stock, in_stock, min_price, price_currency, sales_count, view_count, low_stock_alert, created_at');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r: any) => ({
+    id: r.id, name: r.name, categoryPath: r.category_path ?? '',
+    totalStock: r.total_stock ?? 0, inStock: !!r.in_stock,
+    prices: r.min_price != null
+      ? [{ currency: String(r.price_currency ?? 'NGN').toLowerCase(), price: Number(r.min_price) }]
+      : [],
+    salesCount: r.sales_count ?? 0, viewCount: r.view_count ?? 0,
+    lowStockAlert: r.low_stock_alert ?? 5, createdAt: r.created_at,
+  }));
+}
+
 const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
   // State
   analytics: null,
@@ -119,11 +167,7 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
    */
   fetchCustomerAnalytics: async (): Promise<CustomerAnalytics> => {
     try {
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const users = usersSnapshot.docs.map(doc => ({ 
-        uid: doc.id, 
-        ...doc.data() 
-      } as UserProfile));
+      const users: any[] = await loadUsers();
       
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -158,11 +202,7 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         : 0;
       
       // Get orders for customer analytics
-      const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      const orders = ordersSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Order));
+      const orders: any[] = await loadOrders();
       
       // Calculate top customers with multi-currency revenue
       const customerOrderMap = new Map<string, { totalOrders: number; revenues: Map<string, number> }>();
@@ -239,11 +279,7 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
    */
   fetchProductAnalytics: async (): Promise<ProductAnalytics> => {
     try {
-      const productsSnapshot = await getDocs(collection(db, 'products'));
-      const products = productsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Product));
+      const products: any[] = await loadProducts();
       
       const inStock = products.filter(p => p.inStock).length;
       const outOfStock = products.filter(p => !p.inStock).length;
@@ -308,11 +344,7 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
    */
   fetchOrderAnalytics: async (): Promise<OrderAnalytics> => {
     try {
-      const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      const orders = ordersSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Order));
+      const orders: any[] = await loadOrders();
       
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());

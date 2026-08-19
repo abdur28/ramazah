@@ -1,35 +1,35 @@
 import { create } from "zustand";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  serverTimestamp,
-  Timestamp
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '@/types/types';
 import { AdminUserDataStore, FetchOptions } from '@/types/admin';
 
-/**
- * Utility function to format Firestore timestamps
- */
-const formatFirestoreTimestamp = (timestamp: any): string => {
-  if (!timestamp) return '';
-  if (timestamp instanceof Timestamp) {
-    return timestamp.toDate().toISOString();
-  }
-  if (timestamp.toDate) {
-    return timestamp.toDate().toISOString();
-  }
-  return new Date(timestamp).toISOString();
+const supabase = () => createClient();
+
+/** profiles row -> UserProfile */
+const mapUser = (row: any): UserProfile => ({
+  uid: row.id,
+  email: row.email,
+  displayName: row.display_name ?? undefined,
+  photoURL: row.photo_url ?? undefined,
+  phone: row.phone ?? undefined,
+  role: row.role,
+  status: row.status,
+  emailOptIn: row.email_opt_in,
+  preferences: row.preferences ?? undefined,
+  emailVerified: true,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+/** UserProfile field names -> profiles column names */
+const toColumns = (data: Partial<UserProfile>) => {
+  const patch: Record<string, any> = {};
+  if (data.displayName !== undefined) patch.display_name = data.displayName;
+  if (data.photoURL !== undefined)    patch.photo_url    = data.photoURL;
+  if (data.phone !== undefined)       patch.phone        = data.phone;
+  if (data.emailOptIn !== undefined)  patch.email_opt_in = data.emailOptIn;
+  if (data.preferences !== undefined) patch.preferences  = data.preferences;
+  return patch;
 };
 
 /**
@@ -96,57 +96,36 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     try {
       const {
         limit: limitCount = 20,
-        startAfter: startAfterDoc,
+        startAfter: startAfterOffset,
         filters = [],
-        orderByField = 'createdAt',
+        orderByField = 'created_at',
         orderDirection = 'desc',
       } = options;
-      
-      // Start building the query
-      let baseQuery = query(collection(db, 'users'));
-      
-      // Apply filters if any
-      if (filters.length > 0) {
-        filters.forEach(filter => {
-          baseQuery = query(baseQuery, where(filter.field, filter.operator, filter.value));
-        });
+
+      const offset = (startAfterOffset as number) ?? 0;
+      const column = orderByField === 'createdAt' ? 'created_at' : orderByField;
+
+      let q = supabase().from('profiles').select('*');
+      for (const f of filters) {
+        q = q.eq(f.field === 'role' ? 'role' : f.field, f.value);
       }
-      
-      // Apply ordering
-      let orderedQuery = query(baseQuery, orderBy(orderByField, orderDirection));
-      
-      // Apply pagination
-      let paginatedQuery;
-      if (startAfterDoc || get().pagination.users.lastDoc) {
-        const lastDoc = startAfterDoc || get().pagination.users.lastDoc;
-        paginatedQuery = query(orderedQuery, startAfter(lastDoc), limit(limitCount));
-      } else {
-        paginatedQuery = query(orderedQuery, limit(limitCount));
-      }
-      
-      // Execute the query
-      const snapshot = await getDocs(paginatedQuery);
-      
-      // Extract data
-      const users = snapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data(),
-        createdAt: formatFirestoreTimestamp(doc.data().createdAt),
-        updatedAt: formatFirestoreTimestamp(doc.data().updatedAt),
-      } as UserProfile));
-      
-      // Check if there are more results
-      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
-      
-      // Update state
+
+      const { data, error } = await q
+        .order(column, { ascending: orderDirection === 'asc' })
+        .range(offset, offset + limitCount - 1);
+
+      if (error) throw new Error(error.message);
+
+      const users = (data ?? []).map(mapUser);
+
       set(state => ({
-        users: options.startAfter ? [...state.users, ...users] : users,
+        users: offset > 0 ? [...state.users, ...users] : users,
         loading: { ...state.loading, users: false },
         pagination: {
           ...state.pagination,
           users: {
-            lastDoc: lastVisible,
-            hasMore: snapshot.docs.length === limitCount
+            lastDoc: offset + users.length,
+            hasMore: users.length === limitCount
           }
         }
       }));
@@ -164,16 +143,10 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
    */
   getUserById: async (userId: string): Promise<UserProfile | null> => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      
-      if (!userDoc.exists()) return null;
-      
-      return {
-        uid: userDoc.id,
-        ...userDoc.data(),
-        createdAt: formatFirestoreTimestamp(userDoc.data().createdAt),
-        updatedAt: formatFirestoreTimestamp(userDoc.data().updatedAt),
-      } as UserProfile;
+      const { data, error } = await supabase()
+        .from('profiles').select('*').eq('id', userId).maybeSingle();
+      if (error) throw new Error(error.message);
+      return data ? mapUser(data) : null;
     } catch (error) {
       console.error('Error getting user by ID:', error);
       set(state => ({
@@ -193,15 +166,12 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     }));
     
     try {
-      const userRef = doc(db, 'users', userId);
-      
-      // Add updatedAt timestamp to the data
-      const updatedData = {
-        ...data,
-        updatedAt: serverTimestamp()
-      };
-      
-      await updateDoc(userRef, updatedData);
+      // role and status are column-protected; they go through their own RPCs below.
+      const patch = toColumns(data);
+      if (Object.keys(patch).length > 0) {
+        const { error } = await supabase().from('profiles').update(patch).eq('id', userId);
+        if (error) throw new Error(error.message);
+      }
       
       set(state => ({
         loading: { ...state.loading, adminAction: false }
@@ -238,8 +208,11 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     }));
     
     try {
-      const userRef = doc(db, 'users', userId);
-      await deleteDoc(userRef);
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? 'Failed to delete user');
+      }
       
       set(state => ({
         loading: { ...state.loading, adminAction: false },
@@ -266,13 +239,10 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     }));
     
     try {
-      const userRef = doc(db, 'users', userId);
-      
-      await updateDoc(userRef, {
-        // You might need to add a 'status' field to UserProfile type
-        status,
-        updatedAt: serverTimestamp()
+      const { error } = await supabase().rpc('set_user_status', {
+        p_user: userId, p_status: status
       });
+      if (error) throw new Error(error.message);
       
       set(state => ({
         loading: { ...state.loading, adminAction: false },
@@ -303,12 +273,10 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     }));
     
     try {
-      const userRef = doc(db, 'users', userId);
-      
-      await updateDoc(userRef, {
-        role,
-        updatedAt: serverTimestamp()
+      const { error } = await supabase().rpc('set_user_role', {
+        p_user: userId, p_role: role
       });
+      if (error) throw new Error(error.message);
       
       set(state => ({
         loading: { ...state.loading, adminAction: false }

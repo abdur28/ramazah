@@ -40,7 +40,7 @@ const formatDate = (timestamp: any) => {
 };
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { 
     orders, 
     fetchUserOrders, 
@@ -51,9 +51,9 @@ export default function DashboardPage() {
   } = useDashboard();
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchUserOrders(user.uid);
-      loadWishlist(user.uid);
+    if (user?.id) {
+      fetchUserOrders(user.id);
+      loadWishlist(user.id);
     }
   }, [user]);
 
@@ -125,7 +125,7 @@ export default function DashboardPage() {
           DASHBOARD
         </h1>
         <p className="font-body text-sm text-foreground/60">
-          Welcome back{user?.displayName ? `, ${user.displayName}` : ''}! Here's your account overview.
+          Welcome back{profile?.displayName ? `, ${profile.displayName}` : ''}! Here's your account overview.
         </p>
       </motion.div>
 

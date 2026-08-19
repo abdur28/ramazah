@@ -1,421 +1,375 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  increment,
-  serverTimestamp,
-  writeBatch,
-} from 'firebase/firestore';
-import { db } from './firebase/config';
-import type { Product, CartItem, ProductFilters, PaginationParams, Category, Collection } from '@/types/types';
+import { createClient } from '@/lib/supabase/client';
+import type {
+  CartItem, Category, Collection, Product, ProductFilters,
+  ProductPrice, ProductVariant, PaginationParams,
+} from '@/types/types';
 
-// ============ HELPER FUNCTIONS ============
+const supabase = () => createClient();
 
-const removeUndefined = <T extends Record<string, any>>(obj: T): Partial<T> => {
-  const result: any = {};
-  Object.keys(obj).forEach(key => {
-    if (obj[key] !== undefined) {
-      result[key] = obj[key];
-    }
-  });
-  return result as Partial<T>;
-};
-
-/**
- * Convert path with slashes to display path with " > "
- * Example: "clothings/hood-wears/hoodies" -> "Clothings > Hood Wears > Hoodies"
- */
-const pathToDisplayPath = (path: string): string => {
-  return path
-    .split('/')
-    .map(segment => 
-      segment
-        .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')
+/** Nested selection covering everything the product UI needs. */
+export const PRODUCT_SELECT = `
+  *,
+  categories ( path, slug, name ),
+  collections ( slug, name ),
+  product_images ( id, public_id, url, secure_url, alt_text, position, is_primary ),
+  product_variants (
+    id, sku, stock_count, in_stock, weight, expiry_date, position,
+    product_prices ( currency, amount, compare_at_amount ),
+    variant_option_values (
+      product_option_values (
+        value, hex, position,
+        product_options ( name, position )
+      )
     )
-    .join(' > ');
-};
+  )
+`;
 
-/**
- * Convert display path to slug path
- * Example: "Clothings > Hood Wears > Hoodies" -> "clothings/hood-wears/hoodies"
- */
-const displayPathToPath = (displayPath: string): string => {
-  return displayPath
-    .split(' > ')
-    .map(segment => segment.toLowerCase().replace(/\s+/g, '-'))
-    .join('/');
-};
+function mapPrices(rows: any[] = []): ProductPrice[] {
+  return rows.map((r) => {
+    const price = Number(r.amount);
+    const compareAtPrice = r.compare_at_amount ? Number(r.compare_at_amount) : 0;
+    return {
+      currency: String(r.currency).toLowerCase() as ProductPrice['currency'],
+      price,
+      compareAtPrice,
+      discountPercent: compareAtPrice > price
+        ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100)
+        : 0,
+    };
+  });
+}
 
-// ============ CATEGORY OPERATIONS ============
+function mapVariant(row: any): ProductVariant {
+  const pairs = (row.variant_option_values ?? [])
+    .map((v: any) => v.product_option_values)
+    .filter(Boolean)
+    .sort((a: any, b: any) =>
+      (a.product_options?.position ?? 0) - (b.product_options?.position ?? 0) ||
+      (a.position ?? 0) - (b.position ?? 0));
 
-/**
- * Get all categories
- */
-export async function getAllCategories() {
-  try {
-    const categoriesRef = collection(db, 'categories');
-    const q = query(categoriesRef, orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
+  const options: Record<string, string> = {};
+  for (const p of pairs) options[p.product_options?.name ?? ''] = p.value;
 
-    const categories = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Category[];
+  const sizeEntry = pairs.find((p: any) => /^size$/i.test(p.product_options?.name ?? ''));
+  const colorEntry = pairs.find((p: any) => /^colou?r$/i.test(p.product_options?.name ?? ''));
 
-    return { categories, error: null };
-  } catch (error: any) {
-    console.error('Get all categories error:', error);
-    return { categories: [], error: error.message };
+  return {
+    id: row.id,
+    sku: row.sku,
+    label: pairs.map((p: any) => p.value).join(' / ') || undefined,
+    options,
+    prices: mapPrices(row.product_prices),
+    stockCount: row.stock_count ?? 0,
+    inStock: !!row.in_stock,
+    weight: row.weight ? Number(row.weight) : undefined,
+    expiryDate: row.expiry_date ?? undefined,
+    size: sizeEntry?.value,
+    color: colorEntry ? { name: colorEntry.value, hex: colorEntry.hex ?? '#000000' } : undefined,
+  };
+}
+
+export function mapProduct(row: any): Product {
+  const variants: ProductVariant[] = (row.product_variants ?? [])
+    .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+    .map(mapVariant);
+
+  const images = (row.product_images ?? [])
+    .sort((a: any, b: any) => Number(b.is_primary) - Number(a.is_primary) || (a.position ?? 0) - (b.position ?? 0))
+    .map((i: any) => ({
+      id: i.id, publicId: i.public_id, url: i.url, secureUrl: i.secure_url,
+      altText: i.alt_text ?? '', order: i.position ?? 0, isPrimary: !!i.is_primary,
+    }));
+
+  // Product-level price = cheapest variant, per currency.
+  const byCurrency = new Map<string, ProductPrice>();
+  for (const v of variants) {
+    for (const p of v.prices ?? []) {
+      const existing = byCurrency.get(p.currency);
+      if (!existing || p.price < existing.price) byCurrency.set(p.currency, p);
+    }
   }
+
+  // Distinct option definitions, for the variant picker.
+  const optionMap = new Map<string, Map<string, string | undefined>>();
+  for (const v of variants) {
+    for (const [name, value] of Object.entries(v.options ?? {})) {
+      if (!name) continue;
+      if (!optionMap.has(name)) optionMap.set(name, new Map());
+      const hex = v.color?.name === value ? v.color.hex : undefined;
+      optionMap.get(name)!.set(value, hex);
+    }
+  }
+
+  const sizes = [...new Set(variants.map((v) => v.size).filter(Boolean))] as string[];
+  const colors = variants
+    .map((v) => v.color)
+    .filter(Boolean)
+    .filter((c, i, arr) => arr.findIndex((x) => x!.name === c!.name) === i) as Product['colors'];
+
+  const totalStock = variants.reduce((sum, v) => sum + v.stockCount, 0);
+
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? '',
+    shortDescription: row.short_description ?? undefined,
+    prices: [...byCurrency.values()],
+    itemType: row.item_type ?? undefined,
+    categoryPath: row.categories?.path ?? row.category_path ?? '',
+    collectionSlug: row.collections?.slug ?? row.collection_slug ?? undefined,
+    images,
+    variants,
+    options: [...optionMap.entries()].map(([name, values]) => ({
+      name,
+      values: [...values.entries()].map(([value, hex]) => ({ value, hex })),
+    })),
+    sku: row.sku,
+    inStock: totalStock > 0,
+    totalStock,
+    lowStockAlert: row.low_stock_alert ?? undefined,
+    tags: row.tags ?? [],
+    colors,
+    sizes,
+    materials: row.materials ?? [],
+    details: row.details ?? {},
+    isNew: row.is_new,
+    isFeatured: row.is_featured,
+    isBestseller: row.is_bestseller,
+    isLimitedEdition: row.is_limited_edition,
+    isPerishable: row.is_perishable,
+    ratingAvg: row.rating_avg ? Number(row.rating_avg) : 0,
+    ratingCount: row.rating_count ?? 0,
+    metaTitle: row.meta_title ?? undefined,
+    metaDescription: row.meta_description ?? undefined,
+    metaKeywords: row.meta_keywords ?? [],
+    careInstructions: row.care_instructions ?? undefined,
+    viewCount: row.view_count ?? 0,
+    salesCount: row.sales_count ?? 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    publishedAt: row.published_at ?? undefined,
+  };
+}
+
+export function mapCategory(row: any): Category {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    path: row.path,
+    description: row.description ?? undefined,
+    subtitle: row.subtitle ?? undefined,
+    bannerImage: row.banner_public_id
+      ? { id: row.id, publicId: row.banner_public_id, url: row.banner_url ?? '',
+          secureUrl: row.banner_url ?? '', altText: row.banner_alt ?? '' }
+      : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// ============ CATEGORIES ============
+
+export async function getAllCategories() {
+  const { data, error } = await supabase()
+    .from('categories').select('*').order('sort_order');
+  if (error) return { categories: [], error: error.message };
+
+  const all = (data ?? []).map(mapCategory);
+  const byParent = new Map<string | null, Category[]>();
+  for (const row of data ?? []) {
+    const list = byParent.get(row.parent_id) ?? [];
+    list.push(all.find((c) => c.id === row.id)!);
+    byParent.set(row.parent_id, list);
+  }
+  const categories = (byParent.get(null) ?? []).map((c) => ({
+    ...c,
+    subCategories: byParent.get(c.id) ?? [],
+  }));
+
+  return { categories, error: null };
 }
 
 /**
- * Get category by path (with slashes)
- * Example: "clothings/hood-wears/hoodies"
+ * Accepts either a stored display path ('Food & Pantry > Coffee & Tea') or a URL
+ * slug path ('food-pantry/coffee-tea'). Slug paths resolve by their last segment,
+ * since slugs are unique — reconstructing names from slugs is lossy ('coffee-tea'
+ * cannot yield 'Coffee & Tea').
  */
 export async function getCategoryByPath(path: string) {
-  try {
-    const categoriesRef = collection(db, 'categories');
-    const q = query(categoriesRef, where('path', '==', path), limit(1));
-    const snapshot = await getDocs(q);
+  const client = supabase();
+  const isSlugPath = path.includes('/') || !path.includes('>');
 
-    if (!snapshot.empty) {
-      return {
-        category: { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Category,
-        error: null,
-      };
-    }
+  const query = isSlugPath
+    ? client.from('categories').select('*').eq('slug', path.split('/').filter(Boolean).pop() ?? path)
+    : client.from('categories').select('*').eq('path', path);
 
-    return { category: null, error: 'Category not found' };
-  } catch (error: any) {
-    console.error('Get category by path error:', error);
-    return { category: null, error: error.message };
-  }
+  const { data, error } = await query.maybeSingle();
+  if (error) return { category: null, error: error.message };
+  return data ? { category: mapCategory(data), error: null }
+              : { category: null, error: 'Category not found' };
 }
 
-/**
- * Get category by slug (single level)
- */
+/** Legacy helpers, kept for callers that still pass slug paths around. */
+export const pathToDisplayPath = (path: string): string =>
+  path.split('/').map((segment) =>
+    segment.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  ).join(' > ');
+
+export const displayPathToPath = (displayPath: string): string =>
+  displayPath.split('>').map((s) => s.trim().toLowerCase().replace(/\s+/g, '-')).join('/');
+
 export async function getCategoryBySlug(slug: string) {
-  try {
-    const categoriesRef = collection(db, 'categories');
-    const q = query(categoriesRef, where('slug', '==', slug), limit(1));
-    const snapshot = await getDocs(q);
-
-    if (!snapshot.empty) {
-      return {
-        category: { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Category,
-        error: null,
-      };
-    }
-
-    return { category: null, error: 'Category not found' };
-  } catch (error: any) {
-    console.error('Get category by slug error:', error);
-    return { category: null, error: error.message };
-  }
+  const { data, error } = await supabase()
+    .from('categories').select('*').eq('slug', slug).maybeSingle();
+  if (error) return { category: null, error: error.message };
+  return data ? { category: mapCategory(data), error: null }
+              : { category: null, error: 'Category not found' };
 }
 
-/**
- * Get products by category path
- * Converts slash path to display path for product matching
- * Example: "clothings/hood-wears/hoodies" -> matches products with categoryPath "Clothings > Hood Wears > Hoodies"
- */
-export async function getProductsByCategoryPath(categoryPath: string) {
-  try {
-    // Convert slash path to display path for product query
-    const displayPath = pathToDisplayPath(categoryPath);
-    
-    const productsRef = collection(db, 'products');
-    const q = query(
-      productsRef,
-      where('categoryPath', '==', displayPath),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const snapshot = await getDocs(q);
-    const products = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Product[];
-
-    return { products, error: null };
-  } catch (error: any) {
-    console.error('Get products by category path error:', error);
-    return { products: [], error: error.message };
-  }
-}
-
-/**
- * Get products by category slug
- */
-export async function getProductsByCategorySlug(slug: string) {
-  const { category } = await getCategoryBySlug(slug);
-  
-  if (!category) {
-    return { products: [], error: 'Category not found' };
-  }
-
-  return getProductsByCategoryPath(category.path);
-}
-
-/**
- * Get category hierarchy
- */
 export async function getCategoryHierarchy(categoryPath: string) {
-  try {
-    const categoriesRef = collection(db, 'categories');
-    const snapshot = await getDocs(categoriesRef);
-    
-    const allCategories = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Category[];
+  const { data, error } = await supabase().from('categories').select('*');
+  if (error) return { parent: null, current: null, children: [], error: error.message };
 
-    // Find current category
-    const currentCategory = allCategories.find(cat => cat.path === categoryPath);
-    
-    if (!currentCategory) {
-      return { parent: null, current: null, children: [], error: 'Category not found' };
-    }
-
-    // Find parent (one level up)
-    const pathParts = categoryPath.split('/');
-    const parentPath = pathParts.slice(0, -1).join('/');
-    const parent = parentPath ? allCategories.find(cat => cat.path === parentPath) : null;
-
-    // Find children (one level down)
-    const children = allCategories.filter(cat => {
-      const catParts = cat.path.split('/');
-      return catParts.length === pathParts.length + 1 && 
-             cat.path.startsWith(categoryPath + '/');
-    });
-
-    return { 
-      parent: parent || null, 
-      current: currentCategory, 
-      children, 
-      error: null 
-    };
-  } catch (error: any) {
-    console.error('Get category hierarchy error:', error);
-    return { parent: null, current: null, children: [], error: error.message };
+  const rows = data ?? [];
+  const currentRow = rows.find((c) => c.path === categoryPath);
+  if (!currentRow) {
+    return { parent: null, current: null, children: [], error: 'Category not found' };
   }
-}
+  const parentRow = rows.find((c) => c.id === currentRow.parent_id);
+  const children = rows.filter((c) => c.parent_id === currentRow.id).map(mapCategory);
 
-// ============ COLLECTION OPERATIONS ============
+  return {
+    parent: parentRow ? mapCategory(parentRow) : null,
+    current: mapCategory(currentRow),
+    children,
+    error: null,
+  };
+}
 
 export async function getCollectionBySlug(slug: string) {
-  try {
-    const collectionsRef = collection(db, 'collections');
-    const q = query(collectionsRef, where('slug', '==', slug), limit(1));
-    const snapshot = await getDocs(q);
+  const { data, error } = await supabase()
+    .from('collections').select('*').eq('slug', slug).maybeSingle();
+  if (error) return { collection: null, error: error.message };
+  if (!data) return { collection: null, error: 'Collection not found' };
 
-    if (!snapshot.empty) {
-      return {
-        collection: { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Collection,
-        error: null,
-      };
-    }
-
-    return { collection: null, error: 'Collection not found' };
-  } catch (error: any) {
-    console.error('Get collection by slug error:', error);
-    return { collection: null, error: error.message };
-  }
+  const collection: Collection = {
+    id: data.id, name: data.name, slug: data.slug,
+    description: data.description ?? undefined,
+    bannerImage: data.banner_public_id
+      ? { id: data.id, publicId: data.banner_public_id, url: data.banner_url ?? '',
+          secureUrl: data.banner_url ?? '', altText: data.banner_alt ?? '' }
+      : undefined,
+    createdAt: data.created_at, updatedAt: data.updated_at,
+  };
+  return { collection, error: null };
 }
 
-export async function getProductsByCollectionSlug(slug: string) {
-  try {
-    const productsRef = collection(db, 'products');
-    const q = query(
-      productsRef,
-      where('collectionSlug', '==', slug),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const snapshot = await getDocs(q);
-    const products = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Product[];
+// ============ PRODUCTS ============
 
-    return { products, error: null };
-  } catch (error: any) {
-    console.error('Get products by collection slug error:', error);
-    return { products: [], error: error.message };
-  }
+/** Hydrate full product rows for a set of ids, preserving the given order. */
+async function hydrate(ids: string[]) {
+  if (ids.length === 0) return { products: [] as Product[], error: null };
+  const { data, error } = await supabase()
+    .from('products').select(PRODUCT_SELECT).in('id', ids);
+  if (error) return { products: [], error: error.message };
+
+  const mapped = (data ?? []).map(mapProduct);
+  const order = new Map(ids.map((id, i) => [id, i]));
+  mapped.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return { products: mapped, error: null };
 }
 
-// ============ PRODUCT OPERATIONS ============
-
+/**
+ * Filtering, sorting and pagination all happen in SQL against product_listing,
+ * which carries the variant-derived stock and price aggregates.
+ */
 export async function getProducts(
   filters?: ProductFilters,
   pagination?: PaginationParams
 ) {
   try {
-    const productsRef = collection(db, 'products');
-    let q = query(productsRef);
+    let matchedIds: string[] | null = null;
 
-    if (filters?.categoryPath) {
-      q = query(q, where('categoryPath', '==', filters.categoryPath));
-    }
-    if (filters?.itemType) {
-      q = query(q, where('itemType', '==', filters.itemType));
-    }
-    if (filters?.collection) {
-      q = query(q, where('collectionSlug', '==', filters.collection));
-    }
-    if (filters?.inStock !== undefined) {
-      q = query(q, where('inStock', '==', filters.inStock));
-    }
-    if (filters?.isNew) {
-      q = query(q, where('isNew', '==', true));
-    }
-    if (filters?.isFeatured) {
-      q = query(q, where('isFeatured', '==', true));
-    }
-    if (filters?.isBestseller) {
-      q = query(q, where('isBestseller', '==', true));
+    if (filters?.search?.trim()) {
+      const { data, error } = await supabase()
+        .rpc('search_product_ids', { p_query: filters.search.trim() });
+      if (error) return { products: [], error: error.message, lastDoc: null };
+      matchedIds = (data ?? []).map((r: any) => r.id);
+      if (matchedIds!.length === 0) return { products: [], error: null, lastDoc: null };
     }
 
-    if (pagination?.orderBy) {
-      q = query(q, orderBy(pagination.orderBy, pagination.orderDirection || 'desc'));
-    } else {
-      q = query(q, orderBy('createdAt', 'desc'));
-    }
+    let q = supabase().from('product_listing').select('id').eq('status', 'active');
 
-    if (pagination?.limit) {
-      q = query(q, limit(pagination.limit));
-    }
-    if (pagination?.startAfter) {
-      q = query(q, startAfter(pagination.startAfter));
-    }
+    if (matchedIds) q = q.in('id', matchedIds);
+    if (filters?.categoryPath) q = q.eq('category_path', filters.categoryPath);
+    if (filters?.itemType)     q = q.eq('item_type', filters.itemType);
+    if (filters?.collection)   q = q.eq('collection_slug', filters.collection);
+    if (filters?.inStock !== undefined) q = q.eq('in_stock', filters.inStock);
+    if (filters?.isNew)        q = q.eq('is_new', true);
+    if (filters?.isFeatured)   q = q.eq('is_featured', true);
+    if (filters?.isBestseller) q = q.eq('is_bestseller', true);
+    if (filters?.tags?.length) q = q.overlaps('tags', filters.tags);
+    if (filters?.minPrice !== undefined) q = q.gte('min_price', filters.minPrice);
+    if (filters?.maxPrice !== undefined) q = q.lte('min_price', filters.maxPrice);
 
-    const snapshot = await getDocs(q);
-    let products = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Product[];
+    const orderBy = pagination?.orderBy ?? 'created_at';
+    q = q.order(orderBy, { ascending: pagination?.orderDirection === 'asc' });
+    if (pagination?.limit) q = q.limit(pagination.limit);
 
-    if (filters?.minPrice !== undefined) {
-      products = products.filter((p) => {
-        const price = p.prices?.[0]?.price || 0;
-        return price >= filters.minPrice!;
-      });
-    }
-    if (filters?.maxPrice !== undefined) {
-      products = products.filter((p) => {
-        const price = p.prices?.[0]?.price || 0;
-        return price <= filters.maxPrice!;
-      });
-    }
-    if (filters?.colors && filters.colors.length > 0) {
-      products = products.filter((p) =>
-        filters.colors!.some((color) => 
-          p.colors?.some(c => c.name === color)
-        )
-      );
-    }
-    if (filters?.sizes && filters.sizes.length > 0) {
-      products = products.filter((p) =>
-        filters.sizes!.some((size) => p.sizes?.includes(size))
-      );
-    }
-    if (filters?.search) {
-      const searchLower = filters.search.toLowerCase();
-      products = products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchLower) ||
-          p.description.toLowerCase().includes(searchLower) ||
-          p.tags?.some((tag) => tag.toLowerCase().includes(searchLower))
-      );
-    }
+    const { data, error } = await q;
+    if (error) return { products: [], error: error.message, lastDoc: null };
 
-    return { products, error: null, lastDoc: snapshot.docs[snapshot.docs.length - 1] };
+    const ids = (data ?? []).map((r: any) => r.id);
+    const { products, error: hErr } = await hydrate(ids);
+    return { products, error: hErr, lastDoc: ids[ids.length - 1] ?? null };
   } catch (error: any) {
-    console.error('Get products error:', error);
     return { products: [], error: error.message, lastDoc: null };
   }
 }
 
-export async function getProduct(productId: string) {
-  try {
-    const docRef = doc(db, 'products', productId);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      await updateDoc(docRef, {
-        viewCount: increment(1),
-      });
-
-      return {
-        product: { id: docSnap.id, ...docSnap.data() } as Product,
-        error: null,
-      };
-    }
-
-    return { product: null, error: 'Product not found' };
-  } catch (error: any) {
-    console.error('Get product error:', error);
-    return { product: null, error: error.message };
+export async function getProductsByCategoryPath(categoryPath: string) {
+  // Resolve slug paths to the stored display path before filtering.
+  let path = categoryPath;
+  if (categoryPath.includes('/') || !categoryPath.includes('>')) {
+    const { category } = await getCategoryByPath(categoryPath);
+    if (!category) return { products: [], error: 'Category not found' };
+    path = category.path;
   }
+  const { products, error } = await getProducts({ categoryPath: path });
+  return { products, error };
+}
+
+export async function getProductsByCategorySlug(slug: string) {
+  const { category, error } = await getCategoryBySlug(slug);
+  if (!category) return { products: [], error: error ?? 'Category not found' };
+  return getProductsByCategoryPath(category.path);
+}
+
+export async function getProductsByCollectionSlug(slug: string) {
+  const { products, error } = await getProducts({ collection: slug });
+  return { products, error };
+}
+
+export async function getProduct(productId: string) {
+  const { data, error } = await supabase()
+    .from('products').select(PRODUCT_SELECT).eq('id', productId).maybeSingle();
+  if (error) return { product: null, error: error.message };
+  return data ? { product: mapProduct(data), error: null }
+              : { product: null, error: 'Product not found' };
 }
 
 export async function getProductBySlug(slug: string) {
-  try {
-    const productsRef = collection(db, 'products');
-    const q = query(productsRef, where('slug', '==', slug), limit(1));
-    const snapshot = await getDocs(q);
-
-    if (!snapshot.empty) {
-      const docSnap = snapshot.docs[0];
-
-      await updateDoc(docSnap.ref, {
-        viewCount: increment(1),
-      });
-
-      return {
-        product: { id: docSnap.id, ...docSnap.data() } as Product,
-        error: null,
-      };
-    }
-
-    return { product: null, error: 'Product not found' };
-  } catch (error: any) {
-    console.error('Get product by slug error:', error);
-    return { product: null, error: error.message };
-  }
+  const { data, error } = await supabase()
+    .from('products').select(PRODUCT_SELECT).eq('slug', slug).maybeSingle();
+  if (error) return { product: null, error: error.message };
+  return data ? { product: mapProduct(data), error: null }
+              : { product: null, error: 'Product not found' };
 }
 
 export async function getProductsByIds(productIds: string[]) {
-  try {
-    if (productIds.length === 0) {
-      return { products: [], error: null };
-    }
-
-    const productsRef = collection(db, 'products');
-    const q = query(productsRef, where('__name__', 'in', productIds));
-    const snapshot = await getDocs(q);
-
-    const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-
-    return { products, error: null };
-  } catch (error: any) {
-    console.error('Get products by ids error:', error);
-    return { products: [], error: error.message };
-  }
+  return hydrate(productIds);
 }
 
 export async function getFeaturedProducts(limitCount: number = 6) {
@@ -423,192 +377,124 @@ export async function getFeaturedProducts(limitCount: number = 6) {
 }
 
 export async function getNewArrivals(limitCount: number = 8) {
-  return getProducts({ isNew: true }, { limit: limitCount, orderBy: 'createdAt' });
+  return getProducts({ isNew: true }, { limit: limitCount });
 }
 
 export async function getBestsellers(limitCount: number = 8) {
-  return getProducts(
-    { isBestseller: true },
-    { limit: limitCount, orderBy: 'salesCount' }
-  );
+  return getProducts({ isBestseller: true }, { limit: limitCount, orderBy: 'sales_count' });
 }
 
-// ============ CART OPERATIONS ============
+// ============ CART ============
+
+const CART_SELECT = `
+  id, quantity, variant_id,
+  product_variants (
+    id, sku, stock_count, in_stock,
+    product_prices ( currency, amount, compare_at_amount ),
+    variant_option_values ( product_option_values ( value, hex, position, product_options ( name, position ) ) ),
+    products ( id, name, slug, product_images ( secure_url, is_primary, position ) )
+  )
+`;
+
+function mapCartRow(row: any): CartItem {
+  const v = row.product_variants;
+  const product = v?.products;
+  const variant = mapVariant(v ?? {});
+  const image = (product?.product_images ?? [])
+    .sort((a: any, b: any) => Number(b.is_primary) - Number(a.is_primary) || (a.position ?? 0) - (b.position ?? 0))[0];
+
+  return {
+    id: row.id,
+    productId: product?.id ?? '',
+    variantId: row.variant_id,
+    name: product?.name ?? '',
+    slug: product?.slug ?? '',
+    prices: variant.prices ?? [],
+    quantity: row.quantity,
+    image: image?.secure_url ?? '',
+    size: variant.size,
+    color: variant.color,
+    sku: variant.sku,
+    inStock: variant.inStock,
+    maxQuantity: variant.stockCount,
+  };
+}
 
 export async function getCart(userId: string) {
-  try {
-    const cartRef = collection(db, 'users', userId, 'cart');
-    const snapshot = await getDocs(cartRef);
-
-    const items = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as CartItem[];
-
-    return { items, error: null };
-  } catch (error: any) {
-    console.error('Get cart error:', error);
-    return { items: [], error: error.message };
-  }
+  const { data, error } = await supabase()
+    .from('cart_items').select(CART_SELECT).eq('user_id', userId);
+  if (error) return { items: [], error: error.message };
+  return { items: (data ?? []).map(mapCartRow), error: null };
 }
 
 export async function addToCart(userId: string, item: Omit<CartItem, 'id'>) {
-  try {
-    const cartRef = collection(db, 'users', userId, 'cart');
-    const sanitizedItem = removeUndefined(item);
+  const variantId = item.variantId;
+  if (!variantId) return { cartItemId: null, error: 'Missing variant' };
 
-    const q = query(
-      cartRef,
-      where('productId', '==', sanitizedItem.productId),
-      where('variantId', '==', sanitizedItem.variantId || null)
-    );
-    const snapshot = await getDocs(q);
+  const { data: existing } = await supabase()
+    .from('cart_items').select('id, quantity')
+    .eq('user_id', userId).eq('variant_id', variantId).maybeSingle();
 
-    if (!snapshot.empty) {
-      const existingDoc = snapshot.docs[0];
-      const existingItem = existingDoc.data() as CartItem;
-      const newQuantity = Math.min(
-        existingItem.quantity + (sanitizedItem.quantity || 1),
-        sanitizedItem.maxQuantity || 999
-      );
-
-      await updateDoc(existingDoc.ref, {
-        quantity: newQuantity,
-      });
-
-      return { cartItemId: existingDoc.id, error: null };
-    } else {
-      const docRef = await addDoc(cartRef, sanitizedItem);
-      return { cartItemId: docRef.id, error: null };
-    }
-  } catch (error: any) {
-    console.error('Add to cart error:', error);
-    return { cartItemId: null, error: error.message };
+  if (existing) {
+    const quantity = Math.min(existing.quantity + item.quantity, item.maxQuantity || 99);
+    const { error } = await supabase()
+      .from('cart_items').update({ quantity }).eq('id', existing.id);
+    return { cartItemId: existing.id, error: error?.message ?? null };
   }
+
+  const { data, error } = await supabase()
+    .from('cart_items')
+    .insert({ user_id: userId, variant_id: variantId, quantity: item.quantity })
+    .select('id').single();
+
+  return { cartItemId: data?.id ?? null, error: error?.message ?? null };
 }
 
 export async function updateCartItemQuantity(
-  userId: string,
-  cartItemId: string,
-  quantity: number
+  userId: string, cartItemId: string, quantity: number
 ) {
-  try {
-    const cartItemRef = doc(db, 'users', userId, 'cart', cartItemId);
-    await updateDoc(cartItemRef, { quantity });
-    return { error: null };
-  } catch (error: any) {
-    console.error('Update cart item error:', error);
-    return { error: error.message };
-  }
+  const { error } = await supabase()
+    .from('cart_items').update({ quantity }).eq('id', cartItemId).eq('user_id', userId);
+  return { error: error?.message ?? null };
 }
 
 export async function removeFromCart(userId: string, cartItemId: string) {
-  try {
-    await deleteDoc(doc(db, 'users', userId, 'cart', cartItemId));
-    return { error: null };
-  } catch (error: any) {
-    console.error('Remove from cart error:', error);
-    return { error: error.message };
-  }
+  const { error } = await supabase()
+    .from('cart_items').delete().eq('id', cartItemId).eq('user_id', userId);
+  return { error: error?.message ?? null };
 }
 
 export async function clearCart(userId: string) {
-  try {
-    const cartRef = collection(db, 'users', userId, 'cart');
-    const snapshot = await getDocs(cartRef);
-
-    const batch = writeBatch(db);
-    snapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
-
-    return { error: null };
-  } catch (error: any) {
-    console.error('Clear cart error:', error);
-    return { error: error.message };
-  }
+  const { error } = await supabase().from('cart_items').delete().eq('user_id', userId);
+  return { error: error?.message ?? null };
 }
 
 export async function syncCart(userId: string, localCartItems: CartItem[]) {
-  try {
-    const batch = writeBatch(db);
-    const cartRef = collection(db, 'users', userId, 'cart');
-
-    for (const item of localCartItems) {
-      const { id, ...itemData } = item;
-      const sanitizedData = removeUndefined(itemData);
-      const docRef = doc(cartRef);
-      batch.set(docRef, sanitizedData);
-    }
-
-    await batch.commit();
-    return { error: null };
-  } catch (error: any) {
-    console.error('Sync cart error:', error);
-    return { error: error.message };
+  for (const item of localCartItems) {
+    if (!item.variantId) continue;
+    await addToCart(userId, item);
   }
+  return getCart(userId);
 }
 
-// ============ WISHLIST OPERATIONS ============
+// ============ WISHLIST ============
 
 export async function addToWishlist(userId: string, productId: string) {
-  try {
-    const wishlistRef = collection(db, 'users', userId, 'wishlist');
-    await addDoc(wishlistRef, {
-      productId,
-      addedAt: serverTimestamp(),
-    });
-    return { error: null };
-  } catch (error: any) {
-    console.error('Add to wishlist error:', error);
-    return { error: error.message };
-  }
+  const { error } = await supabase()
+    .from('wishlist_items')
+    .upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id' });
+  return { error: error?.message ?? null };
 }
 
 export async function removeFromWishlist(userId: string, productId: string) {
-  try {
-    const wishlistRef = collection(db, 'users', userId, 'wishlist');
-    const q = query(wishlistRef, where('productId', '==', productId));
-    const snapshot = await getDocs(q);
-
-    if (!snapshot.empty) {
-      await deleteDoc(snapshot.docs[0].ref);
-    }
-
-    return { error: null };
-  } catch (error: any) {
-    console.error('Remove from wishlist error:', error);
-    return { error: error.message };
-  }
+  const { error } = await supabase()
+    .from('wishlist_items').delete().eq('user_id', userId).eq('product_id', productId);
+  return { error: error?.message ?? null };
 }
 
 export async function getWishlist(userId: string) {
-  try {
-    const wishlistRef = collection(db, 'users', userId, 'wishlist');
-    const snapshot = await getDocs(wishlistRef);
-
-    const productIds = snapshot.docs.map((doc) => doc.data().productId);
-
-    if (productIds.length === 0) {
-      return { products: [], error: null };
-    }
-
-    const productsRef = collection(db, 'products');
-    const q = query(productsRef, where('__name__', 'in', productIds));
-    const productsSnapshot = await getDocs(q);
-
-    const products = productsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Product[];
-
-    return { products, error: null };
-  } catch (error: any) {
-    console.error('Get wishlist error:', error);
-    return { products: [], error: error.message };
-  }
+  const { data, error } = await supabase()
+    .from('wishlist_items').select('product_id').eq('user_id', userId);
+  if (error) return { products: [], error: error.message };
+  return hydrate((data ?? []).map((r: any) => r.product_id));
 }
-
-// Export helper functions for use elsewhere
-export { pathToDisplayPath, displayPathToPath };

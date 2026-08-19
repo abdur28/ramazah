@@ -42,7 +42,7 @@ export default async function CategoryDynamicPage({ params }: any) {
   })
 
   // Convert path to display path for the title
-  const displayPath = pathToDisplayPath(category.path)
+  const displayPath = category.path
 
   if (pathParts[0] === 'artwork') {
     return (
@@ -76,17 +76,19 @@ export default async function CategoryDynamicPage({ params }: any) {
 // Generate static params for all categories (including nested)
 export async function generateStaticParams() {
   const { categories } = await getAllCategories()
-  
-  // Generate slug arrays for all categories
-  return categories.map((category) => {
-    // Convert path to slug array
-    // Example: "clothings/hood-wears/hoodies" -> ['clothings', 'hood-wears', 'hoodies']
-    const slugSegments = category.path.split('/')
-    
-    return {
-      slug: slugSegments,
+
+  // URLs are built from slugs, not the stored display path:
+  // "Food & Pantry > Coffee & Tea" -> /categories/food-pantry/coffee-tea
+  const params: { slug: string[] }[] = []
+
+  for (const parent of categories) {
+    params.push({ slug: [parent.slug] })
+    for (const child of parent.subCategories ?? []) {
+      params.push({ slug: [parent.slug, child.slug] })
     }
-  })
+  }
+
+  return params
 }
 
 // Generate metadata for SEO

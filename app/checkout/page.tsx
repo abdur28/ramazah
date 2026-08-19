@@ -1,6 +1,6 @@
 // app/checkout/page.tsx
 import { requireAuth } from "@/lib/auth/server";
-import { getUserProfile } from "@/lib/firebase/auth";
+import { getUserProfile } from "@/lib/supabase/auth";
 import CheckoutPage from "@/components/checkout/CheckoutPage";
 import type { UserProfile } from "@/types/types";
 

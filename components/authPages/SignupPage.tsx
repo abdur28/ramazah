@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { signUp, signInWithGoogle } from '@/lib/firebase/auth';
+import { signUp, signInWithGoogle } from '@/lib/supabase/auth';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const router = useRouter();
   const { refetch } = useAuth();
@@ -57,14 +58,21 @@ export default function SignupPage({redirect}: {redirect: string}) {
     }
 
     try {
-      const { user, error } = await signUp(email, password, displayName);
+      const { user, session, needsEmailConfirmation, error } = await signUp(
+        email, password, displayName
+      );
 
       if (error) {
         setError(error);
+      } else if (needsEmailConfirmation) {
+        // No session yet — the account is not usable until the email is confirmed,
+        // so do not load the profile or redirect into protected pages.
+        setSuccess(true);
+        setAwaitingConfirmation(true);
       } else {
         setSuccess(true);
-        setTimeout( async () => {
-          await refetch(user!);
+        setTimeout(async () => {
+          if (user && session) await refetch(user);
           router.push(redirect);
           router.refresh();
         }, 2000);
@@ -174,7 +182,11 @@ export default function SignupPage({redirect}: {redirect: string}) {
               className="mb-6 p-3 bg-green-500/10 border border-green-500/50 rounded-md flex items-center gap-2 text-green-400 text-sm"
             >
               <CheckCircle className="h-4 w-4 flex-shrink-0" />
-              <span>Account created! Redirecting...</span>
+              <span>
+                {awaitingConfirmation
+                  ? `Account created. Check ${email} for a confirmation link, then sign in.`
+                  : 'Account created! Redirecting...'}
+              </span>
             </motion.div>
           )}
 

@@ -45,7 +45,7 @@ export default function PreferencesPage() {
   // Load preferences on mount if user exists
   useEffect(() => {
     if (user && !storedPreferences) {
-      loadPreferences(user.uid);
+      loadPreferences(user.id);
     }
   }, [user, storedPreferences, loadPreferences]);
 
@@ -60,7 +60,7 @@ export default function PreferencesPage() {
       emailNotifications,
     };
 
-    const result = await savePreferences(user.uid, preferences);
+    const result = await savePreferences(user.id, preferences);
     
     if (result.success) {
       toast.success('Preferences saved successfully!');

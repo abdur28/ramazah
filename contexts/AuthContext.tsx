@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { User } from 'firebase/auth';
-import { onAuthChange, getUserProfile, signOut as firebaseSignOut } from '@/lib/firebase/auth';
+import type { User } from '@supabase/supabase-js';
+import { onAuthChange, getUserProfile, signOut as supabaseSignOut } from '@/lib/supabase/auth';
 import { UserProfile } from '@/types/types';
 import { useDashboard } from '@/hooks/useDashboard';
 
@@ -28,34 +28,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Access dashboard store
+
   const { loadWishlist, clearWishlist, loadPreferences, clearPreferences } = useDashboard();
 
-  // Refetch user profile
   const refetch = useCallback(async (user: User) => {
-    if (user) {
-      const userProfile = await getUserProfile(user.uid);
-      setProfile(userProfile);
-      
-      // Reload wishlist and preferences
-      await loadWishlist(user.uid);
-      await loadPreferences(user.uid);
-    }
-  }, [user, loadWishlist, loadPreferences]);
+    if (!user) return;
+    setProfile(await getUserProfile(user.id));
+    await loadWishlist(user.id);
+    await loadPreferences(user.id);
+  }, [loadWishlist, loadPreferences]);
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (user) => {
       setUser(user);
 
       if (user) {
-        // Fetch user profile from Firestore
-        const userProfile = await getUserProfile(user.uid);
-        setProfile(userProfile);
-        
-        // Load user's wishlist and preferences
-        await loadWishlist(user.uid);
-        await loadPreferences(user.uid);
+        setProfile(await getUserProfile(user.id));
+        await loadWishlist(user.id);
+        await loadPreferences(user.id);
       } else {
         setProfile(null);
         clearWishlist();
@@ -72,18 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      // Sign out from Firebase (this also calls clearAuthCookie internally)
-      await firebaseSignOut();
-      
-      // Clear local state
+      await supabaseSignOut();
       setUser(null);
       setProfile(null);
-      
-      // Clear wishlist and preferences
       clearWishlist();
       clearPreferences();
-      
-      // Redirect to home
       window.location.href = '/';
     } catch (error) {
       console.error('Sign out error:', error);

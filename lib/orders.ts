@@ -1,182 +1,195 @@
 // lib/orders.ts
-import { db } from './firebase/config';
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  arrayUnion,
-  serverTimestamp, 
-  getDoc,
-  query,
-  where,
-  orderBy,
-  getDocs
-} from 'firebase/firestore';
-import type { Order, OrderItem, DeliveryType, CurrencyCode, CreateOrderData } from '@/types/types';
+import { createClient } from '@/lib/supabase/client';
+import type { Order, OrderItem, CreateOrderData, CurrencyCode } from '@/types/types';
+
+const supabase = () => createClient();
+
+const ORDER_SELECT = `
+  *,
+  order_items ( id, product_id, variant_id, name, sku, variant_label, options,
+                image_url, unit_price, quantity, line_total )
+`;
+
+/** TS uses 'inStore'; the database enum uses 'in_store'. */
+const toDbDelivery = (t: string) => (t === 'inStore' ? 'in_store' : 'delivery');
+const fromDbDelivery = (t: string) => (t === 'in_store' ? 'inStore' : 'delivery');
+
+function mapOrderItem(row: any, currency: CurrencyCode): OrderItem {
+  const options = (row.options ?? {}) as Record<string, string>;
+  const sizeKey = Object.keys(options).find((k) => /^size$/i.test(k));
+  const colorKey = Object.keys(options).find((k) => /^colou?r$/i.test(k));
+
+  return {
+    id: row.id,
+    productId: row.product_id ?? '',
+    variantId: row.variant_id ?? undefined,
+    name: row.name,
+    sku: row.sku,
+    price: Number(row.unit_price),
+    lineTotal: Number(row.line_total),
+    currency,
+    quantity: row.quantity,
+    variantLabel: row.variant_label ?? undefined,
+    options,
+    size: sizeKey ? options[sizeKey] : undefined,
+    color: colorKey ? { name: options[colorKey], hex: '#000000' } : undefined,
+    imageUrl: row.image_url ?? '',
+  };
+}
+
+function mapOrder(row: any): Order {
+  const currency = String(row.currency).toLowerCase() as CurrencyCode;
+
+  return {
+    id: row.id,
+    orderNumber: row.order_number,
+    userId: row.user_id,
+    deliveryType: fromDbDelivery(row.delivery_type) as Order['deliveryType'],
+    items: (row.order_items ?? []).map((i: any) => mapOrderItem(i, currency)),
+    currency,
+    subtotal: Number(row.subtotal),
+    tax: Number(row.tax_amount ?? 0),
+    shippingCost: Number(row.shipping_cost ?? 0),
+    discount: Number(row.discount_amount ?? 0),
+    total: Number(row.total),
+    status: row.status,
+    paymentStatus: row.payment_status,
+    shippingAddress: row.ship_street
+      ? {
+          fullName: row.ship_full_name ?? row.customer_name,
+          phone: row.ship_phone ?? row.customer_phone,
+          street: row.ship_street,
+          city: row.ship_city ?? '',
+          state: row.ship_state ?? '',
+          zipCode: row.ship_postal_code ?? '',
+          country: row.ship_country ?? 'Nigeria',
+          isDefault: false,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }
+      : undefined,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
+    paymentMethod: row.payment_method ?? undefined,
+    paymentIntentId: row.payment_intent_id ?? undefined,
+    trackingNumber: row.tracking_number ?? undefined,
+    carrier: row.carrier ?? undefined,
+    customerNotes: row.customer_notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    paidAt: row.paid_at ?? undefined,
+    shippedAt: row.shipped_at ?? undefined,
+    deliveredAt: row.delivered_at ?? undefined,
+    pickedUpAt: row.picked_up_at ?? undefined,
+  };
+}
 
 /**
- * Create a new order
+ * Create an order through the atomic create_order() RPC.
+ *
+ * The database validates stock, reads prices itself (never trusting the client),
+ * refuses expired perishables, applies discounts, decrements stock, writes the
+ * inventory ledger and clears the cart — all in one transaction.
  */
-export async function createOrder(orderData: CreateOrderData): Promise<{ 
-  orderId?: string; 
-  error?: string 
+export async function createOrder(orderData: CreateOrderData): Promise<{
+  orderId?: string;
+  orderNumber?: string;
+  error?: string;
 }> {
   try {
-    // Generate order number
-    const orderNumber = `HS${Date.now().toString().slice(-8)}`;
+    const items = orderData.items
+      .filter((i) => i.variantId)
+      .map((i) => ({ variant_id: i.variantId, quantity: i.quantity }));
 
-    // Prepare order document
-    const order: Omit<Order, 'id'> = {
-      orderNumber,
-      userId: orderData.userId,
-      deliveryType: orderData.deliveryType,
-      items: orderData.items,
-      currency: orderData.currency,
-      subtotal: orderData.subtotal,
-      tax: orderData.tax,
-      shippingCost: orderData.shippingCost,
-      total: orderData.total,
-      status: 'pending',
-      paymentStatus: 'pending',
-      shippingAddress: orderData.shippingAddress ? {
-        fullName: orderData.customerName,
-        phone: orderData.customerPhone,
-        street: orderData.shippingAddress.street,
-        city: orderData.shippingAddress.city,
-        state: orderData.shippingAddress.state,
-        zipCode: orderData.shippingAddress.zipCode,
-        country: orderData.shippingAddress.country,
-        isDefault: false,
-        createdAt: serverTimestamp() as any,
-        updatedAt: serverTimestamp() as any,
-      } : {} as any,
-      customerName: orderData.customerName,
-      customerEmail: orderData.customerEmail,
-      customerPhone: orderData.customerPhone,
-      createdAt: serverTimestamp() as any,
-      updatedAt: serverTimestamp() as any,
-    };
+    if (items.length !== orderData.items.length) {
+      return { error: 'Every cart item must reference a product variant' };
+    }
 
-    // Create order in Firestore
-    const ordersRef = collection(db, 'orders');
-    const orderDoc = await addDoc(ordersRef, order);
-
-    // Add order ID to user's orders array
-    const userRef = doc(db, 'users', orderData.userId);
-    await updateDoc(userRef, {
-      orders: arrayUnion(orderDoc.id),
-      updatedAt: serverTimestamp(),
+    const { data, error } = await supabase().rpc('create_order', {
+      p_items: items,
+      p_delivery_type: toDbDelivery(orderData.deliveryType),
+      p_customer_name: orderData.customerName,
+      p_customer_email: orderData.customerEmail,
+      p_customer_phone: orderData.customerPhone,
+      p_currency: orderData.currency.toUpperCase(),
+      p_shipping_address: orderData.shippingAddress
+        ? {
+            full_name: orderData.customerName,
+            phone: orderData.customerPhone,
+            street: orderData.shippingAddress.street,
+            city: orderData.shippingAddress.city,
+            state: orderData.shippingAddress.state,
+            postal_code: orderData.shippingAddress.zipCode,
+            country: orderData.shippingAddress.country,
+          }
+        : null,
+      p_discount_code: orderData.discountCode ?? null,
+      p_shipping_cost: orderData.shippingCost,
+      p_tax_amount: orderData.tax,
+      p_tax_rate: null,
+      p_customer_notes: null,
+      p_idempotency_key:
+        orderData.idempotencyKey ??
+        (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`),
     });
 
-    return { orderId: orderDoc.id };
+    if (error) return { error: error.message };
+
+    const row = Array.isArray(data) ? data[0] : data;
+    return { orderId: row?.id, orderNumber: row?.order_number };
   } catch (error: any) {
     console.error('Error creating order:', error);
     return { error: error.message || 'Failed to create order' };
   }
 }
 
-/**
- * Get order by ID
- */
 export async function getOrderById(orderId: string): Promise<{
   order?: Order;
   error?: string;
 }> {
-  try {
-    const orderRef = doc(db, 'orders', orderId);
-    const orderSnap = await getDoc(orderRef);
+  const { data, error } = await supabase()
+    .from('orders').select(ORDER_SELECT).eq('id', orderId).maybeSingle();
 
-    if (!orderSnap.exists()) {
-      return { error: 'Order not found' };
-    }
-
-    return {
-      order: {
-        id: orderSnap.id,
-        ...orderSnap.data(),
-      } as Order,
-    };
-  } catch (error: any) {
-    console.error('Error fetching order:', error);
-    return { error: error.message || 'Failed to fetch order' };
-  }
+  if (error) return { error: error.message };
+  if (!data) return { error: 'Order not found' };
+  return { order: mapOrder(data) };
 }
 
-/**
- * Get user's orders
- */
+/** RLS already limits this to the caller's own orders (admins see all). */
 export async function getUserOrders(userId: string): Promise<{
   orders?: Order[];
   error?: string;
 }> {
-  try {
-    
-    const ordersRef = collection(db, 'orders');
-    const q = query(
-      ordersRef,
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
+  const { data, error } = await supabase()
+    .from('orders').select(ORDER_SELECT)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
 
-    const querySnapshot = await getDocs(q);
-    const orders: Order[] = [];
-
-    querySnapshot.forEach((doc) => {
-      orders.push({
-        id: doc.id,
-        ...doc.data(),
-      } as Order);
-    });
-
-    return { orders };
-  } catch (error: any) {
-    console.error('Error fetching user orders:', error);
-    return { error: error.message || 'Failed to fetch orders' };
-  }
+  if (error) return { error: error.message };
+  return { orders: (data ?? []).map(mapOrder) };
 }
 
-/**
- * Update order status
- */
+/** Admin-only under RLS. The status-history trigger records the transition. */
 export async function updateOrderStatus(
   orderId: string,
   status: Order['status']
 ): Promise<{ success?: boolean; error?: string }> {
-  try {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, {
-      status,
-      updatedAt: serverTimestamp(),
-      ...(status === 'shipped' && { shippedAt: serverTimestamp() }),
-      ...(status === 'delivered' && { deliveredAt: serverTimestamp() }),
-    });
+  const patch: Record<string, any> = { status };
+  if (status === 'shipped') patch.shipped_at = new Date().toISOString();
+  if (status === 'delivered') patch.delivered_at = new Date().toISOString();
 
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error updating order status:', error);
-    return { error: error.message || 'Failed to update order status' };
-  }
+  const { error } = await supabase().from('orders').update(patch).eq('id', orderId);
+  return error ? { error: error.message } : { success: true };
 }
 
-/**
- * Update payment status
- */
 export async function updatePaymentStatus(
   orderId: string,
   paymentStatus: Order['paymentStatus']
 ): Promise<{ success?: boolean; error?: string }> {
-  try {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, {
-      paymentStatus,
-      updatedAt: serverTimestamp(),
-      ...(paymentStatus === 'paid' && { paidAt: serverTimestamp() }),
-    });
+  const patch: Record<string, any> = { payment_status: paymentStatus };
+  if (paymentStatus === 'paid') patch.paid_at = new Date().toISOString();
 
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error updating payment status:', error);
-    return { error: error.message || 'Failed to update payment status' };
-  }
+  const { error } = await supabase().from('orders').update(patch).eq('id', orderId);
+  return error ? { error: error.message } : { success: true };
 }

@@ -1,40 +1,19 @@
 import { create } from "zustand";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  serverTimestamp,
-  Timestamp
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { createClient } from '@/lib/supabase/client';
+import { getOrderById as fetchOrder, updateOrderStatus as setOrderStatus,
+         updatePaymentStatus as setPaymentStatus } from '@/lib/orders';
 import { Order, OrderStatus, PaymentStatus } from '@/types/types';
 
 interface AdminOrderDataStore {
   orders: Order[];
   loading: {
-    users: boolean;
-    orders: boolean;
-    products: boolean;
-    categories: boolean;
-    collections: boolean;
-    analytics: boolean;
-    adminAction: boolean;
+    users: boolean; orders: boolean; products: boolean; categories: boolean;
+    collections: boolean; analytics: boolean; adminAction: boolean;
   };
   error: {
-    users: string | null;
-    orders: string | null;
-    products: string | null;
-    categories: string | null;
-    collections: string | null;
-    analytics: string | null;
-    adminAction: string | null;
+    users: string | null; orders: string | null; products: string | null;
+    categories: string | null; collections: string | null;
+    analytics: string | null; adminAction: string | null;
   };
   pagination: {
     users: { lastDoc: any; hasMore: boolean };
@@ -43,7 +22,7 @@ interface AdminOrderDataStore {
     categories: { lastDoc: any; hasMore: boolean };
     collections: { lastDoc: any; hasMore: boolean };
   };
-  
+
   fetchOrders: (options?: FetchOptions) => Promise<void>;
   getOrderById: (orderId: string) => Promise<Order | null>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
@@ -60,22 +39,9 @@ interface FetchOptions {
   orderDirection?: 'asc' | 'desc';
 }
 
-interface FilterOption {
-  field: string;
-  operator: any;
-  value: any;
-}
+interface FilterOption { field: string; operator: any; value: any; }
 
-const formatFirestoreTimestamp = (timestamp: any): string => {
-  if (!timestamp) return '';
-  if (timestamp instanceof Timestamp) {
-    return timestamp.toDate().toISOString();
-  }
-  if (timestamp.toDate) {
-    return timestamp.toDate().toISOString();
-  }
-  return new Date(timestamp).toISOString();
-};
+const supabase = () => createClient();
 
 const createErrorMessage = (error: any): string => {
   if (error instanceof Error) return error.message;
@@ -83,27 +49,23 @@ const createErrorMessage = (error: any): string => {
   return 'An unknown error occurred';
 };
 
+/** Order field names -> orders column names. */
+const COLUMN: Record<string, string> = {
+  createdAt: 'created_at', updatedAt: 'updated_at', orderNumber: 'order_number',
+  paymentStatus: 'payment_status', customerName: 'customer_name',
+  customerEmail: 'customer_email', total: 'total', status: 'status',
+  userId: 'user_id', trackingNumber: 'tracking_number', carrier: 'carrier',
+  paymentMethod: 'payment_method',
+};
+const col = (field: string) => COLUMN[field] ?? field;
+
 const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
   orders: [],
-  
-  loading: {
-    users: false,
-    orders: false,
-    products: false,
-    categories: false,
-    collections: false,
-    analytics: false,
-    adminAction: false
-  },
-  error: {
-    users: null,
-    orders: null,
-    products: null,
-    categories: null,
-    collections: null,
-    analytics: null,
-    adminAction: null
-  },
+
+  loading: { users: false, orders: false, products: false, categories: false,
+             collections: false, analytics: false, adminAction: false },
+  error: { users: null, orders: null, products: null, categories: null,
+           collections: null, analytics: null, adminAction: null },
   pagination: {
     users: { lastDoc: null, hasMore: false },
     orders: { lastDoc: null, hasMore: false },
@@ -111,72 +73,51 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
     categories: { lastDoc: null, hasMore: false },
     collections: { lastDoc: null, hasMore: false },
   },
-  
-  resetOrders: () => set({ 
-    orders: [], 
-    pagination: { 
-      ...get().pagination, 
-      orders: { lastDoc: null, hasMore: false } 
-    } 
+
+  resetOrders: () => set({
+    orders: [],
+    pagination: { ...get().pagination, orders: { lastDoc: null, hasMore: false } }
   }),
-  
+
+  /** RLS gives admins every order; ordinary users would see only their own. */
   fetchOrders: async (options: FetchOptions = {}) => {
-    set(state => ({ 
+    set(state => ({
       loading: { ...state.loading, orders: true },
-      error: { ...state.error, orders: null } 
+      error: { ...state.error, orders: null }
     }));
-    
+
     try {
       const {
         limit: limitCount = 20,
-        startAfter: startAfterDoc,
+        startAfter: startOffset,
         filters = [],
         orderByField = 'createdAt',
         orderDirection = 'desc',
       } = options;
-      
-      let baseQuery = query(collection(db, 'orders'));
-      
-      if (filters.length > 0) {
-        filters.forEach(filter => {
-          baseQuery = query(baseQuery, where(filter.field, filter.operator, filter.value));
-        });
-      }
-      
-      let orderedQuery = query(baseQuery, orderBy(orderByField, orderDirection));
-      
-      let paginatedQuery;
-      if (startAfterDoc || get().pagination.orders.lastDoc) {
-        const lastDoc = startAfterDoc || get().pagination.orders.lastDoc;
-        paginatedQuery = query(orderedQuery, startAfter(lastDoc), limit(limitCount));
-      } else {
-        paginatedQuery = query(orderedQuery, limit(limitCount));
-      }
-      
-      const snapshot = await getDocs(paginatedQuery);
-      
-      const orders = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt,
-        updatedAt: doc.data().updatedAt,
-        paidAt: doc.data().paidAt || undefined,
-        shippedAt: doc.data().shippedAt || undefined,
-        deliveredAt: doc.data().deliveredAt || undefined,
-        pickedUpAt: doc.data().pickedUpAt || undefined,
-      } as Order));
-      
-      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
-      
+
+      const offset = (startOffset as number) ?? 0;
+
+      let q = supabase().from('orders').select(`
+        *, order_items ( id, product_id, variant_id, name, sku, variant_label,
+                         options, image_url, unit_price, quantity, line_total )
+      `);
+      for (const f of filters) q = q.eq(col(f.field), f.value);
+
+      const { data, error } = await q
+        .order(col(orderByField), { ascending: orderDirection === 'asc' })
+        .range(offset, offset + limitCount - 1);
+
+      if (error) throw new Error(error.message);
+
+      // Reuse the mapping in lib/orders via a single-row fetch shape.
+      const orders = (data ?? []).map((row: any) => mapRow(row));
+
       set(state => ({
-        orders: options.startAfter ? [...state.orders, ...orders] : orders,
+        orders: offset > 0 ? [...state.orders, ...orders] : orders,
         loading: { ...state.loading, orders: false },
         pagination: {
           ...state.pagination,
-          orders: {
-            lastDoc: lastVisible,
-            hasMore: snapshot.docs.length === limitCount
-          }
+          orders: { lastDoc: offset + orders.length, hasMore: orders.length === limitCount }
         }
       }));
     } catch (error) {
@@ -187,185 +128,123 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
       }));
     }
   },
-  
+
   getOrderById: async (orderId: string): Promise<Order | null> => {
-    try {
-      const orderDoc = await getDoc(doc(db, 'orders', orderId));
-      
-      if (!orderDoc.exists()) return null;
-      
-      return {
-        id: orderDoc.id,
-        ...orderDoc.data(),
-        createdAt: orderDoc.data().createdAt,
-        updatedAt: orderDoc.data().updatedAt,
-        paidAt: orderDoc.data().paidAt || undefined,
-        shippedAt: orderDoc.data().shippedAt || undefined,
-        deliveredAt: orderDoc.data().deliveredAt || undefined,
-        pickedUpAt: orderDoc.data().pickedUpAt || undefined,
-      } as Order;
-    } catch (error) {
-      console.error('Error getting order by ID:', error);
-      set(state => ({
-        error: { ...state.error, adminAction: createErrorMessage(error) }
-      }));
+    const { order, error } = await fetchOrder(orderId);
+    if (error) {
+      set(state => ({ error: { ...state.error, adminAction: error } }));
       return null;
     }
+    return order ?? null;
   },
-  
+
   updateOrderStatus: async (orderId: string, status: OrderStatus) => {
-    set(state => ({ 
-      loading: { ...state.loading, adminAction: true },
-      error: { ...state.error, adminAction: null } 
-    }));
-    
+    set(state => ({ loading: { ...state.loading, adminAction: true },
+                    error: { ...state.error, adminAction: null } }));
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      const updateData: any = {
-        status,
-        updatedAt: serverTimestamp(),
-      };
-      
-      if (status === 'shipped') {
-        updateData.shippedAt = serverTimestamp();
-      } else if (status === 'delivered') {
-        updateData.deliveredAt = serverTimestamp();
-      }
-      
-      await updateDoc(orderRef, updateData);
-      
-      // Get the full order details for email
-      const orderSnap = await getDoc(orderRef);
-      if (orderSnap.exists()) {
-        const { createdAt, ...orderData } = { id: orderSnap.id, ...orderSnap.data() } as Order;
-        const newCreatedAt = createdAt.toDate().toISOString();
-        const newOrderData = { ...orderData, createdAt: newCreatedAt };
-        
-        // Send appropriate email based on status
-        try {
-          if (status === 'shipped') {
-            // Send shipped email to customer
-            await fetch('/api/send-order-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: 'shipped',
-                order: newOrderData
-              })
-            });
-          } else if (status === 'delivered') {
-            // Send delivered email to customer
-            await fetch('/api/send-order-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: 'delivered',
-                order: newOrderData
-              })
-            });
-          }
-          
-          // Send admin notification for any status change
-          await fetch('/api/send-order-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'admin',
-              order: newOrderData,
-              statusChange: status
-            })
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notification:', emailError);
-          // Don't throw error - order update succeeded
-        }
-      }
-      
+      const { error } = await setOrderStatus(orderId, status);
+      if (error) throw new Error(error);
       set(state => ({
         loading: { ...state.loading, adminAction: false },
-        orders: state.orders.map(order => 
-          order.id === orderId 
-            ? { ...order, status, updatedAt: Timestamp.now() } 
-            : order
-        )
+        orders: state.orders.map(o => o.id === orderId ? { ...o, status } : o)
       }));
     } catch (error) {
-      console.error('Error updating order status:', error);
-      set(state => ({
-        loading: { ...state.loading, adminAction: false },
-        error: { ...state.error, adminAction: createErrorMessage(error) }
-      }));
+      set(state => ({ loading: { ...state.loading, adminAction: false },
+                      error: { ...state.error, adminAction: createErrorMessage(error) } }));
       throw error;
     }
   },
-  
-  updatePaymentStatus: async (orderId: string, status: PaymentStatus) => {
-    set(state => ({ 
-      loading: { ...state.loading, adminAction: true },
-      error: { ...state.error, adminAction: null } 
-    }));
-    
+
+  updatePaymentStatus: async (orderId: string, paymentStatus: PaymentStatus) => {
+    set(state => ({ loading: { ...state.loading, adminAction: true },
+                    error: { ...state.error, adminAction: null } }));
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      const updateData: any = {
-        paymentStatus: status,
-        updatedAt: serverTimestamp(),
-      };
-      
-      if (status === 'paid') {
-        updateData.paidAt = serverTimestamp();
-      }
-      
-      await updateDoc(orderRef, updateData);
-      
+      const { error } = await setPaymentStatus(orderId, paymentStatus);
+      if (error) throw new Error(error);
       set(state => ({
         loading: { ...state.loading, adminAction: false },
-        orders: state.orders.map(order => 
-          order.id === orderId 
-            ? { ...order, paymentStatus: status, updatedAt: Timestamp.now() } 
-            : order
-        )
+        orders: state.orders.map(o => o.id === orderId ? { ...o, paymentStatus } : o)
       }));
     } catch (error) {
-      console.error('Error updating payment status:', error);
-      set(state => ({
-        loading: { ...state.loading, adminAction: false },
-        error: { ...state.error, adminAction: createErrorMessage(error) }
-      }));
+      set(state => ({ loading: { ...state.loading, adminAction: false },
+                      error: { ...state.error, adminAction: createErrorMessage(error) } }));
       throw error;
     }
   },
-  
+
   updateOrder: async (orderId: string, data: Partial<Order>) => {
-    set(state => ({ 
-      loading: { ...state.loading, adminAction: true },
-      error: { ...state.error, adminAction: null } 
-    }));
-    
+    set(state => ({ loading: { ...state.loading, adminAction: true },
+                    error: { ...state.error, adminAction: null } }));
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
-      
+      const patch: Record<string, any> = {};
+      if (data.trackingNumber !== undefined) patch.tracking_number = data.trackingNumber;
+      if (data.carrier !== undefined)        patch.carrier = data.carrier;
+      if (data.customerNotes !== undefined)  patch.customer_notes = data.customerNotes;
+      if (data.paymentMethod !== undefined)  patch.payment_method = data.paymentMethod;
+      if (data.status !== undefined)         patch.status = data.status;
+      if (data.paymentStatus !== undefined)  patch.payment_status = data.paymentStatus;
+
+      if (Object.keys(patch).length > 0) {
+        const { error } = await supabase().from('orders').update(patch).eq('id', orderId);
+        if (error) throw new Error(error.message);
+      }
+
       set(state => ({
         loading: { ...state.loading, adminAction: false },
-        orders: state.orders.map(order => 
-          order.id === orderId 
-            ? { ...order, ...data, updatedAt: Timestamp.now() } 
-            : order
-        )
+        orders: state.orders.map(o => o.id === orderId ? { ...o, ...data } : o)
       }));
     } catch (error) {
-      console.error('Error updating order:', error);
-      set(state => ({
-        loading: { ...state.loading, adminAction: false },
-        error: { ...state.error, adminAction: createErrorMessage(error) }
-      }));
+      set(state => ({ loading: { ...state.loading, adminAction: false },
+                      error: { ...state.error, adminAction: createErrorMessage(error) } }));
       throw error;
     }
-  }
+  },
 }));
+
+/** Local copy of the orders mapper, kept in sync with lib/orders.ts. */
+function mapRow(row: any): Order {
+  const currency = String(row.currency).toLowerCase() as Order['currency'];
+  return {
+    id: row.id,
+    orderNumber: row.order_number,
+    userId: row.user_id,
+    deliveryType: row.delivery_type === 'in_store' ? 'inStore' : 'delivery',
+    items: (row.order_items ?? []).map((i: any) => ({
+      id: i.id,
+      productId: i.product_id ?? '',
+      variantId: i.variant_id ?? undefined,
+      name: i.name,
+      sku: i.sku,
+      price: Number(i.unit_price),
+      lineTotal: Number(i.line_total),
+      currency,
+      quantity: i.quantity,
+      variantLabel: i.variant_label ?? undefined,
+      options: i.options ?? {},
+      imageUrl: i.image_url ?? '',
+    })),
+    currency,
+    subtotal: Number(row.subtotal),
+    tax: Number(row.tax_amount ?? 0),
+    shippingCost: Number(row.shipping_cost ?? 0),
+    discount: Number(row.discount_amount ?? 0),
+    total: Number(row.total),
+    status: row.status,
+    paymentStatus: row.payment_status,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
+    paymentMethod: row.payment_method ?? undefined,
+    trackingNumber: row.tracking_number ?? undefined,
+    carrier: row.carrier ?? undefined,
+    customerNotes: row.customer_notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    paidAt: row.paid_at ?? undefined,
+    shippedAt: row.shipped_at ?? undefined,
+    deliveredAt: row.delivered_at ?? undefined,
+    pickedUpAt: row.picked_up_at ?? undefined,
+  };
+}
 
 export default useAdminOrdersData;

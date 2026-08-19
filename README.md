@@ -16,25 +16,16 @@ npm run dev
 
 ### Environment variables
 
-Create `.env.local` with **your own** Firebase / Cloudinary / SMTP credentials — do not reuse hoodskool's, or this app will read and write that project's live data.
+Create `.env.local` with your own Supabase / Cloudinary / SMTP credentials.
 
 ```
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
-# Firebase (client)
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
-
-# Firebase Admin (server)
-FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=
-FIREBASE_STORAGE_BUCKET=
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=
+DATABASE_URL=
 
 # Cloudinary
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
@@ -55,7 +46,17 @@ EMAIL_DEBUG=false
 | `npm run dev` | Dev server (Turbopack) |
 | `npm run build` | Production build |
 | `npm start` | Serve the production build |
-| `npm run seed` | Seed products into Firestore (`lib/seed-products.js`) |
+| `npm run seed` | Apply the sample catalog (`supabase/seed.sql`) |
+| `npm run make-admin -- you@example.com` | Promote an existing account to admin (`scripts/make-admin.js`) |
+
+## Documentation
+
+| Doc | Contents |
+|-----|----------|
+| [docs/PLAN.md](docs/PLAN.md) | Roadmap — what's next, what's deliberately out of scope |
+| [docs/STRUCTURE.md](docs/STRUCTURE.md) | Architecture, directory map, conventions |
+| [docs/PROGRESS.md](docs/PROGRESS.md) | Change log |
+| [docs/database-design.md](docs/database-design.md) | Schema, RLS model, decision log |
 
 ## Features
 
@@ -77,7 +78,7 @@ EMAIL_DEBUG=false
 | Styling | Tailwind CSS 4 |
 | UI | shadcn/ui + Radix, framer-motion, Lenis |
 | State | zustand + React Context |
-| Backend | Firebase (Auth + Firestore) / firebase-admin |
+| Backend | Supabase (Postgres 17 + Auth + RLS) |
 | Media | Cloudinary + sharp |
 | Email | nodemailer + Handlebars |
 | Deployment | Vercel |
@@ -97,7 +98,7 @@ constants/           # Store configuration
 contexts/            # React context providers (cart, currency)
 emails/              # Handlebars email templates
 hooks/               # Custom React hooks (useCart, ...)
-lib/                 # Firebase, Cloudinary, email, seed script
+lib/                 # Supabase clients, data layer, Cloudinary, email
 public/              # Static assets
 types/               # TypeScript types
 middleware.ts        # Route protection

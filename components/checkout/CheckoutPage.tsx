@@ -108,7 +108,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
       return;
     }
 
-    if (!user?.uid) {
+    if (!user?.id) {
       toast.error("You must be logged in to place an order");
       return;
     }
@@ -132,7 +132,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
       };
 
       // Call checkout function from useCart
-      const result = await checkout(user.uid, checkoutData, currency.code);
+      const result = await checkout(user.id, checkoutData, currency.code);
 
       if (!result.success) {
         toast.error(result.error || "Failed to place order");

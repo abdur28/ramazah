@@ -20,7 +20,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
 import { toast } from 'sonner';
-import { deleteUser } from '@/lib/firebase/auth';
+import { deleteUser } from '@/lib/supabase/auth';
 
 export default function SettingsPage() {
   const { user, profile, refetch, signOut } = useAuth();

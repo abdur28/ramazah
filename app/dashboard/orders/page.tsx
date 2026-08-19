@@ -69,8 +69,8 @@ export default function DashboardOrdersPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchUserOrders(user.uid);
+    if (user?.id) {
+      fetchUserOrders(user.id);
     }
   }, [user]);
 

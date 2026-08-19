@@ -22,7 +22,7 @@ export default function CartInitializer() {
         // User is logged in
         if (!hasSynced.current) {
           // First time sync after login
-          await syncWithFirebase(user.uid);
+          await syncWithFirebase(user.id);
           hasSynced.current = true;
           
           // Clear localStorage after successful sync to prevent duplicates
@@ -30,7 +30,7 @@ export default function CartInitializer() {
           localStorage.removeItem('ramazah-cart');
         } else {
           // Already synced, just reload from Firebase
-          await loadCart(user.uid);
+          await loadCart(user.id);
         }
       } else {
         // Guest user - load from localStorage

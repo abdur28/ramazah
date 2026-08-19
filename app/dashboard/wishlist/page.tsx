@@ -20,7 +20,7 @@ export default function WishlistPage() {
   // Reload wishlist when component mounts
   useEffect(() => {
     if (user) {
-      loadWishlist(user.uid);
+      loadWishlist(user.id);
     }
   }, [user, loadWishlist]);
 

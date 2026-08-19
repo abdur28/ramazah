@@ -21,8 +21,9 @@ const transporter = nodemailer.createTransport({
  */
 export function getCurrencySymbol(currency: CurrencyCode): string {
   const symbols: Record<CurrencyCode, string> = {
+    ngn: '₦',
     usd: '$',
-    rub: '₽'
+    egp: 'E£'
   };
   return symbols[currency] || currency.toUpperCase();
 }
@@ -224,7 +225,7 @@ export async function sendNewArrivalsEmail(
         imageUrl: p.images[0]?.url,
         productUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/product/${p.slug}`,
         priceUSD: p.prices.find(pr => pr.currency === 'usd')?.price || 0,
-        priceRUB: p.prices.find(pr => pr.currency === 'rub')?.price || 0
+        priceNGN: p.prices.find(pr => pr.currency === 'ngn')?.price || 0
       })),
       shopUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/shop`
     }
@@ -269,9 +270,9 @@ export async function sendPromotionsEmail(
         imageUrl: p.images[0]?.url,
         productUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/product/${p.slug}`,
         priceUSD: p.prices.find(pr => pr.currency === 'usd')?.price || 0,
-        priceRUB: p.prices.find(pr => pr.currency === 'rub')?.price || 0,
+        priceNGN: p.prices.find(pr => pr.currency === 'ngn')?.price || 0,
         compareAtPriceUSD: p.prices.find(pr => pr.currency === 'usd')?.compareAtPrice || 0,
-        compareAtPriceRUB: p.prices.find(pr => pr.currency === 'rub')?.compareAtPrice || 0
+        compareAtPriceNGN: p.prices.find(pr => pr.currency === 'ngn')?.compareAtPrice || 0
       })),
       shopUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/shop`
     }
@@ -304,7 +305,7 @@ export async function sendWishlistAlertEmail(
       productImage: product.images[0]?.url,
       productUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/product/${product.slug}`,
       priceUSD: product.prices.find(p => p.currency === 'usd')?.price || 0,
-      priceRUB: product.prices.find(p => p.currency === 'rub')?.price || 0,
+      priceNGN: product.prices.find(p => p.currency === 'ngn')?.price || 0,
       wishlistUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/wishlist`
     }
   });

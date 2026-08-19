@@ -66,7 +66,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     setIsTogglingWishlist(true);
 
     try {
-      await toggleWishlist(product.id, user.uid);
+      await toggleWishlist(product.id, user.id);
     } catch (error) {
       console.error('Failed to toggle wishlist:', error);
     } finally {
@@ -110,7 +110,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         maxQuantity: product.totalStock,
       };
 
-      await addItem(cartItem, user?.uid);
+      await addItem(cartItem, user?.id);
       
       setTimeout(() => setIsAdding(false), 1000);
     } catch (error) {
@@ -161,7 +161,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         cartItem.color = selectedColor;
       }
 
-      await addItem(cartItem, user?.uid);
+      await addItem(cartItem, user?.id);
       
       // Close dialog and reset
       setShowVariantDialog(false);

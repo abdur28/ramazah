@@ -46,7 +46,7 @@ const AdminLayout = ({ authUser } : { authUser: AuthUser }) => {
         return null;
     }   
 
-    if (user?.uid !== authUser.uid) {
+    if (user?.id !== authUser.uid) {
         redirect('/auth/login?redirect=/admin');
     }
 
