@@ -54,9 +54,16 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   // Get current currency object
   const currency = availableCurrencies.find(c => c.code === selectedCurrency) || defaultCurrency;
 
-  // Format price with currency symbol
+  // Format price with currency symbol.
+  // Grouped, and without kobo on Naira: `₦100000.00` was both ungrouped and
+  // quoting a subunit no one prices in. The locale is pinned rather than left
+  // to the host, so the server and the browser render the same string.
   const formatPrice = (amount: number): string => {
-    return `${currency.symbol}${amount.toFixed(2)}`;
+    const fractionDigits = currency.code === 'ngn' ? 0 : 2;
+    return `${currency.symbol}${amount.toLocaleString('en-NG', {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    })}`;
   };
 
   // Get price for selected currency from prices array

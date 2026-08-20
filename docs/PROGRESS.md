@@ -5,6 +5,85 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-20 — Navigation, search, cart
+
+The storefront chrome, redesigned end to end. Colour and type were already done; this
+was structure, wording and the links themselves.
+
+**Navigation had four hardcoded copies** — `Hero.tsx`, `DesktopNavigation.tsx`,
+`MobileMenu.tsx`, `MobileSearch.tsx` — which is how `hoodhub.ru`, the previous brand's
+live site, survived the rebrand in two of them. All four now read
+`constants/navigation.ts`, and the hero's copy is deleted outright: the landing page was
+using six drop-in links *as* the site's navigation.
+
+It is a curated constant rather than `getAllCategories()`, which is what
+[PLAN.md](PLAN.md) called for. The bar needs shorter labels than the table carries
+("Beauty", not "Beauty & Personal Care") and a fixed order; the full names still show on
+the category pages and in the sheets. Cost: a category added in admin needs a line here.
+Every href was diffed against the built routes — all 9 category pages plus `/contact`
+resolve.
+
+**Seven labels plus the lockup and the icons do not fit at `md`**, so the
+desktop/mobile switch moved `md` → `lg`. 768–1023px now gets the menu button.
+
+**The home navbar shows its links the whole way down.** Navigation and the menu button
+used to appear only once the hero had scrolled past, so the landing screen offered no
+way into the shop at all. It stays transparent over the hero — a cream scrim was tried
+and rejected — with the dark lockup rather than `inverse`, because the hero photography
+is light. If the eventual Ramazah hero art is dark, that flips back in two lines.
+
+**Search was rebuilt as a dialog** (`SearchDialog.tsx`, replacing `MobileSearch.tsx`,
+which the desktop navbar also opened). Top-anchored, full screen on mobile, and it
+**searches as you type** — 250ms debounce into `search_product_ids()`, so ranking stays
+in Postgres — with product rows, keyboard navigation, and a stale-response guard. It
+previously submitted to `/search?q=`, a route that has never existed, so **every search
+404'd**. Enter now opens the highlighted result and nothing links to `/search`.
+
+Checking the trending chips against the real catalog caught the same class of problem:
+half of them ("Hibiscus tea", "Dates", "Incense") matched nothing, and a chip that finds
+nothing reads as a broken search. The list is now four terms verified to hit.
+
+**Cart interior rebuilt.** Progress bar to free shipping, per-row pending state instead
+of a full-panel blur on every quantity tick, checkout moved to `bg-sage-deep` per rule 1,
+and out-of-stock lines disable checkout with the reason — `create_order()` would have
+rejected the order anyway, opaquely. Its empty state pointed at `/clothings`, a
+hoodskool route; "Continue shopping" is now a dismissal, since the sheet sits over the
+page you were already on.
+
+**A live bug, found by the client testing the page.** Quick-add from a product card
+raised `Missing variant`. `cart_items` keys on `variant_id`, but `addToCartDirect()`
+never set one, and the card only opened its variant dialog for products with legacy
+`sizes`/`colors` — so **every product on the generic option model failed to add while
+signed in**. Signed out it appeared to work and wrote a variant-less line that would
+have failed at sync. Fixed by resolving the variant: one variant quick-adds, Size/Colour
+opens the dialog, generic options route to the product page, where the real axes render.
+
+`addItem` returned `void` and swallowed the failure into `console.error`, which is why
+this looked like a dead button rather than an error; it now returns `{ error }` and both
+call sites raise a toast. `CartItem` gained `variantLabel`, mapped in `mapCartRow`, so a
+cart line finally reads "1kg / Whole bean".
+
+**Prices were unformatted** — `₦100000.00`, ungrouped and quoting a subunit nobody
+prices in. `formatPrice` now groups and drops kobo on Naira, with the locale pinned so
+the server and browser render the same string. Note: VAT creates fractions, so displayed
+parts can sum ₦1 off the displayed total.
+
+**Menu sheet redesigned** into labelled sections (Home · Shop · Account · Contact), on
+the floating panel the cart and search dialog use. Account is auth-aware — identity plus
+Orders, Wishlist, Sign out, and Admin when `isAdmin`; signed out it asks for the account
+instead of listing four pages that all bounce to the login form. Dead links removed
+along the way: `/orders` and `/faq` never existed.
+
+**Verified:** typecheck and production build clean; every nav href resolves to a built
+route; search tested against the live database as an anonymous user; add-to-cart tested
+end to end as a real signed-in user (temporary account, created and deleted) — insert
+under RLS, correct label, price and stock read back.
+
+Still hoodskool, and next: `components/home/` (HOODIES/T-SHIRTS/JEANS, "STREET CULTURE
+REDEFINED", "Join Hoodhub"), the footer (`/clothings`, "JOIN THE HOOD", and a
+Visa/Mastercard/PayPal row for payments that are not processed), the five email
+templates, and everything in `public/`.
+
 ## 2026-08-20 — Brand lockup, icons, mobile menu
 
 **Brand mark.** `components/brand/BrandMark.tsx` renders the supplied artwork —

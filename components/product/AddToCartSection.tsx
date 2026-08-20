@@ -9,6 +9,7 @@ import { useCart, useIsInCart } from "@/hooks/useCart";
 import { useDashboard, useIsInWishlist } from "@/hooks/useDashboard";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import type { Product, ProductVariant, CartItem } from "@/types/types";
+import { toast } from "sonner";
 
 interface AddToCartSectionProps {
   product: Product;
@@ -85,15 +86,22 @@ export default function AddToCartSection({
       // Add variant information if available
       if (selectedVariant) {
         if (selectedVariant.id) cartItem.variantId = selectedVariant.id;
+        if (selectedVariant.label) cartItem.variantLabel = selectedVariant.label;
         if (selectedVariant.size) cartItem.size = selectedVariant.size;
         if (selectedVariant.color) cartItem.color = selectedVariant.color;
       }
 
-      await addItem(cartItem, user?.id);
+      const { error } = await addItem(cartItem, user?.id);
+      if (error) {
+        toast.error("Could not add that to your cart. Please try again.");
+        setIsAdding(false);
+        return;
+      }
 
       setTimeout(() => setIsAdding(false), 1000);
     } catch (error) {
       console.error("Failed to add to cart:", error);
+      toast.error("Could not add that to your cart. Please try again.");
       setIsAdding(false);
     }
   };

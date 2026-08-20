@@ -1,30 +1,27 @@
 "use client";
 
-import CrossedLink from "@/components/ui/crossed-link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 
-const navigationLinks = [
-  { name: "Clothings", href: "/clothings" },
-  { name: "Accessories", href: "/accessories" },
-  { name: "Candles & Matches", href: "/candles-matches" },
-  { name: "Artwork", href: "/artwork" },
-  { name: "Hoodhub", href: "/hoodhub" },
-  { name: "Contact", href: "/contact" },
-];
-
+// NOTE: still hoodskool's photography — replace with Ramazah's own.
 const backgroundImages = [
-  "/banner/Ramazah_банер 1 _resized.jpg", 
+  "/banner/Ramazah_банер 1 _resized.jpg",
   "/banner/Ramazah_банер правка.jpg",
   "/banner/Ramazah_банер 2 копия_resized.jpg",
 ];
 
+/**
+ * The landing image. It used to double as the site's primary navigation —
+ * six links dropping in one after another — which is now in the navbar above,
+ * where it is reachable from every page and does not need six seconds to
+ * finish animating.
+ */
 export default function Hero() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentImageIndex((prevIndex) => 
+      setCurrentImageIndex((prevIndex) =>
         (prevIndex + 1) % backgroundImages.length
       );
     }, 5000);
@@ -72,46 +69,6 @@ export default function Hero() {
           />
         </AnimatePresence>
       </div>
-      
-      {/* Navigation Links with Drop Animation */}
-      <nav className="flex flex-col items-center justify-center gap-3 md:gap-4">
-        {navigationLinks.map((link, index) => (
-          <motion.div
-            key={link.name}
-            initial={{ 
-              y: -200, 
-              opacity: 0,
-              scale: 0.8
-            }}
-            whileInView={{ 
-              y: 0, 
-              opacity: 1,
-              scale: 1
-            }}
-            viewport={{ once: true }}
-            transition={{
-              type: "spring",
-              damping: 12,
-              stiffness: 100,
-              delay: index * 0.5,
-            }}
-            whileHover={{ 
-              scale: 1.05,
-              transition: { duration: 0.2 }
-            }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <CrossedLink
-              href={link.href}
-              lineColor="gold"
-            >
-              <span className="font-body text-foreground text-sm md:text-base tracking-wide">
-                {link.name}
-              </span>
-            </CrossedLink>
-          </motion.div>
-        ))}
-      </nav>
     </section>
   );
 }

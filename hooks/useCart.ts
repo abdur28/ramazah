@@ -25,7 +25,7 @@ interface CartState {
 
   // Actions
   loadCart: (userId?: string) => Promise<void>;
-  addItem: (item: Omit<CartItem, 'id'>, userId?: string) => Promise<void>;
+  addItem: (item: Omit<CartItem, 'id'>, userId?: string) => Promise<{ error: string | null }>;
   removeItem: (cartItemId: string, userId?: string) => Promise<void>;
   updateQuantity: (cartItemId: string, quantity: number, userId?: string) => Promise<void>;
   clearCart: (userId?: string) => Promise<void>;
@@ -149,6 +149,8 @@ export const useCart = create<CartState>()(
       },
 
       // Add item to cart
+      // Returns the failure rather than only logging it, so the button that
+      // called it can tell the customer their item did not go in.
       addItem: async (newItem: Omit<CartItem, 'id'>, userId?: string) => {
         set({ isLoading: true });
 
@@ -156,15 +158,16 @@ export const useCart = create<CartState>()(
           const sanitizedItem = removeUndefined(newItem) as Omit<CartItem, 'id'>;
 
           if (userId) {
-            const { cartItemId, error } = await addToCartFirebase(userId, sanitizedItem);
-            
+            const { error } = await addToCartFirebase(userId, sanitizedItem);
+
             if (error) {
               console.error('Failed to add item to cart:', error);
               set({ isLoading: false });
-              return;
+              return { error };
             }
 
             await get().loadCart(userId);
+            return { error: null };
           } else {
             const { items } = get();
             const existingIndex = items.findIndex(item => isSameCartItem(item, sanitizedItem));
@@ -190,10 +193,12 @@ export const useCart = create<CartState>()(
 
             set({ items: updatedItems, isLoading: false });
             get().calculateItemCount();
+            return { error: null };
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to add item:', error);
           set({ isLoading: false });
+          return { error: error?.message ?? 'Failed to add item' };
         }
       },
 

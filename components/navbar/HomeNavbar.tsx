@@ -4,88 +4,63 @@ import { useState, useEffect } from 'react';
 import { Search, User, ShoppingBag, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MobileMenu from '@/components/navbar/MobileMenu';
-import MobileSearch from '@/components/navbar/MobileSearch';
+import SearchDialog from '@/components/navbar/SearchDialog';
 import DesktopNavigation from '@/components/navbar/DesktopNavigation';
 import CartSheet from '@/components/cart/CartSheet';
 import { useCartCount } from '@/hooks/useCart';
 
+/**
+ * Home page navbar. Same contents as the site navbar — the difference is only
+ * its ground: transparent over the hero, becoming the solid bar with a
+ * hairline once the hero has scrolled past.
+ *
+ * Navigation and the menu button are present the whole way down. They used to
+ * appear only once the hero had scrolled past, which left the landing screen
+ * with no way into the shop but the logo.
+ */
 export default function HomeNavbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  
+
   // Get cart count from the cart store
   const cartCount = useCartCount();
 
   useEffect(() => {
-    const checkScrollPosition = () => {
-      const heroHeight = window.innerHeight * 0.9;
-      setIsScrolled(window.scrollY > heroHeight);
-    };
-
-    checkScrollPosition();
-
     const handleScroll = () => {
-      const heroHeight = window.innerHeight * 0.95;
-      setIsScrolled(window.scrollY > heroHeight);
+      setIsScrolled(window.scrollY > window.innerHeight * 0.9);
     };
 
+    handleScroll();
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   return (
     <>
-      <motion.nav
-        className="fixed top-0 left-0 right-0 z-50 transition-colors duration-300"
-        initial={{ backgroundColor: 'transparent' }}
-        animate={{
-          backgroundColor: isScrolled ? 'var(--background)' : 'transparent',
-        }}
-      >
-        <AnimatePresence>
-          {isScrolled && (
-            <motion.div
-              className="absolute bottom-0 left-0 right-0 h-[1px] bg-foreground/10"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            />
-          )}
-        </AnimatePresence>
+      <nav className="fixed top-0 left-0 right-0 z-50">
+        {/* Transparent over the hero; the solid bar fades in past it. */}
+        <div
+          aria-hidden
+          className={`absolute inset-0 bg-card border-b border-rule transition-opacity duration-300 ${
+            isScrolled ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
 
-        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${isScrolled ? 'bg-card' : ''}`}>
-          <div className="flex items-center justify-between h-16 md:h-20">
-            {/* Left: Logo - Mobile */}
-            <div className="flex items-center md:hidden">
-              <BrandMark variant={isScrolled ? "default" : "inverse"} />
-            </div>
-
-            {/* Desktop Logo */}
-            <div className="items-center md:flex hidden">
-              <BrandMark variant={isScrolled ? "default" : "inverse"} />
-            </div>
+        <div className="relative mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 md:h-20 gap-4">
+            <BrandMark />
 
             {/* Desktop Navigation with Dropdowns */}
-            <AnimatePresence>
-              {isScrolled && (
-                <motion.div
-                  className="hidden md:block"
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <DesktopNavigation />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="hidden lg:block">
+              <DesktopNavigation />
+            </div>
 
             {/* Right: Icons */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
-                onClick={() => setIsMobileSearchOpen(true)}
+                onClick={() => setIsSearchOpen(true)}
                 className="p-2 hover:bg-foreground/5 rounded-md transition-colors"
                 aria-label="Search"
               >
@@ -118,28 +93,20 @@ export default function HomeNavbar() {
                 </AnimatePresence>
               </button>
 
-              <AnimatePresence>
-                {isScrolled && (
-                  <motion.button
-                    onClick={() => setIsMobileMenuOpen(true)}
-                    className="md:hidden p-2 hover:bg-foreground/5 rounded-md transition-colors"
-                    aria-label="Open menu"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.3, delay: 0.1 }}
-                  >
-                    <Menu className="h-5 w-5" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="lg:hidden p-2 hover:bg-foreground/5 rounded-md transition-colors"
+                aria-label="Open menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
             </div>
           </div>
         </div>
-      </motion.nav>
+      </nav>
 
       <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-      <MobileSearch isOpen={isMobileSearchOpen} onClose={() => setIsMobileSearchOpen(false)} />
+      <SearchDialog isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <CartSheet isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </>
   );

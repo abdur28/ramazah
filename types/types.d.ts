@@ -227,7 +227,10 @@ export interface CartItem {
   prices: ProductPrice[];
   quantity: number;
   image: string;
-  
+
+  /** Rendered axes, e.g. '250g / Ground'. Empty for option-less products. */
+  variantLabel?: string;
+
   size?: string;
   color?: Color;
   sku: string;

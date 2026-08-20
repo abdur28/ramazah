@@ -17,25 +17,28 @@ what still needs replacing.
 See [PROGRESS.md](PROGRESS.md) for the log and
 [database-design.md](database-design.md) for the schema and decisions.
 
+**Storefront chrome — complete.** Navigation, search, cart and the menu sheet. One
+navigation source in `constants/navigation.ts` replaces four hardcoded copies, and
+`hoodhub.ru` is gone. Search actually searches (it used to 404), the cart quick-add bug
+that blocked every generic-option product is fixed, and prices are formatted for
+Naira.
+
 ---
 
 ## Next
 
-### 1. Storefront content and navigation
-The highest-visibility problem. Colours, type and the brand lockup are done; the
-**words** are still hoodskool's:
+### 1. Storefront content
+The chrome is done; the **words and the pictures** are still hoodskool's:
 
-- Navigation is **hardcoded in four files** (`Hero.tsx`, `DesktopNavigation.tsx`,
-  `MobileSearch.tsx`, `Footer.tsx`) with the old categories — and
-  `DesktopNavigation.tsx` links to **`hoodhub.ru`**, a live external site belonging to
-  the previous brand. Point these at `getAllCategories()`.
 - Copy across `components/home/` is streetwear: "STREET CULTURE REDEFINED",
-  "JOIN THE HOOD", HOODIES / T-SHIRTS / JEANS.
-- The footer advertises **Visa, Mastercard, PayPal and Apple Pay** — none of which
-  exist, since there is no payment processing.
-- `public/` photography is still hoodskool's — the hero banners, `DSC*.jpg` and the
-  catalog shots. They are still referenced by components, so they go when the content
-  pass replaces those sections, not before.
+  "JOIN THE HOOD", HOODIES / T-SHIRTS / JEANS, and links to `/clothings` and
+  `/hoodhub` that resolve to nothing.
+- The footer carries the same dead links, plus **Visa, Mastercard, PayPal and Apple
+  Pay** — none of which exist, since there is no payment processing.
+- The five email templates still greet customers as "the Hood".
+- `public/` photography is still hoodskool's — the hero banners are studio shots of a
+  model in a HOOD hoodie. They are referenced by `Hero.tsx` and the home sections, so
+  they go when the content pass replaces those sections, not before.
 
 ### 2. Admin product form
 The data layer writes the generic option model, but the form still only understands
@@ -46,6 +49,13 @@ expiry-date entry for perishables. This is a UI rebuild, not a port.
 ### 3. Product pages and filters
 Size filters and size guides do not fit coffee and spices. Filtering should move to
 the generic options plus tags, using `product_listing` and `search_product_ids()`.
+
+`ProductCard`'s quick-add dialog is part of this: it only speaks Size and Colour, so a
+product on the generic option model routes to the product page instead of choosing in
+place. Deliberate, but it is the same rebuild.
+
+**A search results page** would also belong here. Search currently lives entirely in
+the dialog, which shows the top six matches and asks you to refine.
 
 ### 4. Google sign-in
 Currently an unconfigured button that returns a raw `400`. Either enable the provider
@@ -69,6 +79,11 @@ Naira amounts).
   mobile client reuses the same API with no bespoke backend.
 - **Tremor replacement** — `@tremor/react` is React 18-only and forces
   `legacy-peer-deps=true`. Used in 5 admin analytics files.
+- **Navigation from the database** — `constants/navigation.ts` is curated, so a
+  category added in admin needs a line there. Worth revisiting when the catalog stops
+  changing shape; the labels and order would still need somewhere to live.
+- **Rounding display** — Naira prices drop kobo, so a cart's displayed parts can sum
+  ₦1 off its displayed total. Harmless until invoices exist; not once they do.
 
 ## Deliberately not doing
 

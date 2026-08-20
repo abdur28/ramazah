@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { CartItem, Product, Color } from "@/types/types";
 import { Skeleton } from "./ui/skeleton";
+import { toast } from "sonner";
 
 interface ProductCardProps {
   product: Product;
@@ -51,6 +52,12 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const hasSizes = product.sizes && product.sizes.length > 0;
   const hasColors = product.colors && product.colors.length > 0;
 
+  // The cart keys on variant_id, and every product has at least one variant —
+  // option-less ones get a default. A quick add must therefore resolve a
+  // variant; sending the product alone fails with "Missing variant".
+  const variants = product.variants ?? [];
+  const soleVariant = variants.length === 1 ? variants[0] : undefined;
+
   // Get prices for display
   const priceData = getPriceWithCompare(product.prices);
 
@@ -80,41 +87,61 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     
     if (!product.inStock || isAdding) return;
 
-    // If product has variants, show dialog
-    if (hasVariants && (hasSizes || hasColors)) {
-      setShowVariantDialog(true);
-      // Reset selections
-      setSelectedSize(undefined);
-      setSelectedColor(undefined);
-    } else {
-      // Add directly if no variants
-      addToCartDirect();
+    if (variants.length > 1) {
+      // The card's dialog only speaks Size and Colour. Anything on the generic
+      // option model — Weight, Grind, Volume — has to be chosen on the product
+      // page, which renders whatever axes the product actually has.
+      if (hasSizes || hasColors) {
+        setShowVariantDialog(true);
+        setSelectedSize(undefined);
+        setSelectedColor(undefined);
+      } else {
+        router.push(`/product/${product.slug}`);
+      }
+      return;
     }
+
+    addToCartDirect();
   };
 
   const addToCartDirect = async () => {
+    if (!soleVariant) {
+      toast.error('This product is unavailable right now.');
+      return;
+    }
+
     setIsAdding(true);
 
     try {
       const primaryImage = product.images.find(img => img.isPrimary) || product.images[0];
-      
+
       const cartItem: Omit<CartItem, 'id'> = {
         productId: product.id,
+        variantId: soleVariant.id,
         name: product.name,
         slug: product.slug,
-        prices: product.prices || [],
+        prices: soleVariant.prices?.length ? soleVariant.prices : product.prices || [],
         quantity: 1,
         image: primaryImage?.secureUrl || '/placeholder-product.jpg',
-        sku: product.sku,
-        inStock: product.inStock,
-        maxQuantity: product.totalStock,
+        variantLabel: soleVariant.label,
+        size: soleVariant.size,
+        color: soleVariant.color,
+        sku: soleVariant.sku || product.sku,
+        inStock: soleVariant.inStock ?? product.inStock,
+        maxQuantity: soleVariant.stockCount || product.totalStock,
       };
 
-      await addItem(cartItem, user?.id);
-      
+      const { error } = await addItem(cartItem, user?.id);
+      if (error) {
+        toast.error('Could not add that to your cart. Please try again.');
+        setIsAdding(false);
+        return;
+      }
+
       setTimeout(() => setIsAdding(false), 1000);
     } catch (error) {
       console.error('Failed to add to cart:', error);
+      toast.error('Could not add that to your cart. Please try again.');
       setIsAdding(false);
     }
   };
@@ -135,6 +162,12 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         (!hasColors || v.color?.name === selectedColor?.name)
       );
 
+      if (!matchingVariant) {
+        toast.error('That combination is not available.');
+        setIsAdding(false);
+        return;
+      }
+
       // Use variant prices if available, otherwise product prices
       const prices = matchingVariant?.prices || product.prices;
 
@@ -150,10 +183,8 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         maxQuantity: matchingVariant?.stockCount || product.totalStock,
       };
 
-      // Add variant details if selected
-      if (matchingVariant) {
-        cartItem.variantId = matchingVariant.id;
-      }
+      cartItem.variantId = matchingVariant.id;
+      cartItem.variantLabel = matchingVariant.label;
       if (selectedSize) {
         cartItem.size = selectedSize;
       }
@@ -161,8 +192,13 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         cartItem.color = selectedColor;
       }
 
-      await addItem(cartItem, user?.id);
-      
+      const { error } = await addItem(cartItem, user?.id);
+      if (error) {
+        toast.error('Could not add that to your cart. Please try again.');
+        setIsAdding(false);
+        return;
+      }
+
       // Close dialog and reset
       setShowVariantDialog(false);
       setSelectedSize(undefined);

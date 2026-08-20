@@ -412,6 +412,7 @@ function mapCartRow(row: any): CartItem {
     prices: variant.prices ?? [],
     quantity: row.quantity,
     image: image?.secure_url ?? '',
+    variantLabel: variant.label,
     size: variant.size,
     color: variant.color,
     sku: variant.sku,

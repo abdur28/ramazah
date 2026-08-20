@@ -33,8 +33,11 @@ app/
 ├── categories/       [...slug] catch-all, slug-addressed
 ├── checkout/, dashboard/, product/, contact/
 
-components/          86 components — ui/ (shadcn), admin/, home/, layout/,
-                     navbar/, footer/, cart/, checkout/, product/, category/
+components/          ui/ (shadcn), admin/, home/, layout/, navbar/, footer/,
+                     cart/, checkout/, product/, category/, brand/
+constants/
+├── navigation.ts    The one navigation source — bar, menu sheet, search dialog
+└── index.ts         Currencies, VAT rate, shipping thresholds
 contexts/            AuthContext · CartInitializer · Currency
 hooks/
 ├── admin/           7 zustand stores, one per admin domain
