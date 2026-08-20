@@ -59,7 +59,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 z-50"
+            className="fixed inset-0 bg-foreground/50 z-50"
           />
 
           {/* Cart Panel */}
@@ -169,7 +169,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
                                 </div>
                               )}
                               {!item.inStock && (
-                                <p className="text-xs text-red-500 mt-1">Out of stock</p>
+                                <p className="text-xs text-destructive mt-1">Out of stock</p>
                               )}
                             </div>
                             <button
@@ -212,7 +212,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
                           
                           {/* Max quantity warning */}
                           {item.quantity >= item.maxQuantity && (
-                            <p className="text-xs text-orange-500 mt-1">
+                            <p className="text-xs text-warning mt-1">
                               Max quantity reached
                             </p>
                           )}
@@ -241,7 +241,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
                     <span className="text-foreground/60">Shipping</span>
                     <span className="font-body font-medium">
                       {cartTotals.shipping === 0 ? (
-                        <span className="text-green-600">Free</span>
+                        <span className="text-success">Free</span>
                       ) : (
                         formatPrice(cartTotals.shipping)
                       )}

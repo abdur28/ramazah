@@ -20,12 +20,12 @@ const getOrderStatusConfig = (status: OrderStatus) => {
     pending: { 
       icon: <Clock className="h-4 w-4" />, 
       label: "Pending",
-      gradient: "from-yellow-500/10 to-orange-500/10 border-yellow-500/20"
+      gradient: "from-warning/10 to-warning/10 border-warning/20"
     },
     processing: { 
       icon: <Package className="h-4 w-4" />, 
       label: "Processing",
-      gradient: "from-blue-500/10 to-cyan-500/10 border-blue-500/20"
+      gradient: "from-primary/10 to-cyan-500/10 border-primary/20"
     },
     shipped: { 
       icon: <Truck className="h-4 w-4" />, 
@@ -35,17 +35,17 @@ const getOrderStatusConfig = (status: OrderStatus) => {
     delivered: { 
       icon: <CheckCircle2 className="h-4 w-4" />, 
       label: "Delivered",
-      gradient: "from-green-500/10 to-emerald-500/10 border-green-500/20"
+      gradient: "from-success/10 to-emerald-500/10 border-success/20"
     },
     cancelled: { 
       icon: <XCircle className="h-4 w-4" />, 
       label: "Cancelled",
-      gradient: "from-red-500/10 to-rose-500/10 border-red-500/20"
+      gradient: "from-destructive/10 to-rose-500/10 border-destructive/20"
     },
     refunded: { 
       icon: <XCircle className="h-4 w-4" />, 
       label: "Refunded",
-      gradient: "from-gray-500/10 to-slate-500/10 border-gray-500/20"
+      gradient: "from-ink-muted/10 to-ink-muted/10 border-rule/20"
     }
   };
   
@@ -95,8 +95,8 @@ export default function DashboardOrdersPage() {
   if (ordersError) {
     return (
       <div className="container max-w-5xl mx-auto px-4 py-8">
-        <div className="border border-red-200 bg-red-50 dark:bg-red-950/10 rounded-xl p-8">
-          <div className="text-center text-red-600">
+        <div className="border border-destructive bg-destructive/10 rounded-xl p-8">
+          <div className="text-center text-destructive">
             <XCircle className="h-12 w-12 mx-auto mb-4" />
             <h3 className="text-lg font-body font-semibold mb-2">Failed to Load Orders</h3>
             <p className="text-sm">{ordersError}</p>
@@ -136,11 +136,11 @@ export default function DashboardOrdersPage() {
     <div className="container">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-5xl font-heading uppercase mb-2 ">My Orders</h1>
+        <h1 className="text-5xl font-heading uppercase mb-2">My Orders</h1>
       </div>
 
       {/* Orders Grid */}
-      <div className="space-y-6 ">
+      <div className="space-y-6">
         {orders.map((order) => {
           const statusConfig = getOrderStatusConfig(order.status);
           
@@ -179,7 +179,7 @@ export default function DashboardOrdersPage() {
               {/* Order Content */}
               <div className="p-6">
                 {/* Items Grid */}
-                <div className="grid grid-cols-2  md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
                   {order.items.slice(0, 8).map((item) => (
                     <div key={item.id} className="group/item relative">
                       <div className="aspect-square relative rounded-xl overflow-hidden bg-muted mb-2">
@@ -189,7 +189,7 @@ export default function DashboardOrdersPage() {
                           fill 
                           className="object-cover group-hover/item:scale-105 transition-transform duration-300"
                         />
-                        <div className="absolute top-2 right-2 bg-black/70 backdrop-blur text-white text-xs px-2 py-1 rounded-full">
+                        <div className="absolute top-2 right-2 bg-foreground/70 backdrop-blur text-background text-xs px-2 py-1 rounded-full">
                           ×{item.quantity}
                         </div>
                       </div>

@@ -105,7 +105,7 @@ export default function Hero() {
               href={link.href}
               lineColor="gold"
             >
-              <span className="font-body text-black text-sm md:text-base tracking-wide">
+              <span className="font-body text-foreground text-sm md:text-base tracking-wide">
                 {link.name}
               </span>
             </CrossedLink>

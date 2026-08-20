@@ -28,7 +28,7 @@ export default function CategorySort({ value, onChange }: CategorySortProps) {
       </div>
       
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-[180px] border-foreground/20 rounded-none bg-background hover:border-[#F8E231] transition-colors focus:ring-[#F8E231] focus:ring-1">
+        <SelectTrigger className="w-[180px] border-foreground/20 rounded-none bg-background hover:border-sage transition-colors focus:ring-sage-deep focus:ring-1">
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="rounded-none border-foreground/20">
@@ -36,7 +36,7 @@ export default function CategorySort({ value, onChange }: CategorySortProps) {
             <SelectItem 
               key={option.value} 
               value={option.value} 
-              className="font-body text-sm cursor-pointer hover:bg-[#F8E231]/10 focus:bg-[#F8E231]/10"
+              className="font-body text-sm cursor-pointer hover:bg-sage-deep/10 focus:bg-terra-deep/10"
             >
               {option.label}
             </SelectItem>

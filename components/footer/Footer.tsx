@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import BrandMark from "@/components/brand/BrandMark";
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { Mail, ArrowRight, Instagram, Twitter, Facebook, Youtube } from "lucide-react";
 import CrossedLink from "@/components/ui/crossed-link";
@@ -68,24 +68,24 @@ export default function Footer() {
   };
 
   return (
-    <footer className="relative bg-black text-white overflow-hidden">
+    <footer className="relative bg-foreground text-background overflow-hidden">
       {/* Large Brand Text Overlay */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <h2 className="font-heading text-[24vw] md:text-[24vw] lg:text-[24rem] tracking-wider text-white/5 leading-none select-none pb-8">
+        <h2 className="font-heading text-[24vw] md:text-[24vw] lg:text-[24rem] tracking-wider text-background/5 leading-none select-none pb-8">
           RAMAZAH
         </h2>
       </div>
 
       {/* Newsletter Section */}
-      <div className="relative z-10 border-b border-white/10">
-        <div className=" mx-auto px-6 py-10 md:py-10">
+      <div className="relative z-10 border-b border-background/10">
+        <div className="mx-auto px-6 py-10 md:py-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             {/* Left - Text */}
             <div>
               <h3 className="font-heading text-3xl md:text-4xl tracking-wider mb-3">
                 JOIN THE HOOD
               </h3>
-              <p className="font-body text-sm text-white/70">
+              <p className="font-body text-sm text-background/70">
                 Subscribe to get 10% off your first order, plus exclusive drops and street style updates.
               </p>
             </div>
@@ -94,27 +94,27 @@ export default function Footer() {
             <div>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Enter your email"
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-sm text-white placeholder:text-white/40 font-body text-sm focus:outline-none focus:border-[#F8E231] transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-card/10 border border-background/20 rounded-sm text-background placeholder:text-background/40 font-body text-sm focus:outline-none focus:border-sage transition-all"
                   />
                 </div>
                 <motion.button
                   onClick={handleSubmit}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3 bg-[#F8E231] text-black font-body text-sm font-semibold rounded-sm hover:bg-white transition-colors flex items-center gap-2"
+                  className="px-6 py-3 bg-sage-deep text-background font-body text-sm font-semibold rounded-sm hover:bg-sage-deep/90 transition-colors flex items-center gap-2"
                 >
                   {isSubmitted ? "Subscribed!" : "Subscribe"}
                   {!isSubmitted && <ArrowRight className="h-4 w-4" />}
                 </motion.button>
               </div>
-              <p className="text-xs text-white/50 mt-3 font-body">
+              <p className="text-xs text-background/50 mt-3 font-body">
                 No spam, just culture. Unsubscribe anytime.
               </p>
             </div>
@@ -127,16 +127,8 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-12">
           {/* Brand Column */}
           <div className="col-span-2">
-            <Link href="/" className="inline-block mb-4">
-              <Image
-                src="/ramazah-logo.png"
-                alt="Ramazah"
-                width={150}
-                height={90}
-                className="h-12 w-auto brightness-0 invert"
-              />
-            </Link>
-            <p className="font-body text-sm text-white/70 mb-6 max-w-xs">
+            <div className="mb-4"><BrandMark variant="inverse" /></div>
+            <p className="font-body text-sm text-background/70 mb-6 max-w-xs">
               Ramazah is your destination for authentic streetwear that speaks to the culture.
             </p>
             
@@ -150,16 +142,16 @@ export default function Footer() {
                     href={social.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 bg-white/10 rounded-full hover:bg-[#F8E231] transition-colors group"
+                    className="p-2 bg-card/10 rounded-full hover:bg-sage-deep transition-colors group"
                     aria-label={social.name}
                   >
-                    <Icon className="h-4 w-4 text-white group-hover:text-black transition-colors" />
+                    <Icon className="h-4 w-4 text-background group-hover:text-foreground transition-colors" />
                   </a>
                 );
               })}
             </div>
             <div className="flex items-center gap-3 mt-4">
-                <span className="font-body text-sm text-white/70">Currency</span>
+                <span className="font-body text-sm text-background/70">Currency</span>
                 <CurrencySwitcher />  
             </div>
           </div>
@@ -176,7 +168,7 @@ export default function Footer() {
                     lineWidth={1}
                     animationDuration={0.2}
                   >
-                    <span className="font-body text-sm text-white/70 hover:text-white transition-colors">
+                    <span className="font-body text-sm text-background/70 hover:text-background transition-colors">
                       {link.name}
                     </span>
                   </CrossedLink>
@@ -197,7 +189,7 @@ export default function Footer() {
                     lineWidth={1}
                     animationDuration={0.2}
                   >
-                    <span className="font-body text-sm text-white/70 hover:text-white transition-colors">
+                    <span className="font-body text-sm text-background/70 hover:text-background transition-colors">
                       {link.name}
                     </span>
                   </CrossedLink>
@@ -218,7 +210,7 @@ export default function Footer() {
                     lineWidth={1}
                     animationDuration={0.2}
                   >
-                    <span className="font-body text-sm text-white/70 hover:text-white transition-colors">
+                    <span className="font-body text-sm text-background/70 hover:text-background transition-colors">
                       {link.name}
                     </span>
                   </CrossedLink>
@@ -239,7 +231,7 @@ export default function Footer() {
                     lineWidth={1}
                     animationDuration={0.2}
                   >
-                    <span className="font-body text-sm text-white/70 hover:text-white transition-colors">
+                    <span className="font-body text-sm text-background/70 hover:text-background transition-colors">
                       {link.name}
                     </span>
                   </CrossedLink>
@@ -250,20 +242,20 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-white/10">
+        <div className="pt-8 border-t border-background/10">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="font-body text-xs text-white/50">
+            <p className="font-body text-xs text-background/50">
               © {new Date().getFullYear()} Ramazah. All rights reserved.
             </p>
             
             {/* Payment Methods */}
             <div className="flex items-center gap-2">
-              <span className="font-body text-xs text-white/50 mr-2">We accept:</span>
+              <span className="font-body text-xs text-background/50 mr-2">We accept:</span>
               <div className="flex gap-2">
                 {["Visa", "Mastercard", "PayPal", "Apple Pay"].map((method) => (
                   <div
                     key={method}
-                    className="px-2 py-1 bg-white/10 rounded text-xs font-body text-white/70"
+                    className="px-2 py-1 bg-card/10 rounded text-xs font-body text-background/70"
                   >
                     {method}
                   </div>

@@ -70,7 +70,7 @@ export default function ResetPasswordPage() {
             transition={{ duration: 1.5 }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-black/70" />
+        <div className="absolute inset-0 bg-foreground/70" />
       </div>
 
       {/* Content */}
@@ -86,7 +86,7 @@ export default function ResetPasswordPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 uppercase"
+            className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 uppercase"
           >
             Password Recovery
           </motion.p>
@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="font-heading text-4xl md:text-5xl tracking-wider text-white"
+            className="font-heading text-4xl md:text-5xl tracking-wider text-background"
           >
             RESET PASSWORD
           </motion.h1>
@@ -102,7 +102,7 @@ export default function ResetPasswordPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="mt-4 text-sm text-white/60"
+            className="mt-4 text-sm text-background/60"
           >
             Enter your email and we'll send you a link to reset your password
           </motion.p>
@@ -113,14 +113,14 @@ export default function ResetPasswordPage() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-8"
+          className="bg-foreground/40 backdrop-blur-md border border-background/10 rounded-lg p-8"
         >
           {/* Error Message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-md flex items-center gap-2 text-red-400 text-sm"
+              className="mb-6 p-3 bg-destructive/10 border border-destructive/50 rounded-md flex items-center gap-2 text-destructive text-sm"
             >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
@@ -134,17 +134,17 @@ export default function ResetPasswordPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="text-center py-4"
             >
-              <div className="mb-4 p-4 bg-green-500/10 border border-green-500/50 rounded-md">
-                <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-3" />
-                <h3 className="text-white font-body font-semibold mb-2">Check Your Email</h3>
-                <p className="text-sm text-white/60">
-                  We've sent a password reset link to <span className="text-white">{email}</span>
+              <div className="mb-4 p-4 bg-success/10 border border-success/50 rounded-md">
+                <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
+                <h3 className="text-background font-body font-semibold mb-2">Check Your Email</h3>
+                <p className="text-sm text-background/60">
+                  We've sent a password reset link to <span className="text-background">{email}</span>
                 </p>
               </div>
               <Button
                 onClick={() => setSuccess(false)}
                 variant="outline"
-                className="w-full h-12 bg-[#F8E231] text-black font-body font-semibold hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send Another Email
               </Button>
@@ -153,11 +153,11 @@ export default function ResetPasswordPage() {
             <form onSubmit={handleResetPassword} className="space-y-5">
               {/* Email Field */}
               <div>
-                <Label htmlFor="email" className="text-white/80 text-sm mb-2 block">
+                <Label htmlFor="email" className="text-background/80 text-sm mb-2 block">
                   Email Address
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                   <Input
                     id="email"
                     type="email"
@@ -165,7 +165,7 @@ export default function ResetPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                    className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                   />
                 </div>
               </div>
@@ -174,14 +174,14 @@ export default function ResetPasswordPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-12 bg-[#F8E231] text-black font-body font-semibold hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-black border-t-transparent rounded-full"
+                      className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full"
                     />
                     Sending...
                   </span>
@@ -196,10 +196,10 @@ export default function ResetPasswordPage() {
           )}
 
           {/* Back to Login */}
-          <div className="mt-6 text-center text-sm text-white/60">
+          <div className="mt-6 text-center text-sm text-background/60">
             Remember your password?{' '}
-            <CrossedLink href="/auth/login" lineColor="#F8E231" lineWidth={1}>
-              <span className="text-[#F8E231] font-medium">Login</span>
+            <CrossedLink href="/auth/login" lineColor="#5C6647" lineWidth={1}>
+              <span className="text-sage-light font-medium">Login</span>
             </CrossedLink>
           </div>
         </motion.div>
@@ -212,7 +212,7 @@ export default function ResetPasswordPage() {
           className="text-center mt-6"
         >
           <CrossedLink href="/" lineColor="gold" lineWidth={1}>
-            <span className="text-white/60 text-sm hover:text-white transition-colors">
+            <span className="text-background/60 text-sm hover:text-background transition-colors">
               ← Back to Home
             </span>
           </CrossedLink>

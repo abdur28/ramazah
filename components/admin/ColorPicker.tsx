@@ -97,7 +97,7 @@ export default function ColorPicker({ colors, onChange }: ColorPickerProps) {
                           className="pr-12"
                         />
                         <div 
-                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded border-2 border-gray-200 shadow-sm cursor-pointer"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded border-2 border-rule shadow-sm cursor-pointer"
                           style={{ backgroundColor: colorHex }}
                           onClick={() => document.getElementById('colorPickerInput')?.click()}
                         />
@@ -143,8 +143,8 @@ export default function ColorPicker({ colors, onChange }: ColorPickerProps) {
                           title={preset.name}
                         >
                           {isAdded && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded">
-                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <div className="absolute inset-0 flex items-center justify-center bg-foreground/20 rounded">
+                              <svg className="w-4 h-4 text-background" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                               </svg>
                             </div>
@@ -170,7 +170,7 @@ export default function ColorPicker({ colors, onChange }: ColorPickerProps) {
               className="pl-1 pr-2 py-1 gap-2 hover:bg-accent transition-colors"
             >
               <div 
-                className="w-5 h-5 rounded border border-gray-300 shadow-sm flex-shrink-0"
+                className="w-5 h-5 rounded border border-rule shadow-sm flex-shrink-0"
                 style={{ backgroundColor: color.hex }}
                 title={color.hex}
               />

@@ -120,7 +120,7 @@ export default function AdminDashboardPage() {
     return (
       <Badge 
         variant={isPositive ? "default" : "destructive"}
-        className={`flex items-center gap-1 ${isPositive ? 'bg-green-600' : ''}`}
+        className={`flex items-center gap-1 ${isPositive ? 'bg-success' : ''}`}
       >
         {isPositive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
         {formatPercent(value)}

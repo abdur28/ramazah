@@ -12,12 +12,12 @@ import { Order } from '@/types/types';
 import { format } from 'date-fns';
 
 const statusColors = {
-  delivered: 'bg-green-500/10 text-green-700',
-  shipped: 'bg-blue-500/10 text-blue-700',
-  processing: 'bg-yellow-500/10 text-yellow-700',
-  pending: 'bg-orange-500/10 text-orange-700',
-  cancelled: 'bg-red-500/10 text-red-700',
-  refunded: 'bg-gray-500/10 text-gray-700',
+  delivered: 'bg-success/10 text-success',
+  shipped: 'bg-primary/10 text-primary',
+  processing: 'bg-warning/10 text-warning',
+  pending: 'bg-warning/10 text-warning',
+  cancelled: 'bg-destructive/10 text-destructive',
+  refunded: 'bg-wash/10 text-ink-muted',
 };
 
 const statusIcons = {
@@ -142,14 +142,14 @@ export default function DashboardPage() {
             >
               <Link
                 href={stat.href}
-                className="block p-6 bg-white border border-foreground/10 rounded-lg hover:border-[#F8E231] transition-colors group"
+                className="block p-6 bg-card border border-foreground/10 rounded-lg hover:border-sage transition-colors group"
               >
                 <div className="flex items-start justify-between mb-4">
                   <p className="font-body text-sm text-foreground/60">
                     {stat.name}
                   </p>
-                  <div className="p-2 bg-foreground/5 rounded-md group-hover:bg-[#F8E231] transition-colors">
-                    <Icon className="h-5 w-5 text-foreground/60 group-hover:text-black transition-colors" />
+                  <div className="p-2 bg-sage-deep/5 rounded-md group-hover:bg-sage-deep/90 transition-colors">
+                    <Icon className="h-5 w-5 text-foreground/60 group-hover:text-foreground transition-colors" />
                   </div>
                   
                 </div>
@@ -172,7 +172,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.4 }}
-        className="bg-white border border-foreground/10 rounded-lg p-6 mb-8"
+        className="bg-card border border-foreground/10 rounded-lg p-6 mb-8"
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-heading text-2xl tracking-wider">
@@ -198,7 +198,7 @@ export default function DashboardPage() {
             </p>
             <Link
               href="/clothings"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white hover:bg-[#F8E231] hover:text-black transition-colors rounded-md font-body text-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background transition-colors rounded-md font-body text-sm"
             >
               Start Shopping
               <ArrowRight className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function DashboardPage() {
                 >
                   <Link
                     href={`/dashboard/orders`}
-                    className="flex items-center gap-4 p-4 border border-foreground/10 rounded-lg hover:border-[#F8E231] transition-colors group"
+                    className="flex items-center gap-4 p-4 border border-foreground/10 rounded-lg hover:border-sage transition-colors group"
                   >
                     {/* Image */}
                     <div className="relative w-16 h-16 bg-foreground/5 rounded-md overflow-hidden flex-shrink-0">
@@ -259,7 +259,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Arrow */}
-                    <ArrowRight className="h-5 w-5 text-foreground/40 flex-shrink-0 group-hover:text-[#F8E231] transition-colors" />
+                    <ArrowRight className="h-5 w-5 text-foreground/40 flex-shrink-0 group-hover:text-sage-light transition-colors" />
                   </Link>
                 </motion.div>
               );
@@ -280,7 +280,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link
             href="/clothings"
-            className="p-6 bg-black text-white rounded-lg hover:bg-[#F8E231] hover:text-black transition-colors group"
+            className="p-6 bg-sage-deep text-background rounded-lg hover:bg-sage-deep/90 hover:text-background transition-colors group"
           >
             <h3 className="font-body font-semibold mb-2">Continue Shopping</h3>
             <p className="font-body text-sm opacity-80">
@@ -291,24 +291,24 @@ export default function DashboardPage() {
 
           <Link
             href="/dashboard/wishlist"
-            className="p-6 border border-foreground/10 rounded-lg hover:border-[#F8E231] transition-colors group"
+            className="p-6 border border-foreground/10 rounded-lg hover:border-sage transition-colors group"
           >
             <h3 className="font-body font-semibold mb-2">View Wishlist</h3>
             <p className="font-body text-sm text-foreground/60">
               {wishlistCount} {wishlistCount === 1 ? 'item' : 'items'} waiting for you
             </p>
-            <Heart className="h-5 w-5 mt-4 text-foreground/60 group-hover:text-[#F8E231]" />
+            <Heart className="h-5 w-5 mt-4 text-foreground/60 group-hover:text-sage-light" />
           </Link>
 
           <Link
             href="/dashboard/orders"
-            className="p-6 border border-foreground/10 rounded-lg hover:border-[#F8E231] transition-colors group"
+            className="p-6 border border-foreground/10 rounded-lg hover:border-sage transition-colors group"
           >
             <h3 className="font-body font-semibold mb-2">Track Orders</h3>
             <p className="font-body text-sm text-foreground/60">
               {activeOrders} {activeOrders === 1 ? 'order' : 'orders'} in transit
             </p>
-            <Package className="h-5 w-5 mt-4 text-foreground/60 group-hover:text-[#F8E231]" />
+            <Package className="h-5 w-5 mt-4 text-foreground/60 group-hover:text-sage-light" />
           </Link>
         </div>
       </motion.div>

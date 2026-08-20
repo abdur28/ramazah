@@ -52,7 +52,7 @@ export default function OrderAnalyticsTab({ data }: OrderAnalyticsTabProps) {
           <CardContent>
             <div className="text-2xl font-bold">{data.totalOrders.toLocaleString()}</div>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant={data.orderGrowthRate >= 0 ? "default" : "destructive"} className={data.orderGrowthRate >= 0 ? "bg-green-600" : ""}>
+              <Badge variant={data.orderGrowthRate >= 0 ? "default" : "destructive"} className={data.orderGrowthRate >= 0 ? "bg-success" : ""}>
                 {formatGrowthRate(data.orderGrowthRate)}
               </Badge>
               <p className="text-xs text-muted-foreground">vs last period</p>
@@ -68,7 +68,7 @@ export default function OrderAnalyticsTab({ data }: OrderAnalyticsTabProps) {
           <CardContent>
             <div className="text-xl font-bold">{formatRevenues(data.revenues.map(r => ({ currency: r.currency, amount: r.totalRevenue })))}</div>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant={data.revenueGrowthRate >= 0 ? "default" : "destructive"} className={data.revenueGrowthRate >= 0 ? "bg-green-600" : ""}>
+              <Badge variant={data.revenueGrowthRate >= 0 ? "default" : "destructive"} className={data.revenueGrowthRate >= 0 ? "bg-success" : ""}>
                 {formatGrowthRate(data.revenueGrowthRate)}
               </Badge>
               <p className="text-xs text-muted-foreground">vs last period</p>
@@ -269,7 +269,7 @@ export default function OrderAnalyticsTab({ data }: OrderAnalyticsTabProps) {
             <div className="p-4 rounded-lg border">
               <p className="text-sm text-muted-foreground mb-1">Processing</p>
               <p className="text-2xl font-bold">{data.processingOrders.toLocaleString()}</p>
-              <Badge variant="default" className="mt-2 bg-blue-600">
+              <Badge variant="default" className="mt-2 bg-primary">
                 {((data.processingOrders / data.totalOrders) * 100).toFixed(1)}%
               </Badge>
             </div>
@@ -277,7 +277,7 @@ export default function OrderAnalyticsTab({ data }: OrderAnalyticsTabProps) {
             <div className="p-4 rounded-lg border">
               <p className="text-sm text-muted-foreground mb-1">Delivered</p>
               <p className="text-2xl font-bold">{data.deliveredOrders.toLocaleString()}</p>
-              <Badge variant="default" className="mt-2 bg-green-600">
+              <Badge variant="default" className="mt-2 bg-success">
                 {((data.deliveredOrders / data.totalOrders) * 100).toFixed(1)}%
               </Badge>
             </div>

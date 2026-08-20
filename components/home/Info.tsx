@@ -123,7 +123,7 @@ export default function Info() {
             {scrollingImages.map((image, index) => (
               <motion.div
                 key={index}
-                className="relative  w-[300px] h-[450px] flex-shrink-0 overflow-hidden rounded-sm"
+                className="relative w-[300px] h-[450px] flex-shrink-0 overflow-hidden rounded-sm"
               >
                 <Image
                   src={image}

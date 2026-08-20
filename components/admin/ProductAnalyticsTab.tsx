@@ -37,10 +37,10 @@ export default function ProductAnalyticsTab({ data }: ProductAnalyticsTabProps) 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">In Stock</CardTitle>
-            <Package className="h-4 w-4 text-green-600" />
+            <Package className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{data.inStockProducts.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-success">{data.inStockProducts.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {((data.inStockProducts / data.totalProducts) * 100).toFixed(1)}% of total
             </p>
@@ -50,10 +50,10 @@ export default function ProductAnalyticsTab({ data }: ProductAnalyticsTabProps) 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertTriangle className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{data.lowStockProducts.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-warning">{data.lowStockProducts.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">Need restocking</p>
           </CardContent>
         </Card>
@@ -198,7 +198,7 @@ export default function ProductAnalyticsTab({ data }: ProductAnalyticsTabProps) 
             <div className="space-y-2">
               <div className="flex items-center justify-between p-3 rounded-lg border">
                 <span className="text-sm font-medium">Stock Coverage</span>
-                <Badge variant="default" className="bg-green-600">
+                <Badge variant="default" className="bg-success">
                   {((data.inStockProducts / data.totalProducts) * 100).toFixed(1)}%
                 </Badge>
               </div>

@@ -21,7 +21,7 @@ export default function Banner() {
   return (
     <section
       ref={containerRef}
-      className="relative w-full min-h-[70vh] md:min-h-[80vh] flex items-center justify-center overflow-hidden bg-black"
+      className="relative w-full min-h-[70vh] md:min-h-[80vh] flex items-center justify-center overflow-hidden bg-foreground"
     >
       {/* Parallax Background Image */}
       <motion.div
@@ -37,7 +37,7 @@ export default function Banner() {
             }}
           />
           {/* Dark overlay for better text readability */}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-foreground/40" />
         </div>
       </motion.div>
 
@@ -52,7 +52,7 @@ export default function Banner() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 md:mb-4 uppercase"
+          className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 md:mb-4 uppercase"
         >
           New Collection
         </motion.p>
@@ -63,11 +63,11 @@ export default function Banner() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="font-heading text-4xl md:text-5xl lg:text-6xl tracking-wider text-white mb-4 md:mb-4 leading-tight"
+          className="font-heading text-4xl md:text-5xl lg:text-6xl tracking-wider text-background mb-4 md:mb-4 leading-tight"
         >
           STREET CULTURE
           <br />
-          <span className="text-[#F8E231]">REDEFINED</span>
+          <span className="text-sage-light">REDEFINED</span>
         </motion.h2>
 
         {/* Description */}
@@ -76,7 +76,7 @@ export default function Banner() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="font-body md:text-sm text-xs text-white/80 max-w-xl mx-auto mb-8 md:mb-12 leading-relaxed"
+          className="font-body md:text-sm text-xs text-background/80 max-w-xl mx-auto mb-8 md:mb-12 leading-relaxed"
         >
           Discover our latest drop featuring exclusive pieces that blend urban aesthetics 
           with premium quality. Limited quantities available.
@@ -93,9 +93,9 @@ export default function Banner() {
           {/* Primary Button */}
           <CrossedLink
             href="/clothings"
-            lineColor="#F8E231"
+            lineColor="#A3AB8C"
           >
-            <span className="font-body text-sm md:text-base font-medium text-white flex items-center gap-2">
+            <span className="font-body text-sm md:text-base font-medium text-background flex items-center gap-2">
               Shop Collection
               <ArrowRight className="h-4 w-4" />
             </span>
@@ -104,9 +104,9 @@ export default function Banner() {
           {/* Secondary Button */}
           <CrossedLink
             href="/hoodhub"
-            lineColor="#F8E231"
+            lineColor="#A3AB8C"
           >
-            <span className="font-body text-sm md:text-base font-medium text-white flex items-center gap-2">
+            <span className="font-body text-sm md:text-base font-medium text-background flex items-center gap-2">
               Explore Hoodhub
               <ArrowRight className="h-4 w-4" />
             </span>

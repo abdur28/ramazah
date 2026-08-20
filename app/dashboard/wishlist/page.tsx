@@ -82,7 +82,7 @@ export default function WishlistPage() {
           </p>
           <Link
             href="/clothings"
-            className="px-6 py-3 bg-black text-white hover:bg-[#F8E231] hover:text-black transition-colors rounded-md font-body text-sm font-medium"
+            className="px-6 py-3 bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background transition-colors rounded-md font-body text-sm font-medium"
           >
             Start Shopping
           </Link>
@@ -102,26 +102,26 @@ export default function WishlistPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.7 }}
-              className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-gradient-to-r from-black to-gray-800 rounded-lg relative overflow-hidden"
+              className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-gradient-to-r from-foreground to-ink-muted rounded-lg relative overflow-hidden"
             >
               {/* Background Pattern */}
               <div className="absolute inset-0 opacity-10">
-                <div className="absolute top-0 right-0 w-40 h-40 bg-[#F8E231] rounded-full -translate-y-1/2 translate-x-1/2" />
-                <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#F8E231] rounded-full translate-y-1/2 -translate-x-1/2" />
+                <div className="absolute top-0 right-0 w-40 h-40 bg-sage-deep rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-sage-deep rounded-full translate-y-1/2 -translate-x-1/2" />
               </div>
 
               <div className="relative z-10">
-                <h3 className="font-body font-semibold mb-1 text-white">
+                <h3 className="font-body font-semibold mb-1 text-background">
                   Looking for more?
                 </h3>
-                <p className="font-body text-sm text-white/60">
+                <p className="font-body text-sm text-background/60">
                   {inStockCount} {inStockCount === 1 ? 'item' : 'items'} available in your wishlist
                 </p>
               </div>
               <div className="flex gap-3 relative z-10">
                 <Link
                   href="/clothings"
-                  className="px-6 py-3 bg-[#F8E231] text-black hover:bg-white transition-colors rounded-md font-body text-sm font-medium flex items-center gap-2"
+                  className="px-6 py-3 bg-sage-deep text-background hover:bg-sage-deep/90 transition-colors rounded-md font-body text-sm font-medium flex items-center gap-2"
                 >
                   Shop Now
                   <ArrowRight className="h-4 w-4" />

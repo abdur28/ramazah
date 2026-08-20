@@ -106,8 +106,8 @@ function getCompiledTemplate(templateName: string, templateData: Record<string, 
     console.error(`Template error for ${templateName}:`, error);
     // Fallback HTML
     return `
-      <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #000; color: #fff;">
-        <h2 style="color: #F8E231;">${templateData.title || 'Ramazah Notification'}</h2>
+      <div style="font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #FAF9F5; color: #2A2E24;">
+        <h2 style="color: #A3AB8C;">${templateData.title || 'Ramazah Notification'}</h2>
         <p>${templateData.message || ''}</p>
         <p style="color: #999;">Best regards,<br>The Ramazah Team</p>
       </div>
@@ -126,7 +126,6 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       currentYear: new Date().getFullYear(),
       companyName: 'Ramazah',
       websiteUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
-      logoUrl: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/ramazah-logo.png`,
       ...options.templateData
     };
 

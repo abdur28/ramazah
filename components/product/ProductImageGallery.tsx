@@ -93,7 +93,7 @@ export default function ProductImageGallery({
               <motion.div
                 initial={{ opacity: 0 }}
                 whileHover={{ opacity: 1 }}
-                className="absolute inset-0 bg-black/20 flex items-center justify-center"
+                className="absolute inset-0 bg-foreground/20 flex items-center justify-center"
               >
               </motion.div>
             </motion.div>
@@ -110,7 +110,7 @@ export default function ProductImageGallery({
               whileTap={{ scale: 0.95 }}
               className={`relative flex-shrink-0 w-20 h-28 md:w-[6.1rem] md:h-[8.1rem] overflow-hidden transition-all ${
                 selectedImageIndex === index 
-                  ? "border-1 border-[#F8E231]" 
+                  ? "border-1 border-sage" 
                   : ""
               }`}
             >
@@ -124,7 +124,7 @@ export default function ProductImageGallery({
               
               {/* Overlay for non-selected images */}
               {selectedImageIndex !== index && (
-                <div className="absolute inset-0 bg-black/20" />
+                <div className="absolute inset-0 bg-foreground/20" />
               )}
             </motion.button>
           ))}
@@ -138,7 +138,7 @@ export default function ProductImageGallery({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed w-screen h-screen inset-0 z-80 bg-black"
+            className="fixed w-screen h-screen inset-0 z-80 bg-foreground"
           >
             {/* Close Button */}
             <motion.button
@@ -146,9 +146,9 @@ export default function ProductImageGallery({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               onClick={() => setIsFullscreen(false)}
-              className="absolute top-6 right-6 z-50 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm"
+              className="absolute top-6 right-6 z-50 p-3 bg-card/10 hover:bg-card/20 rounded-full transition-colors backdrop-blur-sm"
             >
-              <X className="h-6 w-6 text-white" />
+              <X className="h-6 w-6 text-background" />
             </motion.button>
 
             {/* Image Counter */}
@@ -156,9 +156,9 @@ export default function ProductImageGallery({
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="absolute top-6 left-6 z-50 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full"
+              className="absolute top-6 left-6 z-50 px-4 py-2 bg-card/10 backdrop-blur-sm rounded-full"
             >
-              <span className="text-white text-sm font-body">
+              <span className="text-background text-sm font-body">
                 {selectedImageIndex + 1} / {sortedImages.length}
               </span>
             </motion.div>
@@ -170,9 +170,9 @@ export default function ProductImageGallery({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 onClick={handlePrevious}
-                className="absolute left-6 top-1/2 -translate-y-1/2 z-50 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm"
+                className="absolute left-6 top-1/2 -translate-y-1/2 z-50 p-4 bg-card/10 hover:bg-card/20 rounded-full transition-colors backdrop-blur-sm"
               >
-                <ChevronLeft className="h-8 w-8 text-white" />
+                <ChevronLeft className="h-8 w-8 text-background" />
               </motion.button>
             )}
 
@@ -183,9 +183,9 @@ export default function ProductImageGallery({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
                 onClick={handleNext}
-                className="absolute right-6 top-1/2 -translate-y-1/2 z-50 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm"
+                className="absolute right-6 top-1/2 -translate-y-1/2 z-50 p-4 bg-card/10 hover:bg-card/20 rounded-full transition-colors backdrop-blur-sm"
               >
-                <ChevronRight className="h-8 w-8 text-white" />
+                <ChevronRight className="h-8 w-8 text-background" />
               </motion.button>
             )}
 
@@ -217,9 +217,9 @@ export default function ProductImageGallery({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full md:hidden"
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-card/10 backdrop-blur-sm rounded-full md:hidden"
             >
-              <span className="text-white text-xs font-body">
+              <span className="text-background text-xs font-body">
                 Swipe to navigate
               </span>
             </motion.div>

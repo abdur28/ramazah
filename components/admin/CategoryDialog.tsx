@@ -229,17 +229,17 @@ export default function CategoryDialog({
           {/* Name Field */}
           <div className="space-y-2">
             <Label htmlFor="name">
-              Category Name <span className="text-red-500">*</span>
+              Category Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               placeholder="e.g., Hoodies, T-Shirts, Accessories"
               value={formData.name}
               onChange={(e) => handleNameChange(e.target.value)}
-              className={errors.name ? 'border-red-500' : ''}
+              className={errors.name ? 'border-destructive' : ''}
             />
             {errors.name && (
-              <p className="text-sm text-red-500">{errors.name}</p>
+              <p className="text-sm text-destructive">{errors.name}</p>
             )}
           </div>
 
@@ -263,7 +263,7 @@ export default function CategoryDialog({
           {/* Slug Field */}
           <div className="space-y-2">
             <Label htmlFor="slug">
-              Slug <span className="text-red-500">*</span>
+              Slug <span className="text-destructive">*</span>
             </Label>
             <Input
               id="slug"
@@ -275,13 +275,13 @@ export default function CategoryDialog({
                   setErrors(prev => ({ ...prev, slug: '' }));
                 }
               }}
-              className={errors.slug ? 'border-red-500' : ''}
+              className={errors.slug ? 'border-destructive' : ''}
             />
             <p className="text-xs text-muted-foreground">
               URL-friendly version of the name. Auto-generated from name.
             </p>
             {errors.slug && (
-              <p className="text-sm text-red-500">{errors.slug}</p>
+              <p className="text-sm text-destructive">{errors.slug}</p>
             )}
             
             {/* Show full path preview */}

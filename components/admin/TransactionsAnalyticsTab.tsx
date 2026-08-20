@@ -87,10 +87,10 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Successful</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <TrendingUp className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{data.successfulTransactions.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-success">{data.successfulTransactions.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Completed payments
             </p>
@@ -263,21 +263,21 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
             <div className="p-4 rounded-lg border">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-muted-foreground">Successful</p>
-                <Badge variant="default" className="bg-green-600">
+                <Badge variant="default" className="bg-success">
                   {((data.successfulTransactions / data.totalTransactions) * 100).toFixed(1)}%
                 </Badge>
               </div>
-              <p className="text-2xl font-bold text-green-600">{data.successfulTransactions.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-success">{data.successfulTransactions.toLocaleString()}</p>
             </div>
 
             <div className="p-4 rounded-lg border">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-muted-foreground">Pending</p>
-                <Badge variant="default" className="bg-yellow-600">
+                <Badge variant="default" className="bg-warning">
                   {((data.pendingTransactions / data.totalTransactions) * 100).toFixed(1)}%
                 </Badge>
               </div>
-              <p className="text-2xl font-bold text-yellow-600">{data.pendingTransactions.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-warning">{data.pendingTransactions.toLocaleString()}</p>
             </div>
 
             <div className="p-4 rounded-lg border">
@@ -287,7 +287,7 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
                   {((data.failedTransactions / data.totalTransactions) * 100).toFixed(1)}%
                 </Badge>
               </div>
-              <p className="text-2xl font-bold text-red-600">{data.failedTransactions.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-destructive">{data.failedTransactions.toLocaleString()}</p>
             </div>
 
             <div className="p-4 rounded-lg border">
@@ -297,7 +297,7 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
                   {((data.refundedTransactions / data.totalTransactions) * 100).toFixed(1)}%
                 </Badge>
               </div>
-              <p className="text-2xl font-bold text-blue-600">{data.refundedTransactions.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-primary">{data.refundedTransactions.toLocaleString()}</p>
             </div>
           </div>
         </CardContent>
@@ -313,7 +313,7 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-lg border">
               <p className="text-sm text-muted-foreground mb-1">Success Rate</p>
-              <p className="text-3xl font-bold text-green-600">{successRate}%</p>
+              <p className="text-3xl font-bold text-success">{successRate}%</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {data.successfulTransactions.toLocaleString()} / {data.totalTransactions.toLocaleString()}
               </p>
@@ -321,7 +321,7 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
 
             <div className="p-4 rounded-lg border">
               <p className="text-sm text-muted-foreground mb-1">Failure Rate</p>
-              <p className="text-3xl font-bold text-red-600">
+              <p className="text-3xl font-bold text-destructive">
                 {((data.failedTransactions / data.totalTransactions) * 100).toFixed(1)}%
               </p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -331,7 +331,7 @@ export default function TransactionsAnalyticsTab({ data }: TransactionsAnalytics
 
             <div className="p-4 rounded-lg border">
               <p className="text-sm text-muted-foreground mb-1">Refund Rate</p>
-              <p className="text-3xl font-bold text-blue-600">
+              <p className="text-3xl font-bold text-primary">
                 {((data.refundedTransactions / data.totalTransactions) * 100).toFixed(1)}%
               </p>
               <p className="text-xs text-muted-foreground mt-1">

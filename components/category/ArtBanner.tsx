@@ -27,7 +27,7 @@ export default function ArtBanner({
   return (
     <section
       ref={containerRef}
-      className="relative w-full h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden bg-black"
+      className="relative w-full h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden bg-foreground"
     >
       {/* Parallax Background */}
         <motion.div

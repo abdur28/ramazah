@@ -80,7 +80,7 @@ function CategoryTreeItem({
     
     return parts.map((part, i) => 
       regex.test(part) ? (
-        <mark key={i} className="bg-yellow-200 px-0.5 rounded">
+        <mark key={i} className="bg-warning px-0.5 rounded">
           {part}
         </mark>
       ) : (
@@ -120,7 +120,7 @@ function CategoryTreeItem({
 
         {/* Folder Icon */}
         {isExpanded && hasChildren ? (
-          <FolderOpen className="h-4 w-4 text-blue-500" />
+          <FolderOpen className="h-4 w-4 text-primary" />
         ) : (
           <Folder className="h-4 w-4 text-muted-foreground" />
         )}
@@ -184,7 +184,7 @@ function CategoryTreeItem({
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 onClick={() => onDelete(node)}
-                className="text-red-600"
+                className="text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete

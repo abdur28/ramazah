@@ -305,7 +305,7 @@ export default function OrderDetailsDialog({
                 </div>
               )}
               {order.discount !== undefined && order.discount > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-success">
                   <span>Discount</span>
                   <span>-{order.discount.toFixed(2)}</span>
                 </div>

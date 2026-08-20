@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BrandMark from "@/components/brand/BrandMark";
 import Image from 'next/image';
 import { useState } from 'react';
 import { Menu, Search, User, ShoppingBag } from 'lucide-react';
@@ -20,40 +21,16 @@ export default function Navbar() {
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-foreground/10">
-        <div className="mx-auto bg-white px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto bg-card px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
-            {/* Left: Search + Menu + Logo - Mobile */}
-            <div className="flex items-center gap-2 md:hidden">
-              <button
-                onClick={() => setIsMobileMenuOpen(true)}
-                className="p-2 hover:bg-foreground/5 rounded-md transition-colors"
-                aria-label="Toggle menu"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-
-              <Link href="/" className="flex items-center">
-                <Image
-                  src="/ramazah-logo.png"
-                  alt="Ramazah"
-                  width={150}
-                  height={90}
-                  className="h-10 w-auto"
-                />
-              </Link>
+            {/* Left: Logo - Mobile */}
+            <div className="flex items-center md:hidden">
+              <BrandMark />
             </div>
 
             {/* Left: Logo - Desktop */}
             <div className="hidden md:flex items-center">
-              <Link href="/" className="flex items-center">
-                <Image
-                  src="/ramazah-logo.png"
-                  alt="Ramazah"
-                  width={150}
-                  height={90}
-                  className="h-14 w-auto"
-                />
-              </Link>
+              <BrandMark />
             </div>
 
             {/* Desktop Navigation with Dropdowns */}
@@ -95,6 +72,14 @@ export default function Navbar() {
                     </motion.span>
                   )}
                 </AnimatePresence>
+              </button>
+
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="md:hidden p-2 hover:bg-foreground/5 rounded-md transition-colors"
+                aria-label="Open menu"
+              >
+                <Menu className="h-5 w-5" />
               </button>
             </div>
           </div>

@@ -335,7 +335,7 @@ export default function UserDetailsDialog({
                   <UserIcon className="h-4 w-4" />
                   <span className="text-sm">Account Status</span>
                 </div>
-                <Badge className="bg-green-100 text-green-800">Active</Badge>
+                <Badge className="bg-success/10 text-success">Active</Badge>
               </div>
             </div>
           </TabsContent>

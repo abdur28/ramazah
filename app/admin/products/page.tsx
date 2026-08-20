@@ -208,9 +208,9 @@ export default function AdminProductsPage() {
       return <Badge variant="destructive">Out of Stock</Badge>;
     }
     if (product.totalStock < (product.lowStockAlert || 10)) {
-      return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Low Stock</Badge>;
+      return <Badge className="bg-warning/10 text-warning">Low Stock</Badge>;
     }
-    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">In Stock</Badge>;
+    return <Badge className="bg-success/10 text-success">In Stock</Badge>;
   };
 
   // Get unique category paths from products
@@ -502,7 +502,7 @@ export default function AdminProductsPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
                             onClick={() => openDeleteDialog(product)}
-                            className="text-red-600"
+                            className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
@@ -545,7 +545,7 @@ export default function AdminProductsPage() {
             <AlertDialogCancel disabled={processingAction}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteProduct}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive"
               disabled={processingAction}
             >
               {processingAction ? (

@@ -22,16 +22,16 @@ export default function CTA() {
   return (
     <section
       ref={sectionRef}
-      className="relative z-10 py-24 md:py-28 bg-black overflow-hidden"
+      className="relative z-10 py-24 md:py-28 bg-foreground overflow-hidden"
     >
       {/* Animated Background Elements */}
       <motion.div
         style={{ y }}
-        className="absolute top-0 left-1/4 w-96 h-96 bg-[#F8E231]/10 rounded-full blur-3xl"
+        className="absolute top-0 left-1/4 w-96 h-96 bg-sage/10 rounded-full blur-3xl"
       />
       <motion.div
         style={{ y: useTransform(scrollYProgress, [0, 1], [-100, 100]) }}
-        className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl"
+        className="absolute bottom-0 right-1/4 w-96 h-96 bg-card/5 rounded-full blur-3xl"
       />
 
       {/* Grid Pattern Overlay */}
@@ -54,7 +54,7 @@ export default function CTA() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 uppercase"
+          className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 uppercase"
         >
           Join The Movement
         </motion.p>
@@ -65,7 +65,7 @@ export default function CTA() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="font-heading text-5xl md:text-6xl lg:text-7xl tracking-wider text-white mb-4 leading-tight"
+          className="font-heading text-5xl md:text-6xl lg:text-7xl tracking-wider text-background mb-4 leading-tight"
         >
           STAY IN THE LOOP
         </motion.h2>
@@ -76,7 +76,7 @@ export default function CTA() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="font-body text-sm md:text-base text-white/80 max-w-2xl mx-auto mb-6"
+          className="font-body text-sm md:text-base text-background/80 max-w-2xl mx-auto mb-6"
         >
           Be the first to know about new drops, exclusive deals, and street culture updates. 
           Join our community and get 10% off your first order.
@@ -89,7 +89,7 @@ export default function CTA() {
           whileInView={{ scaleX: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, delay: 0.5 }}
-          className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent mb-6"
+          className="h-px bg-gradient-to-r from-transparent via-background/20 to-transparent mb-6"
         />
 
         {/* Additional CTAs */}
@@ -102,17 +102,17 @@ export default function CTA() {
         >
           <CrossedLink
             href="/clothings"
-            lineColor="#F8E231"
+            lineColor="#A3AB8C"
             lineWidth={2}
             animationDuration={0.3}
           >
-            <span className="font-body text-base font-medium text-white flex items-center gap-2">
+            <span className="font-body text-base font-medium text-background flex items-center gap-2">
               Shop Collection
               <ArrowRight className="h-4 w-4" />
             </span>
           </CrossedLink>
 
-          <span className="text-white/30 hidden sm:block">|</span>
+          <span className="text-background/30 hidden sm:block">|</span>
 
           <CrossedLink
             href="/hoodhub"
@@ -120,7 +120,7 @@ export default function CTA() {
             lineWidth={2}
             animationDuration={0.3}
           >
-            <span className="font-body text-base font-medium text-white flex items-center gap-2">
+            <span className="font-body text-base font-medium text-background flex items-center gap-2">
               Join Hoodhub
               <ArrowRight className="h-4 w-4" />
             </span>
@@ -138,7 +138,7 @@ export default function CTA() {
             repeat: Infinity,
             ease: "linear",
           }}
-          className="absolute -top-20 left-10 w-32 h-32 border border-[#F8E231]/20 rounded-full"
+          className="absolute -top-20 left-10 w-32 h-32 border border-sage/20 rounded-full"
         />
         <motion.div
           animate={{
@@ -150,7 +150,7 @@ export default function CTA() {
             repeat: Infinity,
             ease: "linear",
           }}
-          className="absolute -bottom-20 right-10 w-40 h-40 border border-white/10 rounded-full"
+          className="absolute -bottom-20 right-10 w-40 h-40 border border-background/10 rounded-full"
         />
       </motion.div>
     </section>

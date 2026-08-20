@@ -27,7 +27,7 @@ export default function CategoryBreadcrumbs({ items }: CategoryBreadcrumbsProps)
       >
         <Link 
           href="/" 
-          className="group flex items-center gap-1 text-foreground/60 hover:text-[#F8E231] transition-colors"
+          className="group flex items-center gap-1 text-foreground/60 hover:text-sage-light transition-colors"
         >
           <span className="hidden sm:inline uppercase tracking-wider text-xs">Home</span>
         </Link>
@@ -53,7 +53,7 @@ export default function CategoryBreadcrumbs({ items }: CategoryBreadcrumbsProps)
             ) : (
               <Link 
                 href={item.href} 
-                className="text-foreground/60 hover:text-[#F8E231] transition-colors uppercase tracking-wider text-xs"
+                className="text-foreground/60 hover:text-sage-light transition-colors uppercase tracking-wider text-xs"
               >
                 {item.label}
               </Link>

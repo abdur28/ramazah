@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import Image from 'next/image';
+import BrandMark from '@/components/brand/BrandMark';
 import { useState, useEffect } from 'react';
 import { Search, User, ShoppingBag, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,7 +41,7 @@ export default function HomeNavbar() {
         className="fixed top-0 left-0 right-0 z-50 transition-colors duration-300"
         initial={{ backgroundColor: 'transparent' }}
         animate={{
-          backgroundColor: isScrolled ? 'hsl(var(--background))' : 'transparent',
+          backgroundColor: isScrolled ? 'var(--background)' : 'transparent',
         }}
       >
         <AnimatePresence>
@@ -55,50 +55,16 @@ export default function HomeNavbar() {
           )}
         </AnimatePresence>
 
-        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${isScrolled ? 'bg-white' : ''}`}>
+        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${isScrolled ? 'bg-card' : ''}`}>
           <div className="flex items-center justify-between h-16 md:h-20">
-            {/* Left: Search + Menu + Logo - Mobile */}
-            <div className="flex items-center gap-2 md:hidden">
-              <AnimatePresence>
-                {isScrolled && (
-                  <>
-                    <motion.button
-                      onClick={() => setIsMobileMenuOpen(true)}
-                      className="md:hidden p-2 hover:bg-foreground/5 rounded-md transition-colors"
-                      aria-label="Toggle menu"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.3, delay: 0.1 }}
-                    >
-                      <Menu className="h-5 w-5" />
-                    </motion.button>
-                  </>
-                )}
-              </AnimatePresence>
-
-              <Link href="/" className="flex items-center">
-                <Image
-                  src="/ramazah-logo.png"
-                  alt="Ramazah"
-                  width={150}
-                  height={90}
-                  className="h-10 md:h-14 w-auto"
-                />
-              </Link>
+            {/* Left: Logo - Mobile */}
+            <div className="flex items-center md:hidden">
+              <BrandMark variant={isScrolled ? "default" : "inverse"} />
             </div>
 
             {/* Desktop Logo */}
             <div className="items-center md:flex hidden">
-              <Link href="/" className="flex items-center">
-                <Image
-                  src="/ramazah-logo.png"
-                  alt="Ramazah"
-                  width={150}
-                  height={90}
-                  className="h-10 md:h-14 w-auto"
-                />
-              </Link>
+              <BrandMark variant={isScrolled ? "default" : "inverse"} />
             </div>
 
             {/* Desktop Navigation with Dropdowns */}
@@ -151,6 +117,22 @@ export default function HomeNavbar() {
                   )}
                 </AnimatePresence>
               </button>
+
+              <AnimatePresence>
+                {isScrolled && (
+                  <motion.button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="md:hidden p-2 hover:bg-foreground/5 rounded-md transition-colors"
+                    aria-label="Open menu"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                  >
+                    <Menu className="h-5 w-5" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>

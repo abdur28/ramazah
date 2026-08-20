@@ -167,7 +167,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="p-6 bg-white border border-foreground/10 rounded-lg h-fit"
+          className="p-6 bg-card border border-foreground/10 rounded-lg h-fit"
         >
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-foreground/5 rounded-md">
@@ -208,14 +208,14 @@ export default function SettingsPage() {
               <Button
                 onClick={handleUpdateProfile}
                 disabled={isSavingProfile}
-                className="bg-[#F8E231] text-black hover:bg-black hover:text-white transition-colors"
+                className="bg-sage-deep text-background hover:bg-foreground hover:text-background transition-colors"
               >
                 {isSavingProfile ? (
                   <>
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-black border-t-transparent rounded-full mr-2"
+                      className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full mr-2"
                     />
                     Saving...
                   </>
@@ -232,7 +232,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="p-6 bg-white border border-foreground/10 rounded-lg h-fit"
+          className="p-6 bg-card border border-foreground/10 rounded-lg h-fit"
         >
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-foreground/5 rounded-md">
@@ -320,14 +320,14 @@ export default function SettingsPage() {
               <Button
                 onClick={handleUpdateAddress}
                 disabled={isSavingAddress}
-                className="bg-[#F8E231] text-black hover:bg-black hover:text-white transition-colors"
+                className="bg-sage-deep text-background hover:bg-foreground hover:text-background transition-colors"
               >
                 {isSavingAddress ? (
                   <>
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-black border-t-transparent rounded-full mr-2"
+                      className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full mr-2"
                     />
                     Saving...
                   </>
@@ -346,7 +346,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="p-6 bg-white border border-foreground/10 rounded-lg h-fit"
+          className="p-6 bg-card border border-foreground/10 rounded-lg h-fit"
         >
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-foreground/5 rounded-md">
@@ -425,14 +425,14 @@ export default function SettingsPage() {
               <Button
                 onClick={handleChangePassword}
                 disabled={isUpdatingPassword}
-                className="bg-[#F8E231] text-black hover:bg-black hover:text-white transition-colors"
+                className="bg-sage-deep text-background hover:bg-foreground hover:text-background transition-colors"
               >
                 {isUpdatingPassword ? (
                   <>
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-black border-t-transparent rounded-full mr-2"
+                      className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full mr-2"
                     />
                     Updating...
                   </>
@@ -450,28 +450,28 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="p-6 bg-red-50 border border-red-200 rounded-lg h-fit"
+          className="p-6 bg-destructive/10 border border-destructive rounded-lg h-fit"
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-100 rounded-md">
-              <Trash2 className="h-5 w-5 text-red-600" />
+            <div className="p-2 bg-destructive/10 rounded-md">
+              <Trash2 className="h-5 w-5 text-destructive" />
             </div>
             <div>
-              <h2 className="font-body font-semibold text-red-900">Danger Zone</h2>
-              <p className="font-body text-sm text-red-700">
+              <h2 className="font-body font-semibold text-destructive">Danger Zone</h2>
+              <p className="font-body text-sm text-destructive">
                 Irreversible actions
               </p>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-md border border-red-200 mb-4">
+          <div className="bg-card p-4 rounded-md border border-destructive mb-4">
             <div className="flex items-start gap-2 mb-3">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-body text-sm font-semibold text-red-900">
+                <p className="font-body text-sm font-semibold text-destructive">
                   Delete Account
                 </p>
-                <p className="font-body text-xs text-red-700 mt-1">
+                <p className="font-body text-xs text-destructive mt-1">
                   Once you delete your account, there is no going back. This will permanently delete your account data, orders, and wishlist.
                 </p>
               </div>
@@ -482,7 +482,7 @@ export default function SettingsPage() {
             <AlertDialogTrigger asChild>
               <Button
                 variant="destructive"
-                className="w-full bg-red-600 hover:bg-red-700"
+                className="w-full bg-destructive hover:bg-destructive"
               >
                 Delete Account
               </Button>
@@ -499,7 +499,7 @@ export default function SettingsPage() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDeleteAccount}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-destructive hover:bg-destructive"
                 >
                   Yes, delete my account
                 </AlertDialogAction>

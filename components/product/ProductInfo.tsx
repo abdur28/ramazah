@@ -68,17 +68,17 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
         className="flex flex-wrap gap-2 mb-4"
       >
         {product.isNew && (
-          <span className="px-3 py-1 bg-[#F8E231] text-black text-xs font-body font-semibold uppercase tracking-wider">
+          <span className="px-3 py-1 bg-terra-deep text-background text-xs font-body font-semibold uppercase tracking-wider">
             New
           </span>
         )}
         {priceData.discountPercent > 0 && (
-          <span className="px-3 py-1 bg-red-500 text-white text-xs font-body font-semibold uppercase tracking-wider">
+          <span className="px-3 py-1 bg-destructive text-background text-xs font-body font-semibold uppercase tracking-wider">
             -{priceData.discountPercent}% Off
           </span>
         )}
         {product.isLimitedEdition && (
-          <span className="px-3 py-1 bg-black text-[#F8E231] text-xs font-body font-semibold uppercase tracking-wider">
+          <span className="px-3 py-1 bg-foreground text-sage-light text-xs font-body font-semibold uppercase tracking-wider">
             Limited Edition
           </span>
         )}
@@ -148,7 +148,7 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
           )}
         </div>
         {priceData.discountPercent > 0 && priceData.compareAtPrice > 0 && (
-          <p className="text-sm text-green-600 mt-2">
+          <p className="text-sm text-success mt-2">
             You save {formatPrice(priceData.compareAtPrice - priceData.price)}
           </p>
         )}

@@ -38,8 +38,8 @@
     body {
       margin: 0 !important;
       padding: 0 !important;
-      font-family: 'Inter', Arial, sans-serif;
-      background-color: #f5f5f5;
+      font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif;
+      background-color: #EFF1E9;
     }
     
     .email-wrapper {
@@ -58,7 +58,6 @@
       transform: translate(-50%, -50%);
       width: 300px;
       height: 300px;
-      background-image: url('https://res.cloudinary.com/abdur28/image/upload/v1760124538/skull_njcebb.svg');
       background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
@@ -75,16 +74,30 @@
     }
     
     .header {
-      background: linear-gradient(135deg, #cecbcb 0%, #ffffff 100%);
+      background: linear-gradient(135deg, #E4E3D8 0%, #ffffff 100%);
       padding: 40px 30px;
       text-align: center;
       position: relative;
     }
     
     .logo {
-      max-width: 200px;
-      height: auto;
-      filter: brightness(0) invert(1);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 26px;
+      font-weight: 400;
+      letter-spacing: 0.28em;
+      color: #FAF9F5;
+      text-transform: uppercase;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .logo-sub {
+      font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.32em;
+      color: #A3AB8C;
+      text-transform: uppercase;
+      margin: 6px 0 0;
     }
     
     .content {
@@ -95,7 +108,7 @@
     h1 {
       font-size: 28px;
       font-weight: 900;
-      color: #000000;
+      color: #2A2E24;
       margin: 0 0 20px 0;
       letter-spacing: -0.5px;
       text-transform: uppercase;
@@ -103,14 +116,14 @@
     
     .greeting {
       font-size: 16px;
-      color: #333333;
+      color: #2A2E24;
       margin-bottom: 30px;
       line-height: 1.6;
     }
     
     .order-info {
-      background-color: #f8f8f8;
-      border-left: 4px solid #F8E231;
+      background-color: #EFF1E9;
+      border-left: 4px solid #5C6647;
       padding: 20px;
       margin: 20px 0;
       border-radius: 0 8px 8px 0;
@@ -118,19 +131,19 @@
     
     .order-number {
       font-size: 14px;
-      color: #666666;
+      color: #6B7060;
       margin-bottom: 5px;
     }
     
     .order-number strong {
-      color: #000000;
+      color: #2A2E24;
       font-size: 16px;
       font-weight: 700;
     }
     
     .order-date {
       font-size: 14px;
-      color: #666666;
+      color: #6B7060;
     }
     
     .items-section {
@@ -140,9 +153,9 @@
     .section-title {
       font-size: 18px;
       font-weight: 700;
-      color: #000000;
+      color: #FAF9F5;
       margin-bottom: 20px;
-      border-bottom: 2px solid #F8E231;
+      border-bottom: 2px solid #5C6647;
       padding-bottom: 10px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -153,7 +166,7 @@
       width: 100%;
       margin-bottom: 20px;
       padding: 20px 0;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid #E4E3D8;
     }
     
     .item:last-child {
@@ -170,7 +183,7 @@
       width: 80px;
       height: 80px;
       object-fit: cover;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #E4E3D8;
       border-radius: 4px;
     }
     
@@ -183,19 +196,19 @@
     .item-name {
       font-size: 16px;
       font-weight: 700;
-      color: #000000;
+      color: #2A2E24;
       margin-bottom: 5px;
     }
     
     .item-variant {
       font-size: 14px;
-      color: #666666;
+      color: #6B7060;
       margin-bottom: 5px;
     }
     
     .item-quantity {
       font-size: 14px;
-      color: #666666;
+      color: #6B7060;
     }
     
     .item-price {
@@ -204,11 +217,11 @@
       vertical-align: top;
       font-size: 16px;
       font-weight: 700;
-      color: #000000;
+      color: #2A2E24;
     }
     
     .summary {
-      background-color: #000000;
+      background-color: #2A2E24;
       color: #ffffff;
       padding: 25px;
       margin: 30px 0;
@@ -225,15 +238,15 @@
     .summary-line.total {
       font-size: 20px;
       font-weight: 900;
-      border-top: 2px solid #F8E231;
+      border-top: 2px solid #5C6647;
       padding-top: 15px;
       margin-top: 15px;
-      color: #F8E231;
+      color: #A3AB8C;
     }
     
     .shipping-info {
-      background-color: #f8f8f8;
-      border-left: 4px solid #F8E231;
+      background-color: #EFF1E9;
+      border-left: 4px solid #5C6647;
       padding: 20px;
       margin: 30px 0;
       border-radius: 0 8px 8px 0;
@@ -242,7 +255,7 @@
     .shipping-title {
       font-size: 16px;
       font-weight: 700;
-      color: #000000;
+      color: #2A2E24;
       margin-bottom: 15px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -250,14 +263,14 @@
     
     .address {
       font-size: 14px;
-      color: #333333;
+      color: #2A2E24;
       line-height: 1.6;
     }
     
     .cta-button {
       display: inline-block;
-      background-color: #F8E231;
-      color: #000000;
+      background-color: #5C6647;
+      color: #FAF9F5;
       text-decoration: none;
       padding: 16px 40px;
       font-size: 16px;
@@ -270,12 +283,12 @@
     }
     
     .cta-button:hover {
-      background-color: #e6d12c;
+      background-color: #4A5239;
       transform: translateY(-2px);
     }
     
     .footer {
-      background-color: #000000;
+      background-color: #2A2E24;
       color: #ffffff;
       padding: 40px 30px;
       text-align: center;
@@ -283,7 +296,7 @@
     
     .footer-tagline {
       font-size: 14px;
-      color: #F8E231;
+      color: #A3AB8C;
       margin: 0 0 20px 0;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -299,7 +312,7 @@
       margin: 0 10px;
       width: 40px;
       height: 40px;
-      background-color: #F8E231;
+      background-color: #5C6647;
       border-radius: 50%;
       transition: all 0.3s ease;
     }
@@ -320,7 +333,7 @@
     }
     
     .footer-links a {
-      color: #F8E231;
+      color: #A3AB8C;
       text-decoration: none;
       margin: 0 15px;
       font-size: 14px;
@@ -333,7 +346,7 @@
     
     .copyright {
       font-size: 12px;
-      color: #999999;
+      color: #6B7060;
       margin-top: 20px;
     }
     
@@ -366,8 +379,8 @@
   <div class="email-wrapper">
     <!-- Header -->
     <div class="header">
-      <!-- TODO: upload a Ramazah logo to Cloudinary and swap this URL -->
-      <img src="https://res.cloudinary.com/abdur28/image/upload/v1760124537/hoodskool-logo_tfnse4.png" alt="RAMAZAH" class="logo">
+      <p class="logo">Ramazah</p>
+      <p class="logo-sub">Store</p>
     </div>
     
     <!-- Content -->
@@ -425,7 +438,7 @@
             {{#if this.image}}
             <img src="{{this.image}}" alt="{{this.name}}">
             {{else}}
-            <div style="width: 80px; height: 80px; background-color: #f0f0f0; border: 1px solid #e0e0e0; border-radius: 4px;"></div>
+            <div style="width: 80px; height: 80px; background-color: #EFF1E9; border: 1px solid #E4E3D8; border-radius: 4px;"></div>
             {{/if}}
           </div>
           <div class="item-details">

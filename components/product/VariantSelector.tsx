@@ -116,7 +116,7 @@ export default function VariantSelector({
                     min-w-[50px] px-4 py-3 font-body text-xs font-medium transition-all
                     ${
                       selected
-                        ? "bg-black text-white ring-2 ring-[#F8E231]"
+                        ? "bg-foreground text-background ring-2 ring-sage-deep"
                         : available
                         ? "bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20"
                         : "bg-foreground/5 text-foreground/30 cursor-not-allowed border border-foreground/10"
@@ -165,7 +165,7 @@ export default function VariantSelector({
                   whileTap={available ? { scale: 0.9 } : {}}
                   className={`
                     group relative w-10 h-10 rounded-full transition-all
-                    ${selected ? "ring-2 ring-[#F8E231] ring-offset-2 ring-offset-background" : "ring-1 ring-foreground/20"}
+                    ${selected ? "ring-2 ring-sage-deep ring-offset-2 ring-offset-background" : "ring-1 ring-foreground/20"}
                     ${!available && "opacity-30 cursor-not-allowed"}
                     ${available && !selected && "hover:ring-2 hover:ring-foreground/40"}
                   `}
@@ -183,11 +183,10 @@ export default function VariantSelector({
                       className="absolute inset-0 flex items-center justify-center"
                     >
                       <svg
-                        className="w-5 h-5"
+                        className="w-5 h-5 [stroke-width:3]"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke={color.hex === "#FFFFFF" || color.hex.toLowerCase() === "#ffffff" ? "#000000" : "#FFFFFF"}
-                        strokeWidth={3}
                       >
                         <path
                           strokeLinecap="round"
@@ -206,7 +205,7 @@ export default function VariantSelector({
                   )}
 
                   {/* Tooltip on hover */}
-                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     {color.name}
                   </span>
                 </motion.button>
@@ -225,7 +224,7 @@ export default function VariantSelector({
         >
           <div
             className={`w-2 h-2 rounded-full ${
-              selectedVariant.inStock ? "bg-green-500" : "bg-red-500"
+              selectedVariant.inStock ? "bg-success" : "bg-destructive"
             }`}
           />
           <span className="font-body text-foreground/70">

@@ -333,7 +333,7 @@ export default function VariantManager({
                         {index > 0 && <Separator />}
                         
                         <div className="flex items-center gap-2">
-                          <h4 className=" font-body font-semibold">{currency.name} ({currency.symbol})</h4>
+                          <h4 className="font-body font-semibold">{currency.name} ({currency.symbol})</h4>
                           {currency.isDefault && (
                             <Badge variant="secondary" className="text-xs">Default</Badge>
                           )}
@@ -385,8 +385,8 @@ export default function VariantManager({
                         </div>
 
                         {discountPercent > 0 && price > 0 && (
-                          <div className="p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                            <p className="text-xs text-green-800 dark:text-green-200">
+                          <div className="p-2 bg-success/10 border border-success rounded-lg">
+                            <p className="text-xs text-success">
                               💰 <strong>{discountPercent}% off</strong> - Save {currency.symbol}{savings.toFixed(2)}
                             </p>
                           </div>

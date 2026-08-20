@@ -174,10 +174,10 @@ export default function AdminMailerPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-heading font-bold tracking-wider ">
+          <h1 className="text-2xl font-heading font-bold tracking-wider">
             EMAIL CAMPAIGNS
           </h1>
-          <p className="text-gray-400 font-body">
+          <p className="text-ink-muted font-body">
             Send targeted emails to your customers
           </p>
         </div>
@@ -185,7 +185,7 @@ export default function AdminMailerPage() {
           onClick={handleRefresh} 
           disabled={refreshing || loading.users}
           variant="outline"
-          className="border-gray-300"
+          className="border-rule"
         >
           <RefreshCcw className={`h-4 w-4 mr-2 ${refreshing || loading.users ? "animate-spin" : ""}`} />
           Refresh
@@ -195,53 +195,53 @@ export default function AdminMailerPage() {
       {/* Stats Cards */}
       {emailStats && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium ">Total Users</CardTitle>
-              <Users className="h-4 w-4 " />
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <Users className="h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold ">{emailStats.totalUsers}</div>
-              <p className="text-xs text-gray-400">
+              <div className="text-2xl font-bold">{emailStats.totalUsers}</div>
+              <p className="text-xs text-ink-muted">
                 {emailStats.totalOptedIn} opted-in
               </p>
             </CardContent>
           </Card>
 
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium ">Promotions</CardTitle>
-              <Sparkles className="h-4 w-4 " />
+              <CardTitle className="text-sm font-medium">Promotions</CardTitle>
+              <Sparkles className="h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold ">{emailStats.promotionsOptedIn}</div>
-              <p className="text-xs text-gray-400">
+              <div className="text-2xl font-bold">{emailStats.promotionsOptedIn}</div>
+              <p className="text-xs text-ink-muted">
                 Active subscribers
               </p>
             </CardContent>
           </Card>
 
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium ">New Arrivals</CardTitle>
-              <Package className="h-4 w-4 " />
+              <CardTitle className="text-sm font-medium">New Arrivals</CardTitle>
+              <Package className="h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold ">{emailStats.newArrivalsOptedIn}</div>
-              <p className="text-xs text-gray-400">
+              <div className="text-2xl font-bold">{emailStats.newArrivalsOptedIn}</div>
+              <p className="text-xs text-ink-muted">
                 Active subscribers
               </p>
             </CardContent>
           </Card>
 
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium ">Newsletter</CardTitle>
-              <Mail className="h-4 w-4 " />
+              <CardTitle className="text-sm font-medium">Newsletter</CardTitle>
+              <Mail className="h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold ">{emailStats.newsletterOptedIn}</div>
-              <p className="text-xs text-gray-400">
+              <div className="text-2xl font-bold">{emailStats.newsletterOptedIn}</div>
+              <p className="text-xs text-ink-muted">
                 Active subscribers
               </p>
             </CardContent>
@@ -253,27 +253,27 @@ export default function AdminMailerPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Email Composer */}
         <div className="lg:col-span-2">
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader>
               <CardTitle className="font-body">
                 Compose Compaign
               </CardTitle>
-              <CardDescription className="text-gray-400">
+              <CardDescription className="text-ink-muted">
                 Create and send email campaigns to your customers
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs value={emailType} onValueChange={(value) => setEmailType(value as any)}>
-                <TabsList className="grid w-full grid-cols-3 bg-gray-100">
-                  <TabsTrigger value="promotions" className="data-[state=active]:bg-[#F8E231] data-[state=active]:text-black">
+                <TabsList className="grid w-full grid-cols-3 bg-wash">
+                  <TabsTrigger value="promotions" className="data-[state=active]:bg-sage-deep data-[state=active]:text-background">
                     <Sparkles className="h-4 w-4 mr-2" />
                     Promotion
                   </TabsTrigger>
-                  <TabsTrigger value="newArrivals" className="data-[state=active]:bg-[#F8E231] data-[state=active]:text-black">
+                  <TabsTrigger value="newArrivals" className="data-[state=active]:bg-terra-deep data-[state=active]:text-background">
                     <Package className="h-4 w-4 mr-2" />
                     New Arrivals
                   </TabsTrigger>
-                  <TabsTrigger value="newsletter" className="data-[state=active]:bg-[#F8E231] data-[state=active]:text-black">
+                  <TabsTrigger value="newsletter" className="data-[state=active]:bg-terra-deep data-[state=active]:text-background">
                     <Mail className="h-4 w-4 mr-2" />
                     Newsletter
                   </TabsTrigger>
@@ -307,9 +307,9 @@ export default function AdminMailerPage() {
         {/* Recipients Panel */}
         <div className="space-y-6">
           {/* Recipient Stats */}
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader>
-              <CardTitle className=" font-body flex items-center">
+              <CardTitle className="font-body flex items-center">
                  Recipients
               </CardTitle>
               <CardDescription>
@@ -318,14 +318,14 @@ export default function AdminMailerPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm ">Available Recipients</span>
+                <span className="text-sm">Available Recipients</span>
                 <Badge variant="secondary" >
                   {emailRecipients.length}
                 </Badge>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-sm ">Selected</span>
+                <span className="text-sm">Selected</span>
                 <Badge variant="secondary" >
                   {selectedRecipients.length}
                 </Badge>
@@ -334,7 +334,7 @@ export default function AdminMailerPage() {
               <Button 
                 onClick={handleSelectAll}
                 variant="outline"
-                className="w-full border-gray-300"
+                className="w-full border-rule"
                 disabled={emailRecipients.length === 0}
               >
                 {selectAll ? "Deselect All" : "Select All"}
@@ -343,21 +343,21 @@ export default function AdminMailerPage() {
           </Card>
 
           {/* Recipients List */}
-          <Card className=" border-gray-300">
+          <Card className="border-rule">
             <CardHeader>
-              <CardTitle className="text-sm font-body ">
+              <CardTitle className="text-sm font-body">
                 Recipient List
               </CardTitle>
             </CardHeader>
             <CardContent>
               {loading.users ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#F8E231]" />
+                  <Loader2 className="h-6 w-6 animate-spin text-sage-light" />
                 </div>
               ) : emailRecipients.length === 0 ? (
                 <div className="text-center py-8">
-                  <Mail className="h-12 w-12 mx-auto mb-4 " />
-                  <p className="text-sm text-gray-400">
+                  <Mail className="h-12 w-12 mx-auto mb-4" />
+                  <p className="text-sm text-ink-muted">
                     No recipients opted-in for {getEmailTypeLabel()}
                   </p>
                 </div>
@@ -366,7 +366,7 @@ export default function AdminMailerPage() {
                   {emailRecipients.map((recipient) => (
                     <label
                       key={recipient.id}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-wash cursor-pointer transition-colors"
                     >
                       <Checkbox
                         checked={selectedRecipients.includes(recipient.id)}
@@ -374,10 +374,10 @@ export default function AdminMailerPage() {
                         className="mt-0.5"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium  truncate">
+                        <p className="text-sm font-medium truncate">
                           {recipient.displayName || "Unnamed User"}
                         </p>
-                        <p className="text-xs text-gray-400 truncate">
+                        <p className="text-xs text-ink-muted truncate">
                           {recipient.email}
                         </p>
                       </div>
@@ -392,26 +392,26 @@ export default function AdminMailerPage() {
 
       {/* Results Dialog */}
       <Dialog open={showResults} onOpenChange={setShowResults}>
-        <DialogContent className="max-w-2xl  border-gray-300">
+        <DialogContent className="max-w-2xl border-rule">
           <DialogHeader>
-            <DialogTitle className=" font-body tracking-wider">
+            <DialogTitle className="font-body tracking-wider">
               Campaign Results
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-ink-muted">
               Email delivery summary
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             {/* Success Summary */}
-            <div className="flex items-center justify-between p-4  rounded-lg border border-gray-300">
+            <div className="flex items-center justify-between p-4 rounded-lg border border-rule">
               <div className="flex items-center">
-                <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+                <CheckCircle className="w-5 h-5 text-success mr-3" />
                 <div>
-                  <p className="text-sm font-medium ">
+                  <p className="text-sm font-medium">
                     {successCount} of {totalCount} sent successfully
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-ink-muted">
                     {Math.round((successCount / totalCount) * 100)}% success rate
                   </p>
                 </div>
@@ -425,28 +425,28 @@ export default function AdminMailerPage() {
                   key={index}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
                     result.success 
-                      ? 'bg-green-200/20 border-green-500/30' 
-                      : 'bg-red-200/20 border-red-500/30'
+                      ? 'bg-success/20 border-success/30' 
+                      : 'bg-destructive/20 border-destructive/30'
                   }`}
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {result.success ? (
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
                     ) : (
-                      <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium  truncate">
+                      <p className="text-sm font-medium truncate">
                         {result.name}
                       </p>
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-xs text-ink-muted truncate">
                         {result.email}
                       </p>
                     </div>
                   </div>
                   <Badge 
                     variant={result.success ? "default" : "destructive"}
-                    className={result.success ? "bg-green-600" : ""}
+                    className={result.success ? "bg-success" : ""}
                   >
                     {result.success ? "Sent" : "Failed"}
                   </Badge>
@@ -458,7 +458,7 @@ export default function AdminMailerPage() {
           <DialogFooter>
             <Button 
               onClick={() => setShowResults(false)}
-              className="bg-[#F8E231] hover:bg-[#ffd700] text-black"
+              className="bg-sage-deep hover:bg-sage-deep text-background"
             >
               Close
             </Button>

@@ -100,7 +100,7 @@ export default function LoginPage({redirect}: {redirect: string}) {
             transition={{ duration: 1.5 }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-black/70" />
+        <div className="absolute inset-0 bg-foreground/70" />
       </div>
 
       {/* Content */}
@@ -116,7 +116,7 @@ export default function LoginPage({redirect}: {redirect: string}) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 uppercase"
+            className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 uppercase"
           >
             Welcome Back
           </motion.p>
@@ -124,7 +124,7 @@ export default function LoginPage({redirect}: {redirect: string}) {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="font-heading text-5xl md:text-6xl tracking-wider text-white"
+            className="font-heading text-5xl md:text-6xl tracking-wider text-background"
           >
             LOGIN
           </motion.h1>
@@ -135,14 +135,14 @@ export default function LoginPage({redirect}: {redirect: string}) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-8"
+          className="bg-foreground/40 backdrop-blur-md border border-background/10 rounded-lg p-8"
         >
           {/* Error Message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-md flex items-center gap-2 text-red-400 text-sm"
+              className="mb-6 p-3 bg-destructive/10 border border-destructive/50 rounded-md flex items-center gap-2 text-destructive text-sm"
             >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
@@ -153,11 +153,11 @@ export default function LoginPage({redirect}: {redirect: string}) {
           <form onSubmit={handleEmailLogin} className="space-y-5">
             {/* Email Field */}
             <div>
-              <Label htmlFor="email" className="text-white/80 text-sm mb-2 block">
+              <Label htmlFor="email" className="text-background/80 text-sm mb-2 block">
                 Email
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                 <Input
                   id="email"
                   type="email"
@@ -165,7 +165,7 @@ export default function LoginPage({redirect}: {redirect: string}) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
@@ -173,18 +173,18 @@ export default function LoginPage({redirect}: {redirect: string}) {
             {/* Password Field */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label htmlFor="password" className="text-white/80 text-sm">
+                <Label htmlFor="password" className="text-background/80 text-sm">
                   Password
                 </Label>
                 <Link
                   href="/auth/reset-password"
-                  className="text-xs text-[#F8E231] hover:text-[#F8E231]/80 transition-colors"
+                  className="text-xs text-sage-light hover:text-sage-light/80 transition-colors"
                 >
                   Forgot?
                 </Link>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -192,9 +192,9 @@ export default function LoginPage({redirect}: {redirect: string}) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                 />
-                <Button className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40"
+                <Button className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40"
                     variant={'ghost'}
                     type='button'
                     onClick={() => setShowPassword(!showPassword)}
@@ -209,14 +209,14 @@ export default function LoginPage({redirect}: {redirect: string}) {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-12 bg-[#F8E231] text-black font-body font-semibold hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-black border-t-transparent rounded-full"
+                    className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full"
                   />
                   Signing in...
                 </span>
@@ -232,10 +232,10 @@ export default function LoginPage({redirect}: {redirect: string}) {
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10" />
+              <div className="w-full border-t border-background/10" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-black/40 px-2 text-white/40">Or continue with</span>
+              <span className="bg-foreground/40 px-2 text-background/40">Or continue with</span>
             </div>
           </div>
 
@@ -245,17 +245,17 @@ export default function LoginPage({redirect}: {redirect: string}) {
             onClick={handleGoogleLogin}
             disabled={loading}
             variant="outline"
-            className="w-full h-12 border-white/20 text-black font-body font-semibold hover:bg-white/5 disabled:opacity-50"
+            className="w-full h-12 border-background/20 text-background font-body font-semibold hover:bg-card/5 disabled:opacity-50"
           >
             <Image src="/google-icon.svg" alt="Google Logo" width={20} height={20} className="mr-2" />
             Sign in with Google
           </Button>
 
           {/* Sign Up Link */}
-          <div className="mt-6 text-center text-sm text-white/60">
+          <div className="mt-6 text-center text-sm text-background/60">
             Don't have an account?{' '}
-            <CrossedLink href={`/auth/signup?redirect=${redirect}`} lineColor="#F8E231" lineWidth={1}>
-              <span className="text-[#F8E231] font-medium">Sign up</span>
+            <CrossedLink href={`/auth/signup?redirect=${redirect}`} lineColor="#5C6647" lineWidth={1}>
+              <span className="text-sage-light font-medium">Sign up</span>
             </CrossedLink>
           </div>
         </motion.div>
@@ -268,7 +268,7 @@ export default function LoginPage({redirect}: {redirect: string}) {
           className="text-center mt-6"
         >
           <CrossedLink href="/" lineColor="gold" lineWidth={1}>
-            <span className="text-white/60 text-sm hover:text-white transition-colors">
+            <span className="text-background/60 text-sm hover:text-background transition-colors">
               ← Back to Home
             </span>
           </CrossedLink>

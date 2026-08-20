@@ -117,20 +117,20 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 z-50"
+            className="fixed inset-0 bg-foreground/40 backdrop-blur-[2px] z-50"
           />
 
           {/* Menu Container */}
           <motion.div
-            initial={{ x: '-100%' }}
+            initial={{ x: '100%' }}
             animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
+            exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.3 }}
-            className="fixed left-0 top-0 bottom-0 w-full max-w-md bg-background z-50 overflow-hidden"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-background z-50 overflow-hidden shadow-2xl"
           >
             <div className="h-full flex flex-col">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-foreground/10">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-rule">
                 {activeCategory ? (
                   <button
                     onClick={handleBack}
@@ -143,7 +143,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   <div className="w-9" /> // Spacer for alignment
                 )}
                 
-                <h2 className="font-heading text-lg tracking-wider">
+                <h2 className="font-body text-sm font-medium uppercase tracking-[0.18em] text-ink-muted">
                   {activeCategory ? activeCategory.name.toUpperCase() : 'MENU'}
                 </h2>
                 
@@ -179,14 +179,14 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                               <Link
                                 href={item.href}
                                 onClick={onClose}
-                                className="flex items-center justify-between py-4 text-foreground hover:text-foreground/60 transition-colors border-b border-foreground/5"
+                                className="flex items-center justify-between py-4 text-foreground hover:text-foreground/60 transition-colors border-b border-rule/60"
                               >
                                 <span className="font-body text-base">{item.name}</span>
                               </Link>
                             ) : (
                               <button
                                 onClick={() => handleCategoryClick(item)}
-                                className="w-full flex items-center justify-between py-4 text-foreground hover:text-foreground/60 transition-colors border-b border-foreground/5"
+                                className="w-full flex items-center justify-between py-4 text-foreground hover:text-foreground/60 transition-colors border-b border-rule/60"
                               >
                                 <span className="font-body text-base">{item.name}</span>
                                 <ChevronRight className="h-4 w-4" />
@@ -197,7 +197,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                       </nav>
 
                       {/* Account Links */}
-                      <div className="px-6 py-4 mt-10 border-t border-foreground/10">
+                      <div className="px-6 py-4 mt-10 border-t border-rule">
                         {accountLinks.map((link) => {
                           const Icon = link.icon;
                           return (
@@ -238,7 +238,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                   key={item.name}
                                   href={item.href}
                                   onClick={onClose}
-                                  className="block py-3 text-foreground hover:text-foreground/60 transition-colors border-b border-foreground/5"
+                                  className="block py-3 text-foreground hover:text-foreground/60 transition-colors border-b border-rule/60"
                                 >
                                   <span className="font-body text-base">{item.name}</span>
                                 </Link>

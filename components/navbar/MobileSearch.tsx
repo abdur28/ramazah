@@ -64,7 +64,7 @@ export default function MobileSearch({ isOpen, onClose }: MobileSearchProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 z-50"
+            className="fixed inset-0 bg-foreground/50 z-50"
           />
 
           {/* Search Panel */}
@@ -151,7 +151,7 @@ export default function MobileSearch({ isOpen, onClose }: MobileSearchProps) {
                       <button
                         key={index}
                         onClick={() => handleSearchClick(search)}
-                        className="px-4 py-2 border border-foreground/20 rounded-full hover:bg-[#F8E231] hover:text-black transition-all font-body text-sm"
+                        className="px-4 py-2 border border-foreground/20 rounded-full hover:bg-sage-deep hover:text-background transition-all font-body text-sm"
                       >
                         {search}
                       </button>

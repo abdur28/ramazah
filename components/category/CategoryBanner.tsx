@@ -35,7 +35,7 @@ export default function CategoryBanner({
   return (
     <section
       ref={containerRef}
-      className="relative w-full h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden bg-black"
+      className="relative w-full h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden bg-foreground"
     >
       {/* Parallax Background */}
       {bannerImage ? (
@@ -50,10 +50,10 @@ export default function CategoryBanner({
             className="object-cover"
             priority
           />
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-foreground/40" />
         </motion.div>
       ) : (
-        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-foreground/40" />
       )}
 
 
@@ -75,7 +75,7 @@ export default function CategoryBanner({
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 md:mb-4 uppercase"
+            className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 md:mb-4 uppercase"
             >
             {subtitle}
             </motion.p>
@@ -88,12 +88,12 @@ export default function CategoryBanner({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="font-heading text-4xl md:text-5xl lg:text-6xl tracking-wider uppercase text-white mb-4 md:mb-4 leading-tight"
+          className="font-heading text-4xl md:text-5xl lg:text-6xl tracking-wider uppercase text-background mb-4 md:mb-4 leading-tight"
         >
           {title.split(" ").length > 1 ? title.split(" ").slice(0, -1).join(" ") : title}
           {" "}
           {title.split(" ").length > 1 && 
-             <span className="text-[#F8E231]">{title.split(" ").slice(-1)[0]}</span>
+             <span className="text-sage-light">{title.split(" ").slice(-1)[0]}</span>
           }
         </motion.h2>
 
@@ -103,7 +103,7 @@ export default function CategoryBanner({
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.6 }}
-            className="font-body text-sm md:text-base text-white/70 max-w-2xl mx-auto mb-6 leading-relaxed"
+            className="font-body text-sm md:text-base text-background/70 max-w-2xl mx-auto mb-6 leading-relaxed"
           >
             {description}
           </motion.p>
@@ -116,7 +116,7 @@ export default function CategoryBanner({
         initial={{ scaleX: 0 }}
         animate={{ scaleX: 1 }}
         transition={{ duration: 1, delay: 0.5 }}
-        className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#F8E231] to-transparent z-30"
+        className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-sage to-transparent z-30"
       />
 
     </section>

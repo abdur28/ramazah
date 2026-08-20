@@ -260,7 +260,7 @@ export default function UserOrderDetailsDialog({
               )}
               
               {order.discount !== undefined && order.discount > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-success">
                   <span>Discount</span>
                   <span>-{order.discount.toFixed(2)}</span>
                 </div>
@@ -325,7 +325,7 @@ export default function UserOrderDetailsDialog({
               
               {order.deliveredAt && (
                 <div className="flex items-start gap-3">
-                  <div className="bg-green-600 text-white rounded-full p-1 mt-0.5">
+                  <div className="bg-success text-background rounded-full p-1 mt-0.5">
                     <CheckCircle2 className="h-3 w-3" />
                   </div>
                   <div className="flex-1">
@@ -337,7 +337,7 @@ export default function UserOrderDetailsDialog({
               
               {order.pickedUpAt && (
                 <div className="flex items-start gap-3">
-                  <div className="bg-green-600 text-white rounded-full p-1 mt-0.5">
+                  <div className="bg-success text-background rounded-full p-1 mt-0.5">
                     <CheckCircle2 className="h-3 w-3" />
                   </div>
                   <div className="flex-1">

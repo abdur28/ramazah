@@ -74,8 +74,8 @@ export default function ContactForm() {
               onClick={() => setFormData({ ...formData, inquiryType: type.value as any })}
               className={`px-4 py-2 text-sm tracking-wider transition-all ${
                 formData.inquiryType === type.value
-                  ? "bg-[#F8E231] text-black"
-                  : "bg-transparent border border-border hover:border-[#F8E231]"
+                  ? "bg-sage-deep text-background"
+                  : "bg-transparent border border-border hover:border-sage"
               }`}
             >
               {type.label}
@@ -95,7 +95,7 @@ export default function ContactForm() {
           required
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          className="bg-background border-border focus:border-[#F8E231] transition-colors"
+          className="bg-background border-border focus:border-sage transition-colors"
           placeholder="Your full name"
         />
       </div>
@@ -112,7 +112,7 @@ export default function ContactForm() {
             required
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className="bg-background border-border focus:border-[#F8E231] transition-colors"
+            className="bg-background border-border focus:border-sage transition-colors"
             placeholder="your@email.com"
           />
         </div>
@@ -126,7 +126,7 @@ export default function ContactForm() {
             type="tel"
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            className="bg-background border-border focus:border-[#F8E231] transition-colors"
+            className="bg-background border-border focus:border-sage transition-colors"
             placeholder="+1 (555) 000-0000"
           />
         </div>
@@ -143,7 +143,7 @@ export default function ContactForm() {
           required
           value={formData.subject}
           onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-          className="bg-background border-border focus:border-[#F8E231] transition-colors"
+          className="bg-background border-border focus:border-sage transition-colors"
           placeholder="How can we help you?"
         />
       </div>
@@ -158,7 +158,7 @@ export default function ContactForm() {
           required
           value={formData.message}
           onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-          className="bg-background border-border focus:border-[#F8E231] transition-colors min-h-[150px] resize-none"
+          className="bg-background border-border focus:border-sage transition-colors min-h-[150px] resize-none"
           placeholder="Tell us more about your inquiry..."
         />
       </div>
@@ -167,7 +167,7 @@ export default function ContactForm() {
       <Button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-[#F8E231] text-black hover:bg-[#F8E231]/90 font-medium tracking-wider py-6"
+        className="w-full bg-sage-deep text-background hover:bg-sage-deep/90 font-medium tracking-wider py-6"
       >
         {isSubmitting ? "SENDING..." : "SEND MESSAGE"}
       </Button>
@@ -177,7 +177,7 @@ export default function ContactForm() {
         <motion.p
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center text-[#F8E231] text-sm"
+          className="text-center text-sage-light text-sm"
         >
           Message sent successfully! We'll get back to you soon.
         </motion.p>

@@ -158,7 +158,7 @@ export default function AdminCollectionsPage() {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => { setCollectionToDelete(collection); setDeleteDialogOpen(true); }} className="text-red-600">
+                          <DropdownMenuItem onClick={() => { setCollectionToDelete(collection); setDeleteDialogOpen(true); }} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -185,7 +185,7 @@ export default function AdminCollectionsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={processingAction}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700" disabled={processingAction}>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive" disabled={processingAction}>
               {processingAction ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</> : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>

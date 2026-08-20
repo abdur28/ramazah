@@ -93,7 +93,7 @@ export default function PreferencesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="lg:col-span-2 p-6 bg-white border border-foreground/10 rounded-lg"
+          className="lg:col-span-2 p-6 bg-card border border-foreground/10 rounded-lg"
         >
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-foreground/5 rounded-md">
@@ -176,7 +176,7 @@ export default function PreferencesPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="p-6 bg-white border border-foreground/10 rounded-lg"
+            className="p-6 bg-card border border-foreground/10 rounded-lg"
           >
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-foreground/5 rounded-md">
@@ -222,14 +222,14 @@ export default function PreferencesPage() {
             <Button
               onClick={handleSavePreferences}
               disabled={isSavingPreferences}
-              className="w-full h-12 bg-[#F8E231] text-black hover:bg-black hover:text-white transition-colors font-body text-sm font-medium disabled:opacity-50"
+              className="w-full h-12 bg-sage-deep text-background hover:bg-foreground hover:text-background transition-colors font-body text-sm font-medium disabled:opacity-50"
             >
               {isSavingPreferences ? (
                 <>
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-black border-t-transparent rounded-full mr-2"
+                    className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full mr-2"
                   />
                   Saving...
                 </>

@@ -85,19 +85,19 @@ export default function NewArrivalsEmailComposer({
         <Label className="">
           Select Products to Feature (Max 6)
         </Label>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-ink-muted">
           Choose the products you want to showcase in the email
         </p>
       </div>
 
       {loading.products ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-[#F8E231]" />
+          <Loader2 className="h-8 w-8 animate-spin text-sage-light" />
         </div>
       ) : products.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-zinc-700 rounded-lg">
-          <Package className="h-12 w-12 mx-auto mb-4 text-gray-500" />
-          <p className="text-gray-500">No products available</p>
+        <div className="text-center py-12 border border-dashed border-rule rounded-lg">
+          <Package className="h-12 w-12 mx-auto mb-4 text-ink-muted" />
+          <p className="text-ink-muted">No products available</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto p-1">
@@ -106,8 +106,8 @@ export default function NewArrivalsEmailComposer({
               key={product.id}
               className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 selectedProducts.includes(product.id)
-                  ? ' border-[#F8E231]'
-                  : ' border-gray-300 hover:border-[#F8E231]'
+                  ? ' border-sage'
+                  : ' border-rule hover:border-sage'
               }`}
             >
               <Checkbox
@@ -125,15 +125,15 @@ export default function NewArrivalsEmailComposer({
                     className="rounded object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-[60px] h-[60px]  rounded flex items-center justify-center flex-shrink-0">
-                    <Package className="h-6 w-6 text-zinc-600" />
+                  <div className="w-[60px] h-[60px] rounded flex items-center justify-center flex-shrink-0">
+                    <Package className="h-6 w-6 text-ink-muted" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium  truncate">
+                  <p className="text-sm font-medium truncate">
                     {product.name}
                   </p>
-                  <p className="text-xs text-gray-400 truncate">
+                  <p className="text-xs text-ink-muted truncate">
                     {product.sku}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
@@ -154,15 +154,15 @@ export default function NewArrivalsEmailComposer({
       )}
 
       {selectedProducts.length > 0 && (
-        <div className="flex items-center justify-between p-3  rounded-lg border border-gray-300">
-          <span className="text-sm ">
+        <div className="flex items-center justify-between p-3 rounded-lg border border-rule">
+          <span className="text-sm">
             {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
           </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setSelectedProducts([])}
-            className=" hover:"
+            className="hover:"
           >
             <X className="h-4 w-4 mr-1" />
             Clear
@@ -174,7 +174,7 @@ export default function NewArrivalsEmailComposer({
         <Button
           onClick={handleSend}
           disabled={loading.adminAction || recipients.length === 0 || selectedProducts.length === 0}
-          className="bg-[#F8E231] hover:bg-[#ffd700] text-black font-semibold"
+          className="bg-sage-deep hover:bg-sage-deep text-background font-semibold"
         >
           {loading.adminAction ? (
             <>
@@ -190,8 +190,8 @@ export default function NewArrivalsEmailComposer({
         </Button>
       </div>
 
-      <div className="text-xs text-gray-500  p-3 rounded border border-gray-300">
-        <strong className="text-black">Preview:</strong> Recipients will receive a branded new arrivals email featuring the selected products with images, prices, and shop now buttons.
+      <div className="text-xs text-ink-muted p-3 rounded border border-rule">
+        <strong className="text-foreground">Preview:</strong> Recipients will receive a branded new arrivals email featuring the selected products with images, prices, and shop now buttons.
       </div>
     </div>
   );

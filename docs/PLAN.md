@@ -22,7 +22,8 @@ See [PROGRESS.md](PROGRESS.md) for the log and
 ## Next
 
 ### 1. Storefront content and navigation
-The highest-visibility problem. The site still reads as hoodskool:
+The highest-visibility problem. Colours, type and the brand lockup are done; the
+**words** are still hoodskool's:
 
 - Navigation is **hardcoded in four files** (`Hero.tsx`, `DesktopNavigation.tsx`,
   `MobileSearch.tsx`, `Footer.tsx`) with the old categories — and
@@ -32,8 +33,9 @@ The highest-visibility problem. The site still reads as hoodskool:
   "JOIN THE HOOD", HOODIES / T-SHIRTS / JEANS.
 - The footer advertises **Visa, Mastercard, PayPal and Apple Pay** — none of which
   exist, since there is no payment processing.
-- `public/` artwork and the README screenshots are still hoodskool imagery.
-- Email templates hardcode a `hoodskool-logo` Cloudinary URL.
+- `public/` photography is still hoodskool's — the hero banners, `DSC*.jpg` and the
+  catalog shots. They are still referenced by components, so they go when the content
+  pass replaces those sections, not before.
 
 ### 2. Admin product form
 The data layer writes the generic option model, but the form still only understands

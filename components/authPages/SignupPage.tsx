@@ -125,7 +125,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
             transition={{ duration: 1.5 }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-black/70" />
+        <div className="absolute inset-0 bg-foreground/70" />
       </div>
 
       {/* Content */}
@@ -141,7 +141,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 uppercase"
+            className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 uppercase"
           >
             Join The Hood
           </motion.p>
@@ -149,7 +149,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="font-heading text-5xl md:text-6xl tracking-wider text-white"
+            className="font-heading text-5xl md:text-6xl tracking-wider text-background"
           >
             SIGN UP
           </motion.h1>
@@ -160,14 +160,14 @@ export default function SignupPage({redirect}: {redirect: string}) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-8"
+          className="bg-foreground/40 backdrop-blur-md border border-background/10 rounded-lg p-8"
         >
           {/* Error Message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-md flex items-center gap-2 text-red-400 text-sm"
+              className="mb-6 p-3 bg-destructive/10 border border-destructive/50 rounded-md flex items-center gap-2 text-destructive text-sm"
             >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
@@ -179,7 +179,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-3 bg-green-500/10 border border-green-500/50 rounded-md flex items-center gap-2 text-green-400 text-sm"
+              className="mb-6 p-3 bg-success/10 border border-success/50 rounded-md flex items-center gap-2 text-success text-sm"
             >
               <CheckCircle className="h-4 w-4 flex-shrink-0" />
               <span>
@@ -194,29 +194,29 @@ export default function SignupPage({redirect}: {redirect: string}) {
           <form onSubmit={handleSignUp} className="space-y-5">
             {/* Display Name */}
             <div>
-              <Label htmlFor="displayName" className="text-white/80 text-sm mb-2 block">
+              <Label htmlFor="displayName" className="text-background/80 text-sm mb-2 block">
                 Display Name
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                 <Input
                   id="displayName"
                   type="text"
                   placeholder="Your Name"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
 
             {/* Email Field */}
             <div>
-              <Label htmlFor="email" className="text-white/80 text-sm mb-2 block">
+              <Label htmlFor="email" className="text-background/80 text-sm mb-2 block">
                 Email
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                 <Input
                   id="email"
                   type="email"
@@ -224,18 +224,18 @@ export default function SignupPage({redirect}: {redirect: string}) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
 
             {/* Password Field */}
             <div>
-              <Label htmlFor="password" className="text-white/80 text-sm mb-2 block">
+              <Label htmlFor="password" className="text-background/80 text-sm mb-2 block">
                 Password
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                 <Input
                   id="password"
                   type="password"
@@ -243,21 +243,21 @@ export default function SignupPage({redirect}: {redirect: string}) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
-              <p className="text-xs text-white/40 mt-1">
+              <p className="text-xs text-background/40 mt-1">
                 At least 6 characters
               </p>
             </div>
 
             {/* Confirm Password */}
             <div>
-              <Label htmlFor="confirmPassword" className="text-white/80 text-sm mb-2 block">
+              <Label htmlFor="confirmPassword" className="text-background/80 text-sm mb-2 block">
                 Confirm Password
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -265,7 +265,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-white/40 focus:border-[#F8E231] focus:ring-[#F8E231] h-12"
+                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
@@ -274,14 +274,14 @@ export default function SignupPage({redirect}: {redirect: string}) {
             <Button
               type="submit"
               disabled={loading || success}
-              className="w-full h-12 bg-[#F8E231] text-black font-body font-semibold hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-black border-t-transparent rounded-full"
+                    className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full"
                   />
                   Creating account...
                 </span>
@@ -297,10 +297,10 @@ export default function SignupPage({redirect}: {redirect: string}) {
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10" />
+              <div className="w-full border-t border-background/10" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-black/40 px-2 text-white/40">Or continue with</span>
+              <span className="bg-foreground/40 px-2 text-background/40">Or continue with</span>
             </div>
           </div>
 
@@ -310,29 +310,29 @@ export default function SignupPage({redirect}: {redirect: string}) {
             onClick={handleGoogleSignUp}
             disabled={loading || success}
             variant="outline"
-            className="w-full h-12 border-white/20 text-black font-body font-semibold hover:bg-white/5 disabled:opacity-50"
+            className="w-full h-12 border-background/20 text-background font-body font-semibold hover:bg-card/5 disabled:opacity-50"
           >
             <Image src="/google-icon.svg" alt="Google Logo" width={20} height={20} className="mr-2" />
             Sign up with Google
           </Button>
 
           {/* Terms */}
-          <p className="mt-4 text-xs text-white/40 text-center">
+          <p className="mt-4 text-xs text-background/40 text-center">
             By signing up, you agree to our{' '}
-            <a href="/terms" className="text-[#F8E231] hover:underline">
+            <a href="/terms" className="text-sage-light hover:underline">
               Terms
             </a>{' '}
             and{' '}
-            <a href="/privacy" className="text-[#F8E231] hover:underline">
+            <a href="/privacy" className="text-sage-light hover:underline">
               Privacy Policy
             </a>
           </p>
 
           {/* Login Link */}
-          <div className="mt-6 text-center text-sm text-white/60">
+          <div className="mt-6 text-center text-sm text-background/60">
             Already have an account?{' '}
-            <CrossedLink href={`/auth/login?redirect=${redirect}`} lineColor="#F8E231" lineWidth={1}>
-              <span className="text-[#F8E231] font-medium">Login</span>
+            <CrossedLink href={`/auth/login?redirect=${redirect}`} lineColor="#5C6647" lineWidth={1}>
+              <span className="text-sage-light font-medium">Login</span>
             </CrossedLink>
           </div>
         </motion.div>
@@ -345,7 +345,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
           className="text-center mt-6"
         >
           <CrossedLink href="/" lineColor="gold" lineWidth={1}>
-            <span className="text-white/60 text-sm hover:text-white transition-colors">
+            <span className="text-background/60 text-sm hover:text-background transition-colors">
               ← Back to Home
             </span>
           </CrossedLink>

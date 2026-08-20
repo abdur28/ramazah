@@ -54,7 +54,7 @@ export default function ArtShowcase({isArt}: {isArt?: boolean}) {
             />
             
             {/* Overlay with Text */}
-            {!isArt && <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            {!isArt && <div className="absolute inset-0 bg-foreground/40 flex items-center justify-center">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -67,7 +67,7 @@ export default function ArtShowcase({isArt}: {isArt?: boolean}) {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: 0.2 }}
-                  className="font-body text-xs tracking-[0.3em] text-[#F8E231] mb-2 uppercase"
+                  className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 uppercase"
                 >
                   Gallery
                 </motion.p>
@@ -77,7 +77,7 @@ export default function ArtShowcase({isArt}: {isArt?: boolean}) {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: 0.3 }}
-                  className="font-heading text-5xl md:text-6xl lg:text-7xl tracking-wider text-white mb-4"
+                  className="font-heading text-5xl md:text-6xl lg:text-7xl tracking-wider text-background mb-4"
                 >
                   ART SHOWCASE
                 </motion.h2>
@@ -87,7 +87,7 @@ export default function ArtShowcase({isArt}: {isArt?: boolean}) {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: 0.4 }}
-                  className="font-body text-sm md:text-base text-white/80 max-w-md mx-auto mb-8"
+                  className="font-body text-sm md:text-base text-background/80 max-w-md mx-auto mb-8"
                 >
                   Discover our exclusive collection of street art and creative designs 
                   that define the culture.
@@ -103,7 +103,7 @@ export default function ArtShowcase({isArt}: {isArt?: boolean}) {
                     href="/artwork"
                     lineColor="gold"
                   >
-                    <span className="font-body text-base font-medium text-white">
+                    <span className="font-body text-base font-medium text-background">
                       Explore Collection
                     </span>
                   </CrossedLink>
@@ -137,12 +137,12 @@ export default function ArtShowcase({isArt}: {isArt?: boolean}) {
                 initial={{ opacity: 0 }}
                 whileHover={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
-                className="absolute inset-0 bg-black/10 flex items-center justify-center"
+                className="absolute inset-0 bg-foreground/10 flex items-center justify-center"
               >
               </motion.div>
 
               {/* Border effect */}
-              <div className="absolute inset-0 border border-black/20 pointer-events-none" />
+              <div className="absolute inset-0 border border-foreground/20 pointer-events-none" />
             </motion.div>
           ))}
         </div>

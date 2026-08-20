@@ -171,7 +171,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
           </p>
           <Button
             onClick={() => router.push("/clothings")}
-            className="bg-black text-white hover:bg-[#F8E231] hover:text-black rounded-none"
+            className="bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background rounded-none"
           >
             <ShoppingBag className="h-4 w-4 mr-2" />
             Continue Shopping
@@ -219,7 +219,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                     <label
                       className={`relative flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${
                         deliveryType === "delivery"
-                          ? "border-black bg-black/5"
+                          ? "border-foreground bg-foreground/5"
                           : "border-foreground/20 hover:border-foreground/40"
                       }`}
                     >
@@ -240,7 +240,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                     <label
                       className={`relative flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${
                         deliveryType === "inStore"
-                          ? "border-black bg-black/5"
+                          ? "border-foreground bg-foreground/5"
                           : "border-foreground/20 hover:border-foreground/40"
                       }`}
                     >
@@ -265,7 +265,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 p-4 bg-[#F8E231]/10 border border-[#F8E231]/20 rounded"
+                    className="mt-4 p-4 bg-terra-deep/10 border border-sage/20 rounded"
                   >
                     <p className="text-sm font-body">
                       <strong>Ramazah Store</strong>
@@ -449,7 +449,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
             <Button
               onClick={handlePlaceOrder}
               disabled={!canPlaceOrder() || isProcessing}
-              className="w-full rounded-none bg-black text-white hover:bg-[#F8E231] hover:text-black py-6 text-base"
+              className="w-full rounded-none bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background py-6 text-base"
             >
               {isProcessing ? (
                 <>
@@ -460,7 +460,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                       repeat: Infinity,
                       ease: "linear",
                     }}
-                    className="w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full"
+                    className="w-5 h-5 mr-2 border-2 border-background border-t-transparent rounded-full"
                   />
                   Processing Order...
                 </>
@@ -491,7 +491,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                     const itemPrice = getPrice(item.prices);
 
                     return (
-                      <div key={item.id} className="flex gap-4 ">
+                      <div key={item.id} className="flex gap-4">
                         <div className="relative w-20 h-20 bg-foreground/5 rounded flex-shrink-0">
                           {item.image && (
                             <Image
@@ -501,7 +501,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                               className="object-cover rounded"
                             />
                           )}
-                          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-xs font-body">
+                          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-body">
                             {item.quantity}
                           </div>
                         </div>
@@ -555,7 +555,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                     <span className="text-foreground/60">Shipping</span>
                     <span className="font-body font-medium">
                       {cartTotals.shipping === 0 ? (
-                        <span className="text-green-600">Free</span>
+                        <span className="text-success">Free</span>
                       ) : (
                         formatPrice(cartTotals.shipping)
                       )}
@@ -568,7 +568,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
-                        className="p-3 bg-[#F8E231]/10 border border-[#F8E231]/30 rounded"
+                        className="p-3 bg-terra-deep/10 border border-sage/30 rounded"
                       >
                         <p className="text-xs text-foreground/70">
                           Add{" "}
@@ -597,15 +597,15 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
             {/* Benefits */}
             <div className="mt-6 space-y-3 text-sm text-foreground/70 font-body">
               <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-success" />
                 <span>Free returns within 30 days</span>
               </div>
               <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-success" />
                 <span>Secure checkout</span>
               </div>
               <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-success" />
                 <span>Authenticity guaranteed</span>
               </div>
             </div>

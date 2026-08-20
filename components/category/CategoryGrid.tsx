@@ -82,15 +82,15 @@ export default function CategoryGrid({
                 repeat: Infinity,
                 ease: "easeInOut"
               }}
-              className="absolute inset-0 rounded-full border-2 border-[#F8E231]/30"
+              className="absolute inset-0 rounded-full border-2 border-sage/30"
             />
           </div>
 
           {/* Corner Accents */}
-          <div className="absolute -top-2 -left-2 w-8 h-8 border-l-2 border-t-2 border-[#F8E231]/50" />
-          <div className="absolute -top-2 -right-2 w-8 h-8 border-r-2 border-t-2 border-[#F8E231]/50" />
-          <div className="absolute -bottom-2 -left-2 w-8 h-8 border-l-2 border-b-2 border-[#F8E231]/50" />
-          <div className="absolute -bottom-2 -right-2 w-8 h-8 border-r-2 border-b-2 border-[#F8E231]/50" />
+          <div className="absolute -top-2 -left-2 w-8 h-8 border-l-2 border-t-2 border-sage/50" />
+          <div className="absolute -top-2 -right-2 w-8 h-8 border-r-2 border-t-2 border-sage/50" />
+          <div className="absolute -bottom-2 -left-2 w-8 h-8 border-l-2 border-b-2 border-sage/50" />
+          <div className="absolute -bottom-2 -right-2 w-8 h-8 border-r-2 border-b-2 border-sage/50" />
         </motion.div>
 
         {/* Text */}
@@ -117,7 +117,7 @@ export default function CategoryGrid({
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: 0.8, delay: 0.6 }}
-          className="w-24 h-px bg-gradient-to-r from-transparent via-[#F8E231] to-transparent mt-8"
+          className="w-24 h-px bg-gradient-to-r from-transparent via-sage to-transparent mt-8"
         />
       </motion.div>
     )

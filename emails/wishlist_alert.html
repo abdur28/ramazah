@@ -38,8 +38,8 @@
     body {
       margin: 0 !important;
       padding: 0 !important;
-      font-family: 'Inter', Arial, sans-serif;
-      background-color: #f5f5f5;
+      font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif;
+      background-color: #EFF1E9;
     }
     
     .email-wrapper {
@@ -58,7 +58,6 @@
       transform: translate(-50%, -50%);
       width: 300px;
       height: 300px;
-      background-image: url('https://res.cloudinary.com/abdur28/image/upload/v1760124538/skull_njcebb.svg');
       background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
@@ -77,22 +76,34 @@
     }
     
     .header {
-      background: linear-gradient(135deg, #cecbcb 0%, #ffffff 100%);
+      background: linear-gradient(135deg, #E4E3D8 0%, #ffffff 100%);
       padding: 40px 30px;
       text-align: center;
       position: relative;
     }
     
     .logo {
-      max-width: 200px;
-      height: auto;
-      position: relative;
-      z-index: 1;
-      filter: brightness(0) invert(1);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 26px;
+      font-weight: 400;
+      letter-spacing: 0.28em;
+      color: #FAF9F5;
+      text-transform: uppercase;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .logo-sub {
+      font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.32em;
+      color: #A3AB8C;
+      text-transform: uppercase;
+      margin: 6px 0 0;
     }
     
     .alert-banner {
-      background: linear-gradient(135deg, #F8E231 0%, #FFD700 100%);
+      background: linear-gradient(135deg, #5C6647 0%, #AB5E3A 100%);
       padding: 30px;
       text-align: center;
       position: relative;
@@ -106,7 +117,7 @@
     .alert-title {
       font-size: 32px;
       font-weight: 900;
-      color: #000000;
+      color: #2A2E24;
       margin: 0 0 10px 0;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -114,7 +125,7 @@
     
     .alert-subtitle {
       font-size: 16px;
-      color: #000000;
+      color: #2A2E24;
       margin: 0;
       font-weight: 600;
     }
@@ -126,13 +137,13 @@
     
     .greeting {
       font-size: 16px;
-      color: #333333;
+      color: #2A2E24;
       margin-bottom: 30px;
       line-height: 1.6;
     }
     
     .product-showcase {
-      border: 2px solid #F8E231;
+      border: 2px solid #5C6647;
       margin: 30px 0;
       overflow: hidden;
       border-radius: 8px;
@@ -141,7 +152,7 @@
     .product-image {
       width: 100%;
       height: 400px;
-      background-color: #f0f0f0;
+      background-color: #EFF1E9;
       position: relative;
     }
     
@@ -156,7 +167,7 @@
       top: 20px;
       left: 20px;
       background-color: #00ff00;
-      color: #000000;
+      color: #2A2E24;
       padding: 10px 25px;
       font-size: 14px;
       font-weight: 900;
@@ -175,7 +186,7 @@
     .product-name {
       font-size: 24px;
       font-weight: 900;
-      color: #000000;
+      color: #2A2E24;
       margin: 0 0 15px 0;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -184,30 +195,30 @@
     .product-price {
       font-size: 28px;
       font-weight: 900;
-      color: #000000;
+      color: #2A2E24;
       margin: 0 0 25px 0;
     }
     
     .urgency-message {
-      background-color: #fff3cd;
-      border-left: 4px solid #F8E231;
+      background-color: #EFF1E9;
+      border-left: 4px solid #5C6647;
       padding: 18px;
       margin: 30px 0;
       font-size: 15px;
-      color: #856404;
+      color: #A35A38;
       font-weight: 600;
       border-radius: 0 8px 8px 0;
     }
     
     .urgency-message strong {
-      color: #000000;
+      color: #2A2E24;
       font-weight: 900;
     }
     
     .cta-button {
       display: inline-block;
-      background-color: #F8E231;
-      color: #000000;
+      background-color: #5C6647;
+      color: #FAF9F5;
       text-decoration: none;
       padding: 20px 50px;
       font-size: 18px;
@@ -220,7 +231,7 @@
     }
     
     .cta-button:hover {
-      background-color: #e6d12c;
+      background-color: #4A5239;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(248, 226, 49, 0.4);
     }
@@ -228,23 +239,23 @@
     .secondary-cta {
       text-align: center;
       padding: 30px;
-      background-color: #f8f8f8;
+      background-color: #EFF1E9;
     }
     
     .secondary-cta-text {
       font-size: 16px;
-      color: #666666;
+      color: #6B7060;
       margin-bottom: 15px;
     }
     
     .secondary-cta-link {
-      color: #000000;
+      color: #2A2E24;
       text-decoration: underline;
       font-weight: 600;
     }
     
     .footer {
-      background-color: #000000;
+      background-color: #2A2E24;
       color: #ffffff;
       padding: 40px 30px;
       text-align: center;
@@ -252,7 +263,7 @@
     
     .footer-tagline {
       font-size: 14px;
-      color: #F8E231;
+      color: #A3AB8C;
       margin: 0 0 20px 0;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -268,7 +279,7 @@
       margin: 0 10px;
       width: 40px;
       height: 40px;
-      background-color: #F8E231;
+      background-color: #5C6647;
       border-radius: 50%;
       transition: all 0.3s ease;
     }
@@ -289,7 +300,7 @@
     }
     
     .footer-links a {
-      color: #F8E231;
+      color: #A3AB8C;
       text-decoration: none;
       margin: 0 15px;
       font-size: 14px;
@@ -302,12 +313,12 @@
     
     .copyright {
       font-size: 12px;
-      color: #999999;
+      color: #6B7060;
       margin-top: 20px;
     }
     
     .copyright a {
-      color: #F8E231;
+      color: #A3AB8C;
       text-decoration: none;
     }
     
@@ -344,8 +355,8 @@
   <div class="email-wrapper">
     <!-- Header -->
     <div class="header">
-      <!-- TODO: upload a Ramazah logo to Cloudinary and swap this URL -->
-      <img src="https://res.cloudinary.com/abdur28/image/upload/v1760124537/hoodskool-logo_tfnse4.png" alt="RAMAZAH" class="logo">
+      <p class="logo">Ramazah</p>
+      <p class="logo-sub">Store</p>
     </div>
     
     <!-- Alert Banner -->

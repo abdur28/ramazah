@@ -149,7 +149,7 @@ export default function AdminOrdersPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
-            <span className="text-sm font-medium ">Total</span>
+            <span className="text-sm font-medium">Total</span>
             <Package className="h-5 w-5 mr-2 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
@@ -161,7 +161,7 @@ export default function AdminOrdersPage() {
         <Card>
           <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium ">Pending</span>
+              <span className="text-sm font-medium">Pending</span>
               <Clock className="h-5 w-5 mr-2 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
@@ -173,19 +173,19 @@ export default function AdminOrdersPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium ">Processing</span>
+              <span className="text-sm font-medium">Processing</span>
               <TrendingUp className="h-5 w-5 mr-2 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold ">{stats.processing}</div>
+            <div className="text-2xl font-bold">{stats.processing}</div>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="pb-2">            
             <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium ">Shipped</span>
+              <span className="text-sm font-medium">Shipped</span>
               <Truck className="h-5 w-5 mr-2 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
@@ -197,7 +197,7 @@ export default function AdminOrdersPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium ">Delivered</span>
+              <span className="text-sm font-medium">Delivered</span>
               <CheckCircle2 className="h-5 w-5 mr-2 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
@@ -209,12 +209,12 @@ export default function AdminOrdersPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium ">Cancelled</span>
+              <span className="text-sm font-medium">Cancelled</span>
               <XCircle className="h-5 w-5 mr-2 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold ">{stats.cancelled}</div>
+            <div className="text-2xl font-bold">{stats.cancelled}</div>
           </CardContent>
         </Card>
       </div>

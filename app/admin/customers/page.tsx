@@ -433,7 +433,7 @@ export default function AdminCustomersPage() {
                             setSelectedUser(user);
                             setBlockDialogOpen(true);
                           }}
-                          className="text-red-600"
+                          className="text-destructive"
                         >
                           <UserX className="h-4 w-4 mr-2" />
                           Suspend Customer
@@ -484,7 +484,7 @@ export default function AdminCustomersPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => handleToggleStatus(selectedUser!)}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive"
               disabled={processingAction}
             >
               {processingAction ? (
@@ -526,7 +526,7 @@ export default function AdminCustomersPage() {
             
             <div className="mt-4 text-sm">
               {selectedRole === 'admin' && (
-                <div className="flex items-start gap-2 text-amber-600 bg-amber-50 p-3 rounded">
+                <div className="flex items-start gap-2 text-warning bg-warning/10 p-3 rounded">
                   <AlertTriangle className="h-5 w-5 flex-shrink-0" />
                   <div>
                     <strong>Warning:</strong> Admins have full access to the admin panel and can manage all aspects of the store. Only assign this role to trusted individuals.

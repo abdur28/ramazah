@@ -373,7 +373,7 @@ export default function AdminCategoriesPage() {
             <AlertDialogDescription>
               Are you sure you want to delete "{categoryToDelete?.category.name}"? This action cannot be undone.
               {categoryToDelete?.category.subCategories && categoryToDelete.category.subCategories.length > 0 && (
-                <div className="mt-2 p-2 bg-amber-50 text-amber-800 rounded text-sm">
+                <div className="mt-2 p-2 bg-warning/10 text-warning rounded text-sm">
                   ⚠️ This category has {categoryToDelete.category.subCategories.length} subcategories that will also be deleted.
                 </div>
               )}
@@ -385,7 +385,7 @@ export default function AdminCategoriesPage() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteCategory}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive"
               disabled={processingAction}
             >
               {processingAction ? (

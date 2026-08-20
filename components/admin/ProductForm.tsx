@@ -434,8 +434,8 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
                     </div>
 
                     {discountPercent > 0 && (
-                      <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                        <p className="text-sm text-green-800 dark:text-green-200">
+                      <div className="p-3 bg-success/10 border border-success rounded-lg">
+                        <p className="text-sm text-success">
                           💰 <strong>{discountPercent}% off</strong> - Customers save {currency.symbol}{savings.toFixed(2)}
                         </p>
                       </div>
@@ -530,7 +530,7 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
                         onClick={() => removeTag(tag)}
                       >
                       <X 
-                        className="h-3 w-3 cursor-pointer text-red-500 hover:text-red-700" 
+                        className="h-3 w-3 cursor-pointer text-destructive hover:text-destructive" 
                         onClick={() => removeTag(tag)}
                       />
                       </Button>
@@ -573,7 +573,7 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
                         onClick={() => removeSize(size)}
                       >
                       <X 
-                        className="h-3 w-3 cursor-pointer text-red-500 hover:text-red-700" 
+                        className="h-3 w-3 cursor-pointer text-destructive hover:text-destructive" 
                         onClick={() => removeSize(size)}
                       />
                       </Button>
@@ -608,7 +608,7 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
                         onClick={() => removeMaterial(material)}
                       >
                       <X 
-                        className="h-3 w-3 cursor-pointer text-red-500 hover:text-red-700" 
+                        className="h-3 w-3 cursor-pointer text-destructive hover:text-destructive" 
                         onClick={() => removeMaterial(material)}
                       />
                       </Button>

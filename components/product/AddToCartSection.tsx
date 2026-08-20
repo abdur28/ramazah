@@ -144,11 +144,11 @@ export default function AddToCartSection({
             flex items-center justify-center gap-3 transition-all
             ${
               isInCart
-                ? "bg-green-500 text-white cursor-default"
+                ? "bg-success text-background cursor-default"
                 : isAdding
-                ? "bg-black/50 text-white cursor-wait"
+                ? "bg-foreground/50 text-background cursor-wait"
                 : inStock
-                ? "bg-black text-white hover:bg-[#F8E231] hover:text-black"
+                ? "bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background"
                 : "bg-foreground/20 text-foreground/40 cursor-not-allowed"
             }
           `}
@@ -162,7 +162,7 @@ export default function AddToCartSection({
                   repeat: Infinity,
                   ease: "linear",
                 }}
-                className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+                className="w-5 h-5 border-2 border-background border-t-transparent rounded-full"
               />
               Adding...
             </>
@@ -191,8 +191,8 @@ export default function AddToCartSection({
             px-5 py-4 border transition-all
             ${
               isLiked
-                ? "bg-[#F8E231] text-black border-[#F8E231]"
-                : "bg-transparent text-foreground border-foreground/20 hover:border-[#F8E231]"
+                ? "bg-sage-deep text-background border-sage"
+                : "bg-transparent text-foreground border-foreground/20 hover:border-sage"
             }
             ${isTogglingWishlist ? "opacity-50 cursor-wait" : ""}
           `}

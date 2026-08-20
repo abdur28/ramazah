@@ -37,7 +37,7 @@ const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
     return (
         <>
               {/* Mobile Navigation - Top Icons */}
-      <div className="lg:hidden fixed top-16 md:top-20 left-0 right-0 z-40 bg-white border-b border-foreground/10">
+      <div className="lg:hidden fixed top-16 md:top-20 left-0 right-0 z-40 bg-card border-b border-foreground/10">
         <div className="flex items-center justify-between px-4 py-3 overflow-x-auto">
           {navigationItems.map((item) => {
             const Icon = item.icon;
@@ -52,24 +52,24 @@ const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
                 <motion.div
                   className={`p-2 rounded-lg transition-all ${
                     isActive
-                      ? 'bg-[#F8E231]'
+                      ? 'bg-sage-deep'
                       : 'bg-foreground/5 group-hover:bg-foreground/10'
                   }`}
                   whileTap={{ scale: 0.95 }}
                 >
                   <Icon className={`h-5 w-5 ${
-                    isActive ? 'text-black' : 'text-foreground/60'
+                    isActive ? 'text-foreground' : 'text-foreground/60'
                   }`} />
                 </motion.div>
                 <span className={`text-[10px] font-body font-medium ${
-                  isActive ? 'text-black' : 'text-foreground/60'
+                  isActive ? 'text-foreground' : 'text-foreground/60'
                 }`}>
                   {item.name}
                 </span>
                 {isActive && (
                   <motion.div
                     layoutId="mobileActiveTab"
-                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#F8E231]"
+                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sage-deep"
                   />
                 )}
               </Link>
@@ -79,7 +79,7 @@ const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-20 bottom-0 w-72 bg-white border-r border-foreground/10 flex-col">
+      <aside className="hidden lg:flex fixed left-0 top-20 bottom-0 w-72 bg-card border-r border-foreground/10 flex-col">
         <div className="flex-1 overflow-y-auto p-6">
           {/* User Info */}
           <motion.div 
@@ -123,12 +123,12 @@ const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
                     href={item.href}
                     className={`relative flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
                       isActive
-                        ? 'bg-[#F8E231]'
+                        ? 'bg-sage-deep'
                         : 'text-foreground/70 hover:bg-foreground/5'
                     }`}
                   >
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-black' : ''}`} />
-                    <span className={`font-body text-sm font-medium ${isActive ? 'text-black' : ''}`}>
+                    <Icon className={`h-5 w-5 ${isActive ? 'text-foreground' : ''}`} />
+                    <span className={`font-body text-sm font-medium ${isActive ? 'text-foreground' : ''}`}>
                       {item.name}
                     </span>
                   </Link>
@@ -144,7 +144,7 @@ const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+            className="w-full flex items-center gap-3 px-4 py-3 text-destructive hover:bg-destructive/10 rounded-lg transition-all"
             onClick={handleSignOut}
           >
             <LogOut className="h-5 w-5" />

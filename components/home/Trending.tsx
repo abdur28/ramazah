@@ -50,7 +50,7 @@ export default function Trending() {
   return (
     <section
       ref={sectionRef}
-      className="relative py-10 md:py-16 bg-gray-200 z-10 overflow-hidden"
+      className="relative py-10 md:py-16 bg-wash z-10 overflow-hidden"
     >
       <div className="mx-auto px-6 relative z-10">
         {/* Section Header */}

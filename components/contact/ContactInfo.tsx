@@ -53,7 +53,7 @@ export default function ContactInfo() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
-            className="flex items-start gap-4 group hover:text-[#F8E231] transition-colors"
+            className="flex items-start gap-4 group hover:text-sage-light transition-colors"
           >
             <detail.icon className="w-5 h-5 mt-1 flex-shrink-0" />
             <div>
@@ -81,7 +81,7 @@ export default function ContactInfo() {
               href={social.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-12 h-12 border border-border flex items-center justify-center hover:border-[#F8E231] hover:text-[#F8E231] transition-all"
+              className="w-12 h-12 border border-border flex items-center justify-center hover:border-sage hover:text-sage-light transition-all"
               aria-label={social.label}
             >
               <social.icon className="w-5 h-5" />

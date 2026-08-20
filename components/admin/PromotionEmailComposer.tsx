@@ -82,7 +82,7 @@ export default function PromotionEmailComposer({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Black Friday Sale"
-          className="bg-gray-100  "
+          className="bg-wash"
         />
       </div>
 
@@ -96,7 +96,7 @@ export default function PromotionEmailComposer({
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Get 30% off everything! Limited time only."
           rows={4}
-          className="bg-gray-100  "
+          className="bg-wash"
         />
       </div>
 
@@ -110,7 +110,7 @@ export default function PromotionEmailComposer({
             value={discountCode}
             onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
             placeholder="SAVE30"
-            className="bg-gray-100  "
+            className="bg-wash"
           />
         </div>
 
@@ -126,7 +126,7 @@ export default function PromotionEmailComposer({
             placeholder="30"
             min="0"
             max="100"
-            className="bg-gray-100  "
+            className="bg-wash"
           />
         </div>
       </div>
@@ -140,7 +140,7 @@ export default function PromotionEmailComposer({
           type="date"
           value={expiryDate}
           onChange={(e) => setExpiryDate(e.target.value)}
-          className="bg-gray-100  "
+          className="bg-wash"
         />
       </div>
 
@@ -148,7 +148,7 @@ export default function PromotionEmailComposer({
         <Button
           onClick={handleSend}
           disabled={loading.adminAction || recipients.length === 0 || !title.trim() || !description.trim()}
-          className="bg-[#F8E231] hover:bg-[#ffd700] text-black font-semibold"
+          className="bg-sage-deep hover:bg-sage-deep text-background font-semibold"
         >
           {loading.adminAction ? (
             <>
@@ -164,8 +164,8 @@ export default function PromotionEmailComposer({
         </Button>
       </div>
 
-      <div className="text-xs text-gray-500 p-3 rounded border border-gray-300">
-        <strong className="text-black">Preview:</strong> Recipients will receive a branded promotion email with your discount details, featured products, and a prominent CTA button.
+      <div className="text-xs text-ink-muted p-3 rounded border border-rule">
+        <strong className="text-foreground">Preview:</strong> Recipients will receive a branded promotion email with your discount details, featured products, and a prominent CTA button.
       </div>
     </div>
   );

@@ -65,7 +65,7 @@ export default function CustomerAnalyticsTab({ data, timePeriod }: CustomerAnaly
           <CardContent>
             <div className="text-2xl font-bold">{data.totalCustomers.toLocaleString()}</div>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant={data.customerGrowthRate >= 0 ? "default" : "destructive"} className={data.customerGrowthRate >= 0 ? "bg-green-600" : ""}>
+              <Badge variant={data.customerGrowthRate >= 0 ? "default" : "destructive"} className={data.customerGrowthRate >= 0 ? "bg-success" : ""}>
                 {formatGrowthRate(data.customerGrowthRate)}
               </Badge>
               <p className="text-xs text-muted-foreground">vs last period</p>

@@ -124,9 +124,9 @@ export default function CollectionDialog({
               id="name"
               value={formData.name}
               onChange={(e) => handleNameChange(e.target.value)}
-              className={errors.name ? 'border-red-500' : ''}
+              className={errors.name ? 'border-destructive' : ''}
             />
-            {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+            {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
           </div>
 
           <div className="space-y-2">
@@ -135,9 +135,9 @@ export default function CollectionDialog({
               id="slug"
               value={formData.slug}
               onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-              className={errors.slug ? 'border-red-500' : ''}
+              className={errors.slug ? 'border-destructive' : ''}
             />
-            {errors.slug && <p className="text-sm text-red-500">{errors.slug}</p>}
+            {errors.slug && <p className="text-sm text-destructive">{errors.slug}</p>}
           </div>
 
           <div className="space-y-2">

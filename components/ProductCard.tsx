@@ -265,7 +265,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
               <motion.span 
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
-                className="px-3 py-1 bg-[#F8E231] text-black text-xs font-body font-semibold uppercase tracking-wider"
+                className="px-3 py-1 bg-terra-deep text-background text-xs font-body font-semibold uppercase tracking-wider"
               >
                 New
               </motion.span>
@@ -275,7 +275,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.1 }}
-                className="px-3 py-1 bg-red-500 text-white text-xs font-body font-semibold uppercase tracking-wider"
+                className="px-3 py-1 bg-destructive text-background text-xs font-body font-semibold uppercase tracking-wider"
               >
                 -{priceData.discountPercent}%
               </motion.span>
@@ -285,7 +285,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="px-3 py-1 bg-black text-[#F8E231] text-xs font-body font-semibold uppercase tracking-wider"
+                className="px-3 py-1 bg-foreground text-sage-light text-xs font-body font-semibold uppercase tracking-wider"
               >
                 Limited
               </motion.span>
@@ -306,8 +306,8 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
               whileTap={{ scale: 0.9 }}
               className={`p-2 rounded-full transition-all shadow-lg ${
                 isLiked 
-                  ? 'bg-[#F8E231] text-black' 
-                  : 'bg-white text-black hover:bg-[#F8E231]'
+                  ? 'bg-sage-deep text-background' 
+                  : 'bg-card text-foreground hover:bg-sage-deep hover:text-background'
               } ${isTogglingWishlist ? 'opacity-50 cursor-wait' : ''}`}
             >
               <Heart 
@@ -331,10 +331,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 disabled={isAdding || isInCart}
                 className={`w-1/2 py-3 font-body text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                   isInCart
-                    ? 'bg-green-500 text-white cursor-default'
+                    ? 'bg-success text-background cursor-default'
                     : isAdding
-                    ? 'bg-black/50 text-white cursor-wait'
-                    : 'bg-black text-white hover:bg-[#F8E231] hover:text-black'
+                    ? 'bg-foreground/50 text-background cursor-wait'
+                    : 'bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background'
                 }`}
               >
                 {isAdding ? (
@@ -342,7 +342,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                      className="w-4 h-4 border-2 border-background border-t-transparent rounded-full"
                     />
                     Adding...
                   </>
@@ -363,9 +363,9 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
           {/* Out of Stock Overlay */}
           {!product.inStock && (
-            <div className="absolute inset-0 z-10 bg-black/60 rounded-xs flex items-center justify-center">
+            <div className="absolute inset-0 z-10 bg-foreground/60 rounded-xs flex items-center justify-center">
               <div className="text-center">
-                <div className="px-4 py-2 bg-red-500/30 text-white text-sm font-body font-semibold uppercase tracking-wider mb-2">
+                <div className="px-4 py-2 bg-destructive/30 text-background text-sm font-body font-semibold uppercase tracking-wider mb-2">
                   Out of Stock
                 </div>
               </div>
@@ -377,7 +377,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: isHovered ? 1 : 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-0 bg-black/20 pointer-events-none"
+            className="absolute inset-0 bg-foreground/20 pointer-events-none"
           />
         </div>
 
@@ -468,7 +468,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                           min-w-[50px] px-4 py-3 font-body text-xs font-medium transition-all
                           ${
                             selected
-                              ? 'bg-black text-white ring-2 ring-[#F8E231]'
+                              ? 'bg-foreground text-background ring-2 ring-sage-deep'
                               : available
                               ? 'bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20'
                               : 'bg-foreground/5 text-foreground/30 cursor-not-allowed border border-foreground/10'
@@ -507,7 +507,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                         disabled={!available}
                         className={`
                           group relative w-10 h-10 rounded-full transition-all
-                          ${selected ? 'ring-2 ring-[#F8E231] ring-offset-2' : 'ring-1 ring-foreground/20'}
+                          ${selected ? 'ring-2 ring-sage-deep ring-offset-2' : 'ring-1 ring-foreground/20'}
                           ${!available && 'opacity-30 cursor-not-allowed'}
                           ${available && !selected && 'hover:ring-2 hover:ring-foreground/40'}
                         `}
@@ -522,9 +522,8 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                             className="absolute inset-0 flex items-center justify-center"
                           >
                             <Check
-                              className="w-5 h-5"
+                              className="w-5 h-5 [stroke-width:3]"
                               stroke={color.hex === '#FFFFFF' || color.hex?.toLowerCase() === '#ffffff' ? '#000000' : '#FFFFFF'}
-                              strokeWidth={3}
                             />
                           </motion.div>
                         )}
@@ -555,14 +554,14 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             <Button
               onClick={handleAddWithVariant}
               disabled={!canAddToCart() || isAdding}
-              className="flex-1 rounded-none bg-black text-white hover:bg-[#F8E231] hover:text-black"
+              className="flex-1 rounded-none bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background"
             >
               {isAdding ? (
                 <>
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full"
+                    className="w-4 h-4 mr-2 border-2 border-background border-t-transparent rounded-full"
                   />
                   Adding...
                 </>

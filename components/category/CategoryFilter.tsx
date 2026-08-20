@@ -87,7 +87,7 @@ export default function CategoryFilter({
           <span className="text-xs font-body text-foreground/60 uppercase tracking-wider">
             {activeCount} Active
           </span>
-          <Button variant="ghost" size="sm" onClick={onClearFilters} className="text-xs hover:text-[#F8E231] h-auto p-0">
+          <Button variant="ghost" size="sm" onClick={onClearFilters} className="text-xs hover:text-sage-light h-auto p-0">
             Clear All
           </Button>
         </div>
@@ -133,7 +133,7 @@ export default function CategoryFilter({
                         onClick={() => handleSizeToggle(size)}
                         className={`min-w-[50px] px-4 py-2 font-body text-xs font-medium transition-all ${
                           isSelected
-                            ? "bg-black text-white ring-2 ring-[#F8E231]"
+                            ? "bg-foreground text-background ring-2 ring-sage-deep"
                             : "bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20"
                         }`}
                       >
@@ -176,7 +176,7 @@ export default function CategoryFilter({
                         onClick={() => handleColorToggle(color)}
                         className={`relative w-10 h-10 rounded-full transition-all ${
                           isSelected
-                            ? "ring-2 ring-[#F8E231] ring-offset-2"
+                            ? "ring-2 ring-sage-deep ring-offset-2"
                             : "ring-1 ring-foreground/20 hover:ring-2 hover:ring-foreground/40"
                         }`}
                         style={{ backgroundColor: color.hex }}
@@ -184,7 +184,7 @@ export default function CategoryFilter({
                       >
                         {isSelected && (
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-2 h-2 bg-white rounded-full" />
+                            <div className="w-2 h-2 bg-card rounded-full" />
                           </div>
                         )}
                       </button>
@@ -225,7 +225,7 @@ export default function CategoryFilter({
                         onClick={() => handleMaterialToggle(material)}
                         className={`px-4 py-2 font-body text-xs transition-all rounded-full ${
                           isSelected
-                            ? "bg-[#F8E231] text-black"
+                            ? "bg-sage-deep text-background"
                             : "bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20"
                         }`}
                       >
@@ -326,7 +326,7 @@ export default function CategoryFilter({
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-heading text-xl tracking-wider">FILTERS</h2>
           {activeCount > 0 && (
-            <span className="px-2 py-1 bg-[#F8E231] text-black text-xs font-body font-semibold rounded-full">
+            <span className="px-2 py-1 bg-sage-deep text-background text-xs font-body font-semibold rounded-full">
               {activeCount}
             </span>
           )}
@@ -344,7 +344,7 @@ export default function CategoryFilter({
           <SlidersHorizontal className="h-4 w-4 mr-2" />
           Filters
           {activeCount > 0 && (
-            <span className="ml-2 px-2 py-0.5 bg-[#F8E231] text-black text-xs font-semibold rounded-full">
+            <span className="ml-2 px-2 py-0.5 bg-sage-deep text-background text-xs font-semibold rounded-full">
               {activeCount}
             </span>
           )}
@@ -358,7 +358,7 @@ export default function CategoryFilter({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsMobileOpen(false)}
-                className="fixed inset-0 bg-black/50 z-50"
+                className="fixed inset-0 bg-foreground/50 z-50"
               />
 
               <motion.div
@@ -382,7 +382,7 @@ export default function CategoryFilter({
                 <div className="px-6 py-4 border-t border-foreground/10">
                   <Button
                     onClick={() => setIsMobileOpen(false)}
-                    className="w-full bg-[#F8E231] text-black hover:bg-[#F8E231]/90 font-body font-semibold tracking-wider rounded-none"
+                    className="w-full bg-sage-deep text-background hover:bg-sage-deep/90 font-body font-semibold tracking-wider rounded-none"
                   >
                     APPLY FILTERS
                   </Button>

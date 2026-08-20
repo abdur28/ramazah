@@ -90,7 +90,7 @@ export default function NewsletterEmailComposer({
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           placeholder="Your Monthly Style Update"
-          className="bg-gray-100  "
+          className="bg-wash"
         />
       </div>
 
@@ -103,7 +103,7 @@ export default function NewsletterEmailComposer({
           value={headline}
           onChange={(e) => setHeadline(e.target.value)}
           placeholder="What's Hot This Month"
-          className="bg-gray-100 "
+          className="bg-wash"
         />
       </div>
 
@@ -117,9 +117,9 @@ export default function NewsletterEmailComposer({
           onChange={(e) => setContent(e.target.value)}
           placeholder="<p>Check out our latest collection featuring bold designs...</p>"
           rows={8}
-          className="bg-gray-100   font-mono text-xs"
+          className="bg-wash font-mono text-xs"
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-ink-muted">
           You can use HTML tags like {'<p>, <h2>, <ul>, <li>, <strong>'}, etc.
         </p>
       </div>
@@ -134,7 +134,7 @@ export default function NewsletterEmailComposer({
           value={imageUrl}
           onChange={(e) => setImageUrl(e.target.value)}
           placeholder="https://example.com/image.jpg"
-          className="bg-gray-100 "
+          className="bg-wash"
         />
       </div>
 
@@ -148,7 +148,7 @@ export default function NewsletterEmailComposer({
             value={ctaText}
             onChange={(e) => setCtaText(e.target.value)}
             placeholder="Shop Now"
-            className="bg-gray-100 "
+            className="bg-wash"
           />
         </div>
 
@@ -162,7 +162,7 @@ export default function NewsletterEmailComposer({
             value={ctaUrl}
             onChange={(e) => setCtaUrl(e.target.value)}
             placeholder="/shop"
-            className="bg-gray-100 "
+            className="bg-wash"
           />
         </div>
       </div>
@@ -172,7 +172,7 @@ export default function NewsletterEmailComposer({
         <Button
           onClick={handleSend}
           disabled={loading.adminAction || recipients.length === 0 || !subject.trim() || !headline.trim() || !content.trim()}
-          className="bg-[#F8E231] hover:bg-[#ffd700] text-black font-semibold"
+          className="bg-sage-deep hover:bg-sage-deep text-background font-semibold"
         >
           {loading.adminAction ? (
             <>
@@ -188,13 +188,13 @@ export default function NewsletterEmailComposer({
         </Button>
       </div>
 
-      <div className="text-xs text-gray-500 p-3 rounded border">
-        <strong className="text-black">Preview:</strong> Recipients will receive a fully customized newsletter with your content, optional featured image, and call-to-action button.
+      <div className="text-xs text-ink-muted p-3 rounded border">
+        <strong className="text-foreground">Preview:</strong> Recipients will receive a fully customized newsletter with your content, optional featured image, and call-to-action button.
       </div>
 
-      <div className=" p-4 rounded-lg border  space-y-2">
-        <p className="text-sm font-medium ">💡 Content Tips:</p>
-        <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
+      <div className="p-4 rounded-lg border space-y-2">
+        <p className="text-sm font-medium">💡 Content Tips:</p>
+        <ul className="text-xs text-ink-muted space-y-1 list-disc list-inside">
           <li>Keep paragraphs short and scannable</li>
           <li>Use headings to break up content</li>
           <li>Include a clear call-to-action</li>
