@@ -192,7 +192,7 @@ export default function NewsletterEmailComposer({
         <strong className="text-foreground">Preview:</strong> Recipients will receive a fully customized newsletter with your content, optional featured image, and call-to-action button.
       </div>
 
-      <div className="p-4 rounded-lg border space-y-2">
+      <div className="p-4 rounded-sm border space-y-2">
         <p className="text-sm font-medium">💡 Content Tips:</p>
         <ul className="text-xs text-ink-muted space-y-1 list-disc list-inside">
           <li>Keep paragraphs short and scannable</li>

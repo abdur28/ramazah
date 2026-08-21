@@ -11,6 +11,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { Collection, BannerImage } from "@/types/admin";
 import useAdmin from "@/hooks/admin/useAdmin";
+import useScrollLock from "@/hooks/useScrollLock";
 
 interface CollectionDialogProps {
   open: boolean;
@@ -26,6 +27,11 @@ export default function CollectionDialog({
   mode 
 }: CollectionDialogProps) {
   const { createCollection, updateCollection, uploadBannerImage, loading } = useAdmin();
+
+  // Lenis drives the window directly and ignores both `overflow: hidden` and
+  // Radix's scroll lock, so every overlay in this app has to stop it explicitly
+  // or the page slides away behind the open dialog.
+  useScrollLock(open);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -165,7 +171,7 @@ export default function CollectionDialog({
                 </Button>
               </div>
             ) : (
-              <div className="border-2 border-dashed rounded-lg p-8 text-center">
+              <div className="border border-dashed rounded-sm p-8 text-center">
                 <Input
                   type="file"
                   accept="image/*"

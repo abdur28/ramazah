@@ -35,10 +35,21 @@ All ratios measured against `--ground` (`#FAF9F5`), target WCAG AA.
 | `--terra` | `#B4633E` | Badges, large sale prices | 4.16:1 |
 | `--terra-text` | `#AB5E3A` | Small sale text | 4.54:1 |
 | `--terra-deep` | `#AB5E3A` | Badge background with a light label | 4.54:1 |
+| `--terra-ink` | `#9C5433` | Terracotta text **on a terracotta tint** | 5.34:1 |
 | `--danger` | `#9B3B2E` | Errors | 6.52:1 |
 
 `--success` aliases `--sage-deep`. On a sage brand a separate success green is noise.
 `--warning` aliases `--terra-text`.
+
+**`--terra-text` vs `--terra-ink`.** `--terra-text` is measured against the page ground.
+Put it on a `terra/10` tint — which is where badges, pills and warning panels actually
+sit — and the surface beneath rises to `#F3EAE3`, taking it to 4.03:1. `--terra-ink` is
+the same hue darkened until it survives its own tint (4.74:1 there, 5.34:1 on the
+ground). Rule of thumb: **terracotta text on cream is `--terra-text`; terracotta text on
+terracotta is `--terra-ink`.**
+
+The same trap catches `--ink-muted`, which reaches 4.48:1 on full `--wash`. Where muted
+text sits on a sage tint the tint is softened to `wash/60`.
 
 ## Brand mark
 
@@ -127,3 +138,23 @@ states and 10 hover states moved to sage-deep; only genuine badges kept terracot
 
 An automated bg/text contrast sweep over every class string now reports clean, and is
 the check to re-run after any future colour change.
+
+## Checking contrast
+
+`scripts/check-admin-contrast.mjs` is that sweep, made permanent:
+
+```
+node scripts/check-admin-contrast.mjs
+```
+
+It reads every class string under `app/admin`, `components/admin` and the admin shell,
+resolves the tokens above, composites tinted backgrounds (`bg-terra/10`) over the page
+ground, and fails any element that sets both a background and a text colour below 4.5:1.
+Only states that appear together are compared, so a `hover:` background is checked
+against the `hover:` text rather than the resting one. It exits non-zero, so it can gate
+a commit.
+
+Run on the admin rebuild (2026-08-22) it caught nine pairings: the ink-on-sage active
+item at 2.28:1 that the customer rail had already been fixed for, four uses of
+`--ink-faint` as running text, a translucent cream badge on sage-deep at 3.75:1, and
+terracotta on its own tint — which is what `--terra-ink` exists to solve.

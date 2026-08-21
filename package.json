@@ -27,7 +27,6 @@
     "@studio-freight/lenis": "^1.0.42",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
-    "@tremor/react": "^3.18.7",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.7.0",
     "clsx": "^2.1.1",

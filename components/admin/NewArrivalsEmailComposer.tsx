@@ -95,7 +95,7 @@ export default function NewArrivalsEmailComposer({
           <Loader2 className="h-8 w-8 animate-spin text-sage-light" />
         </div>
       ) : products.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-rule rounded-lg">
+        <div className="text-center py-12 border border-dashed border-rule rounded-sm">
           <Package className="h-12 w-12 mx-auto mb-4 text-ink-muted" />
           <p className="text-ink-muted">No products available</p>
         </div>
@@ -104,7 +104,7 @@ export default function NewArrivalsEmailComposer({
           {products.map((product) => (
             <label
               key={product.id}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              className={`flex items-start gap-3 p-3 rounded-sm border cursor-pointer transition-colors ${
                 selectedProducts.includes(product.id)
                   ? ' border-sage'
                   : ' border-rule hover:border-sage'
@@ -154,7 +154,7 @@ export default function NewArrivalsEmailComposer({
       )}
 
       {selectedProducts.length > 0 && (
-        <div className="flex items-center justify-between p-3 rounded-lg border border-rule">
+        <div className="flex items-center justify-between p-3 rounded-sm border border-rule">
           <span className="text-sm">
             {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
           </span>

@@ -125,6 +125,7 @@ export function mapProduct(row: any): Product {
       values: [...values.entries()].map(([value, hex]) => ({ value, hex })),
     })),
     sku: row.sku,
+    status: row.status ?? undefined,
     inStock: totalStock > 0,
     totalStock,
     lowStockAlert: row.low_stock_alert ?? undefined,

@@ -81,7 +81,45 @@ const useAdminMailer = create<AdminMailerDataStore>((set, get) => ({
         firstName: row.display_name?.split(' ')[0],
         preferences: row.preferences,
         createdAt: row.created_at,
+        source: 'account' as const,
       }));
+
+      // Footer signups.
+      //
+      // `newsletter_subscribers` is where the storefront footer has been
+      // putting every address people typed in — visitors with no account, which
+      // is most of them. Nothing read that table. The form said "subscribed",
+      // the row was written, and the list was unreachable from the one screen
+      // that sends mail, so those people could never receive anything.
+      //
+      // They belong to the newsletter only: they never saw a preferences screen
+      // and never opted into promotions or new arrivals.
+      if (emailType === 'newsletter' || !emailType) {
+        const { data: subscribers, error: subscriberError } = await supabase()
+          .from('newsletter_subscribers')
+          .select('id, email, created_at')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (subscriberError) throw new Error(subscriberError.message);
+
+        const known = new Set(recipients.map(r => r.email.toLowerCase()));
+
+        (subscribers ?? []).forEach((row: any) => {
+          // Someone who signed up in the footer and later created an account
+          // would otherwise be mailed twice.
+          if (known.has(String(row.email).toLowerCase())) return;
+
+          recipients.push({
+            id: row.id,
+            email: row.email,
+            displayName: undefined,
+            firstName: undefined,
+            createdAt: row.created_at,
+            source: 'footer' as const,
+          });
+        });
+      }
       
       set(state => ({
         emailRecipients: recipients,
@@ -115,8 +153,13 @@ const useAdminMailer = create<AdminMailerDataStore>((set, get) => ({
     }));
     
     try {
-      const { data, error } = await supabase()
-        .from('profiles').select('email_opt_in, preferences');
+      const [{ data, error }, { count: footerCount }] = await Promise.all([
+        supabase().from('profiles').select('email_opt_in, preferences'),
+        supabase()
+          .from('newsletter_subscribers')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true),
+      ]);
       if (error) throw new Error(error.message);
 
       const users = data ?? [];
@@ -128,7 +171,9 @@ const useAdminMailer = create<AdminMailerDataStore>((set, get) => ({
         totalOptedIn: users.filter((u: any) => u.email_opt_in).length,
         promotionsOptedIn: optedInto('promotions'),
         newArrivalsOptedIn: optedInto('newArrivals'),
-        newsletterOptedIn: optedInto('newsletter'),
+        // Account holders who opted in, plus everyone who used the footer form.
+        newsletterOptedIn: optedInto('newsletter') + (footerCount ?? 0),
+        footerSubscribers: footerCount ?? 0,
         // No campaigns table yet — the feature is still a stub.
         totalCampaigns: 0,
         campaignsThisMonth: 0,

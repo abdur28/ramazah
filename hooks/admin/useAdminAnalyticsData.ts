@@ -7,12 +7,11 @@ import {
   ProductAnalytics,
   OrderAnalytics,
   TransactionAnalytics,
-  Transaction,
-  TransactionStatus,
   PaymentMethodType,
   CurrencyRevenue
 } from '@/types/admin';
 import { UserProfile, Order, Product } from '@/types/types';
+import { getPayments } from '@/lib/admin/payments';
 
 /**
  * Utility function to create error messages
@@ -31,44 +30,6 @@ const toDate = (timestamp: any): Date => {
   if (timestamp.toDate) return timestamp.toDate();
   if (timestamp instanceof Date) return timestamp;
   return new Date(timestamp);
-};
-
-/**
- * Generate mock transaction data with multiple currencies
- */
-const generateMockTransactions = (): Transaction[] => {
-  const statuses: TransactionStatus[] = ['success', 'pending', 'failed', 'refunded'];
-  const paymentMethods: PaymentMethodType[] = ['Credit Card', 'PayPal', 'Stripe', 'Bank Transfer', 'Cash on Delivery'];
-  const customers = [
-    'John Doe', 'Jane Smith', 'Michael Brown', 'Sarah Johnson', 'David Lee',
-    'Emma Wilson', 'James Taylor', 'Olivia Martinez', 'William Anderson', 'Sophia Garcia'
-  ];
-  const currencies = ['USD', 'RUB'];
-  
-  return Array.from({ length: 100 }, (_, i) => {
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const currency = currencies[Math.floor(Math.random() * currencies.length)];
-    const amount = currency === 'RUB' 
-      ? (Math.random() * 45000 + 1800).toFixed(2) // RUB amounts (roughly 90x USD)
-      : (Math.random() * 500 + 20).toFixed(2);    // USD amounts
-    const date = new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000);
-    
-    return {
-      id: `TXN-${String(10000 + i).padStart(5, '0')}`,
-      orderNumber: `ORD-${String(5000 + i).padStart(5, '0')}`,
-      customer: customers[Math.floor(Math.random() * customers.length)],
-      email: `customer${i}@example.com`,
-      amount: parseFloat(amount),
-      currency: currency,
-      status,
-      paymentMethod: paymentMethods[Math.floor(Math.random() * paymentMethods.length)],
-      date: date,
-      description: status === 'success' ? 'Payment processed successfully' :
-                   status === 'pending' ? 'Payment is being processed' :
-                   status === 'failed' ? 'Payment declined by bank' :
-                   'Payment refunded to customer',
-    };
-  });
 };
 
 /**
@@ -126,7 +87,10 @@ async function loadProducts() {
 const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
   // State
   analytics: null,
-  transactions: generateMockTransactions(),
+  // Empty until `fetchTransactionAnalytics` reads the orders. This used to be
+  // seeded with `generateMockTransactions()`, so the store held a hundred
+  // fabricated payments before a single query had run.
+  transactions: [],
   
   // Loading & Error states
   loading: {
@@ -499,109 +463,94 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
   },
   
   /**
-   * Fetch transaction analytics (using mock data)
+   * Payment analytics, derived from the orders.
+   *
+   * Reads the real ledger through `getPayments()` and stores the rows, so the
+   * Payments screen and this tab agree by construction rather than by two
+   * copies of the same generator.
    */
   fetchTransactionAnalytics: async (): Promise<TransactionAnalytics> => {
     try {
-      const transactions = get().transactions;
-      
+      const { payments, error } = await getPayments();
+      if (error) throw new Error(error);
+
+      set({ transactions: payments });
+
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
-      const successful = transactions.filter(t => t.status === 'success');
-      const pending = transactions.filter(t => t.status === 'pending');
-      const failed = transactions.filter(t => t.status === 'failed');
-      const refunded = transactions.filter(t => t.status === 'refunded');
-      
-      // Calculate revenues by currency
+
+      const successful = payments.filter(t => t.status === 'success');
+      const pending = payments.filter(t => t.status === 'pending');
+      const failed = payments.filter(t => t.status === 'failed');
+      const refunded = payments.filter(t => t.status === 'refunded');
+
+      // Revenue means money that actually arrived. The old version summed every
+      // transaction regardless of status, so failed and pending payments were
+      // counted as income.
       const revenues: CurrencyRevenue[] = [];
-      const currencySet = new Set<string>();
-      transactions.forEach(t => currencySet.add(t.currency));
-      
-      currencySet.forEach(currency => {
-        const currencyTransactions = transactions.filter(t => t.currency === currency);
-        const currencySuccessful = successful.filter(t => t.currency === currency);
-        
-        const totalRevenue = currencyTransactions.reduce((sum, t) => sum + t.amount, 0);
-        const successfulRevenue = currencySuccessful.reduce((sum, t) => sum + t.amount, 0);
-        
-        const revenueToday = currencyTransactions
-          .filter(t => t.date >= today)
-          .reduce((sum, t) => sum + t.amount, 0);
-        
-        const revenueThisWeek = currencyTransactions
-          .filter(t => t.date >= weekAgo)
-          .reduce((sum, t) => sum + t.amount, 0);
-        
-        const revenueThisMonth = currencyTransactions
-          .filter(t => t.date >= monthAgo)
-          .reduce((sum, t) => sum + t.amount, 0);
-        
-        const averageTransactionValue = currencyTransactions.length > 0 
-          ? totalRevenue / currencyTransactions.length 
-          : 0;
-        
+      const currencies = Array.from(new Set(payments.map(t => t.currency)));
+
+      currencies.forEach(currency => {
+        const settled = successful.filter(t => t.currency === currency);
+        const all = payments.filter(t => t.currency === currency);
+
+        const totalRevenue = settled.reduce((sum, t) => sum + t.amount, 0);
+
         revenues.push({
           currency,
           totalRevenue,
-          revenueToday,
-          revenueThisWeek,
-          revenueThisMonth,
-          averageOrderValue: 0,
-          averageTransactionValue
+          revenueToday: settled.filter(t => t.date >= today).reduce((sum, t) => sum + t.amount, 0),
+          revenueThisWeek: settled.filter(t => t.date >= weekAgo).reduce((sum, t) => sum + t.amount, 0),
+          revenueThisMonth: settled.filter(t => t.date >= monthAgo).reduce((sum, t) => sum + t.amount, 0),
+          averageOrderValue: settled.length > 0 ? totalRevenue / settled.length : 0,
+          averageTransactionValue: all.length > 0 ? totalRevenue / all.length : 0,
         });
       });
-      
-      const transactionsToday = transactions.filter(t => t.date >= today).length;
-      const transactionsThisWeek = transactions.filter(t => t.date >= weekAgo).length;
-      const transactionsThisMonth = transactions.filter(t => t.date >= monthAgo).length;
-      
-      // Payment method distribution with multi-currency
+
       const methodMap = new Map<PaymentMethodType, { count: number; revenues: Map<string, number> }>();
-      transactions.forEach(t => {
+      payments.forEach(t => {
         if (!methodMap.has(t.paymentMethod)) {
           methodMap.set(t.paymentMethod, { count: 0, revenues: new Map() });
         }
         const stats = methodMap.get(t.paymentMethod)!;
         stats.count += 1;
-        
+
         if (t.status === 'success') {
-          const current = stats.revenues.get(t.currency) || 0;
-          stats.revenues.set(t.currency, current + t.amount);
+          stats.revenues.set(t.currency, (stats.revenues.get(t.currency) || 0) + t.amount);
         }
       });
-      
+
       const paymentMethodDistribution = Array.from(methodMap.entries())
         .map(([method, stats]) => ({
           method,
           count: stats.count,
           revenues: Array.from(stats.revenues.entries()).map(([currency, amount]) => ({
             currency,
-            amount
-          }))
+            amount,
+          })),
         }))
         .sort((a, b) => b.count - a.count);
-      
+
       return {
-        totalTransactions: transactions.length,
+        totalTransactions: payments.length,
         successfulTransactions: successful.length,
         pendingTransactions: pending.length,
         failedTransactions: failed.length,
         refundedTransactions: refunded.length,
         revenues,
-        transactionsToday,
-        transactionsThisWeek,
-        transactionsThisMonth,
-        paymentMethodDistribution
+        transactionsToday: payments.filter(t => t.date >= today).length,
+        transactionsThisWeek: payments.filter(t => t.date >= weekAgo).length,
+        transactionsThisMonth: payments.filter(t => t.date >= monthAgo).length,
+        paymentMethodDistribution,
       };
     } catch (error) {
-      console.error('Error fetching transaction analytics:', error);
+      console.error('Error fetching payment analytics:', error);
       throw error;
     }
   },
-  
+
   /**
    * Fetch all analytics
    */

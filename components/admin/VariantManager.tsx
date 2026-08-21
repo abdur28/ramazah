@@ -385,7 +385,7 @@ export default function VariantManager({
                         </div>
 
                         {discountPercent > 0 && price > 0 && (
-                          <div className="p-2 bg-success/10 border border-success rounded-lg">
+                          <div className="p-2 bg-success/10 border border-success rounded-sm">
                             <p className="text-xs text-success">
                               💰 <strong>{discountPercent}% off</strong> - Save {currency.symbol}{savings.toFixed(2)}
                             </p>
@@ -441,7 +441,7 @@ export default function VariantManager({
       </CardHeader>
       <CardContent>
         {variants.length === 0 ? (
-          <div className="text-center py-8 border-2 border-dashed rounded-lg">
+          <div className="text-center py-8 border border-dashed rounded-sm">
             <Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
             <p className="text-sm font-medium mb-1">No variants yet</p>
             <p className="text-xs text-muted-foreground mb-4">
@@ -461,7 +461,7 @@ export default function VariantManager({
               return (
                 <div
                   key={variant.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                  className="flex items-center justify-between p-4 border rounded-sm hover:bg-accent/50 transition-colors"
                 >
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-2">
@@ -519,7 +519,7 @@ export default function VariantManager({
         )}
 
         {variants.length > 0 && (
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+          <div className="mt-4 p-3 bg-muted/50 rounded-sm text-sm text-muted-foreground">
             <strong>{variants.length}</strong> variant{variants.length !== 1 ? "s" : ""} •{" "}
             <strong>{variants.reduce((sum, v) => sum + v.stockCount, 0)}</strong> total units
           </div>

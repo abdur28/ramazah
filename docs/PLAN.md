@@ -102,6 +102,11 @@ The data layer writes the generic option model, but the form still only understa
 "Weight: 250g / Grind: Ground" product through the UI — only via SQL. Also needs
 expiry-date entry for perishables. This is a UI rebuild, not a port.
 
+The 2026-08-22 admin pass deliberately stopped at colour and radius here: restyling a
+form that cannot express the catalogue's own data model would only make the gap harder
+to see. Everything around it — the catalogue list, which now shows publication state and
+expiry — is finished.
+
 ### 5. Product pages and filters
 Size filters and size guides do not fit coffee and spices. Filtering should move to
 the generic options plus tags, using `product_listing` and `search_product_ids()`.
@@ -113,6 +118,12 @@ place. Deliberate, but it is the same rebuild.
 **A search results page** would also belong here. Search currently lives entirely in
 the dialog, which shows the top six matches and asks you to refine.
 
+**Collections have no storefront route at all.** `app/` has `/categories/[...slug]` and
+`/product/[slug]` and nothing for collections, so `/admin/collections` manages data that
+no shopper can reach — banner image, description and all. Either build
+`/collections/[slug]` or drop the concept; leaving it half-present is the worst of the
+three. The admin screen says so on its face in the meantime.
+
 ### 6. Notifications and admin — deferred by the client (2026-08-21)
 Working, but nobody is told anything by email:
 
@@ -123,8 +134,13 @@ Working, but nobody is told anything by email:
   request lands as `asked`; both are invisible until someone opens
   `/admin/reviews` or `/admin/requests`. No email says one is waiting, and the
   customer is not told when their review is published or their request quoted.
-- **Admin polish.** The admin screens work but have not had the design pass the
-  storefront and the account area have had.
+- ~~**Admin polish.**~~ Done 2026-08-22. The pass also removed two screens' worth of
+  fabricated data — `/admin/transactions` and the analytics Transactions tab were both
+  fed by `generateMockTransactions()` — and fixed an inverted suspend action. See
+  PROGRESS.
+- **Still no notification when a queue fills.** The sidebar badges and the dashboard now
+  show the backlog, which closes the *discoverability* half of this. The email half is
+  untouched: nothing tells you a review is waiting unless you open the admin.
 
 ### 7. Google sign-in
 Currently an unconfigured button that returns a raw `400`. Either enable the provider
@@ -146,8 +162,6 @@ Naira amounts).
   `payment_status`, `payment_method` and `payment_intent_id`.
 - **Expo mobile app** — the architecture already supports it: RLS plus RPCs mean the
   mobile client reuses the same API with no bespoke backend.
-- **Tremor replacement** — `@tremor/react` is React 18-only and forces
-  `legacy-peer-deps=true`. Used in 5 admin analytics files.
 - **Navigation from the database** — `constants/navigation.ts` is curated, so a
   category added in admin needs a line there. Worth revisiting when the catalog stops
   changing shape; the labels and order would still need somewhere to live.

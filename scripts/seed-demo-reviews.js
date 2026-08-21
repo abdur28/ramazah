@@ -25,6 +25,13 @@ const env = Object.fromEntries(
     .map((line) => [line.slice(0, line.indexOf('=')).trim(), line.slice(line.indexOf('=') + 1).trim()])
 );
 
+/**
+ * An ISO timestamp `n` days back, so seeded orders carry a plausible history
+ * rather than all landing at the same instant. The dashboard's revenue trend
+ * buckets by month and needs real dates to draw anything.
+ */
+const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
@@ -171,6 +178,15 @@ async function seed() {
         user_id: userId,
         order_number: `RMZ-D${String(1000 + index)}`,
         status: 'delivered',
+        // A delivered order that was never paid for is not a state this shop
+        // can be in, and leaving it that way made every revenue figure in the
+        // admin read zero once those figures started counting settled money
+        // only. Delivered means paid, shipped and received.
+        payment_status: 'paid',
+        payment_method: 'Bank transfer',
+        paid_at: daysAgo(30 - index),
+        shipped_at: daysAgo(27 - index),
+        delivered_at: daysAgo(24 - index),
         delivery_type: 'delivery',
         customer_name: customer.name,
         customer_email: customer.email,
@@ -239,6 +255,11 @@ async function seed() {
         user_id: userId,
         order_number: 'RMZ-D1099',
         status: 'delivered',
+        payment_status: 'paid',
+        payment_method: 'Cash on delivery',
+        paid_at: daysAgo(9),
+        shipped_at: daysAgo(9),
+        delivered_at: daysAgo(6),
         delivery_type: 'delivery',
         customer_name: customer.name,
         customer_email: customer.email,
@@ -281,6 +302,10 @@ async function seed() {
         user_id: userId,
         order_number: longOrder.orderNumber,
         status: longOrder.status,
+        // Being packed: the money is in, the goods have not left.
+        payment_status: 'paid',
+        payment_method: 'Bank transfer',
+        paid_at: daysAgo(2),
         delivery_type: 'delivery',
         customer_name: customer.name,
         customer_email: customer.email,

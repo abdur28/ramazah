@@ -54,10 +54,18 @@ export interface FetchOptions {
 // ============ TRANSACTION TYPES ============
 
 export type TransactionStatus = 'success' | 'pending' | 'failed' | 'refunded';
-export type PaymentMethodType = 'Credit Card' | 'PayPal' | 'Stripe' | 'Bank Transfer' | 'Cash on Delivery';
+/**
+ * Free text, because it is free text in the database. It was a closed union of
+ * five Western processors — PayPal, Stripe, Credit Card — none of which this
+ * shop uses; orders here settle by bank transfer, Paystack or on delivery. The
+ * union only ever type-checked because the values were being invented locally.
+ */
+export type PaymentMethodType = string;
 
 export interface Transaction {
   id: string;
+  /** The order this payment belongs to, so the row can link through to it. */
+  orderId?: string;
   orderNumber: string;
   customer: string;
   email: string;
@@ -311,6 +319,12 @@ export interface AdminAnalyticsDataStore {
 export interface EmailRecipient {
   id: string;
   email: string;
+  /**
+   * Where the address came from. `footer` addresses are anonymous newsletter
+   * signups with no account behind them — no display name, no preferences, and
+   * newsletter mail only.
+   */
+  source?: 'account' | 'footer';
   displayName?: string;
   firstName?: string;
   preferences?: {
@@ -357,6 +371,8 @@ export interface EmailStats {
   promotionsOptedIn: number;
   newArrivalsOptedIn: number;
   newsletterOptedIn: number;
+  /** Footer signups with no account. Included in `newsletterOptedIn`. */
+  footerSubscribers: number;
   totalCampaigns: number;
   campaignsThisMonth: number;
   emailsSentTotal: number;

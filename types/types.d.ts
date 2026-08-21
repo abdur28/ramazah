@@ -126,6 +126,13 @@ export interface Product {
   variants?: ProductVariant[];
   
   sku: string;
+  /**
+   * Publication state. Draft and archived products are absent from the
+   * storefront entirely — `product_listing` filters on this — so the admin
+   * catalogue has to show it or a product can sit unpublished with nothing
+   * anywhere saying why it is not on the site.
+   */
+  status?: 'draft' | 'active' | 'archived';
   inStock: boolean;
   totalStock: number;
   lowStockAlert?: number;

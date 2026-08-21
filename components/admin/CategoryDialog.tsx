@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, FolderTree } from "lucide-react";
 import { toast } from "sonner";
 import useAdmin from "@/hooks/admin/useAdmin";
+import useScrollLock from "@/hooks/useScrollLock";
 import { Badge } from "@/components/ui/badge";
 import { Category } from "@/types/types";
 import ImageUpload from "@/components/admin/ImageUpload";
@@ -37,6 +38,11 @@ export default function CategoryDialog({
   mode 
 }: CategoryDialogProps) {
   const { createCategory, updateCategory, loading } = useAdmin();
+
+  // Lenis drives the window directly and ignores both `overflow: hidden` and
+  // Radix's scroll lock, so every overlay in this app has to stop it explicitly
+  // or the page slides away behind the open dialog.
+  useScrollLock(open);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -215,7 +221,7 @@ export default function CategoryDialog({
         </DialogHeader>
 
         {parentCategory && (
-          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+          <div className="flex items-center gap-2 p-3 bg-muted rounded-sm">
             <FolderTree className="h-4 w-4 text-muted-foreground" />
             <div className="flex-1">
               <p className="text-sm font-medium">Parent Category</p>

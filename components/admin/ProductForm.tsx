@@ -261,7 +261,7 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold font-heading uppercase">
+            <h1 className="text-2xl font-medium font-heading uppercase">
               {mode === "create" ? "Create New Product" : "Edit Product"}
             </h1>
             <p className="text-muted-foreground">
@@ -434,7 +434,7 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
                     </div>
 
                     {discountPercent > 0 && (
-                      <div className="p-3 bg-success/10 border border-success rounded-lg">
+                      <div className="p-3 bg-success/10 border border-success rounded-sm">
                         <p className="text-sm text-success">
                           💰 <strong>{discountPercent}% off</strong> - Customers save {currency.symbol}{savings.toFixed(2)}
                         </p>

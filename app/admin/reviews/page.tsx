@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, MessageSquare, RefreshCcw, Star, ExternalLink } from "lucide-react";
+import { Check, ExternalLink, Loader2, MessageSquare, RefreshCcw, Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import PageHeader from "@/components/admin/ui/PageHeader";
+import EmptyState from "@/components/admin/ui/EmptyState";
+import StatusPill, { REVIEW_STATUS } from "@/components/admin/ui/StatusPill";
+import { cn } from "@/lib/utils";
+import { formatDate, formatRelative } from "@/lib/admin/format";
 import {
   getReviewsForModeration,
   setReviewStatus,
@@ -22,11 +26,14 @@ import {
  * Approving goes through `set_review_status()`, a SECURITY DEFINER function
  * that checks `is_admin()`. The `status` column is deliberately not grantable
  * to `authenticated`, which is what stops a customer approving their own.
+ *
+ * The design pass added the thing the queue was missing: how long each review
+ * has been waiting. A moderation backlog is measured in days, not in rows.
  */
-const TABS: { label: string; status: "pending" | "approved" | "rejected" }[] = [
-  { label: "Pending", status: "pending" },
-  { label: "Approved", status: "approved" },
-  { label: "Rejected", status: "rejected" },
+const TABS = [
+  { label: "Waiting", status: "pending" as const },
+  { label: "Published", status: "approved" as const },
+  { label: "Rejected", status: "rejected" as const },
 ];
 
 export default function AdminReviewsPage() {
@@ -47,9 +54,9 @@ export default function AdminReviewsPage() {
     load();
   }, [load]);
 
-  const decide = async (id: string, next: "approved" | "rejected") => {
-    setBusyId(id);
-    const { error } = await setReviewStatus(id, next);
+  const decide = async (review: PendingReview, next: "approved" | "rejected") => {
+    setBusyId(review.id);
+    const { error } = await setReviewStatus(review.id, next);
     setBusyId(null);
 
     if (error) {
@@ -57,91 +64,99 @@ export default function AdminReviewsPage() {
       return;
     }
 
-    toast.success(next === "approved" ? "Review published." : "Review rejected.");
-    setReviews((current) => current.filter((review) => review.id !== id));
+    toast.success(
+      next === "approved"
+        ? `Published — it is on ${review.productName} now.`
+        : "Rejected. The customer is not told."
+    );
+    setReviews((current) => current.filter((item) => item.id !== review.id));
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <MessageSquare className="h-5 w-5" />
-            Reviews
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Reviews stay hidden from the storefront until they are approved here.
-          </p>
-        </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Waiting on you"
+        title="Reviews"
+        description="Nothing a customer writes reaches the shop until you approve it here."
+        actions={
+          <Button variant="outline" onClick={load} disabled={isLoading}>
+            <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        }
+      />
 
-        <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
-          <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
-
-      <div className="mb-6 flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {TABS.map((tab) => (
-          <Button
+          <button
             key={tab.status}
-            variant={status === tab.status ? "default" : "outline"}
-            size="sm"
+            type="button"
             onClick={() => setStatus(tab.status)}
+            aria-pressed={status === tab.status}
+            className={cn(
+              "rounded-sm border px-3 py-1.5 font-body text-sm transition-colors",
+              status === tab.status
+                ? "border-sage-deep bg-sage-deep text-background"
+                : "border-rule bg-card text-ink-muted hover:border-sage hover:text-foreground"
+            )}
           >
             {tab.label}
-          </Button>
+          </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <div className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-rule py-20 font-body text-sm text-ink-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading reviews…
         </div>
       ) : reviews.length === 0 ? (
-        <div className="rounded-md border border-dashed py-20 text-center text-sm text-muted-foreground">
-          Nothing {status}.
-        </div>
+        <EmptyState
+          icon={MessageSquare}
+          title={
+            status === "pending"
+              ? "Nothing waiting"
+              : status === "approved"
+                ? "No published reviews yet"
+                : "Nothing rejected"
+          }
+          description={
+            status === "pending"
+              ? "Reviews land here as customers write them. Only people who have received the item can leave one."
+              : undefined
+          }
+        />
       ) : (
-        <ul className="space-y-4">
+        <ul className="space-y-3">
           {reviews.map((review) => (
-            <li key={review.id} className="rounded-md border p-5">
+            <li key={review.id} className="rounded-sm border border-rule bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex" aria-label={`${review.rating} out of 5`}>
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <Star
-                          key={index}
-                          className={`h-4 w-4 ${
-                            index < review.rating ? "text-terra" : "text-muted-foreground/30"
-                          }`}
-                          fill="currentColor"
-                        />
-                      ))}
-                    </span>
-                    {review.title && <span className="font-medium">{review.title}</span>}
-                    <Badge variant="secondary">{review.status}</Badge>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Stars rating={review.rating} />
+                    {review.title && (
+                      <span className="font-body text-sm font-medium text-foreground">
+                        {review.title}
+                      </span>
+                    )}
+                    <StatusPill status={review.status} map={REVIEW_STATUS} />
                   </div>
 
-                  <p className="mt-2 max-w-[70ch] text-sm text-muted-foreground">
+                  <p className="mt-3 max-w-[70ch] font-body text-sm leading-relaxed text-ink-muted">
                     {review.body}
                   </p>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-body text-xs text-ink-muted">
                     <Link
                       href={`/product/${review.productSlug}`}
                       target="_blank"
-                      className="inline-flex items-center gap-1 hover:text-foreground"
+                      className="inline-flex items-center gap-1 text-sage-deep hover:underline"
                     >
                       {review.productName}
                       <ExternalLink className="h-3 w-3" />
                     </Link>
-                    <span>
-                      {new Date(review.createdAt).toLocaleDateString("en-NG", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
+                    <span title={formatDate(review.createdAt)}>
+                      Written {formatRelative(review.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -150,19 +165,25 @@ export default function AdminReviewsPage() {
                   {status !== "approved" && (
                     <Button
                       size="sm"
-                      onClick={() => decide(review.id, "approved")}
+                      onClick={() => decide(review, "approved")}
                       disabled={busyId === review.id}
                     >
-                      Approve
+                      {busyId === review.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="mr-2 h-4 w-4" />
+                      )}
+                      Publish
                     </Button>
                   )}
                   {status !== "rejected" && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => decide(review.id, "rejected")}
+                      onClick={() => decide(review, "rejected")}
                       disabled={busyId === review.id}
                     >
+                      <X className="mr-2 h-4 w-4" />
                       Reject
                     </Button>
                   )}
@@ -173,5 +194,27 @@ export default function AdminReviewsPage() {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * Terracotta rather than sage: a rating is the one thing on this screen that is
+ * an opinion, and the brand green is a surface colour. Filled count is also
+ * given in text for anyone who cannot separate the two.
+ */
+function Stars({ rating }: { rating: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="flex" aria-hidden>
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Star
+            key={index}
+            className={cn("h-4 w-4", index < rating ? "text-terra" : "text-rule")}
+            fill="currentColor"
+          />
+        ))}
+      </span>
+      <span className="font-body text-xs tabular-nums text-ink-muted">{rating}/5</span>
+    </span>
   );
 }

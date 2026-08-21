@@ -1,297 +1,150 @@
 "use client";
 
-import React from "react";
-import { DonutChart } from "@tremor/react";
-import { ShoppingBag, DollarSign, TrendingUp, Package } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { OrderAnalytics } from "@/types/admin";
+import { Coins, Package, ShoppingBag, TrendingUp } from "lucide-react";
+import StatCard from "@/components/admin/ui/StatCard";
+import SectionCard from "@/components/admin/ui/SectionCard";
+import DonutChart from "@/components/admin/charts/DonutChart";
+import StatusPill, { ORDER_STATUS } from "@/components/admin/ui/StatusPill";
+import { formatMoney, formatMoneyByCurrency, formatNumber } from "@/lib/admin/format";
+import type { OrderAnalytics } from "@/types/admin";
 
-interface OrderAnalyticsTabProps {
-  data: OrderAnalytics;
-}
+/**
+ * Orders, in aggregate.
+ *
+ * The previous version printed total revenue in four separate panels and
+ * revenue-by-currency in three, at roughly 600 lines. Every one of them
+ * formatted money through a symbol table with no Naira entry, so the shop's own
+ * currency rendered as `NGN410005.00`. This says each thing once.
+ */
+export default function OrderAnalyticsTab({ data }: { data: OrderAnalytics }) {
+  const primary = data.revenues[0];
+  const currency = primary?.currency ?? "ngn";
 
-export default function OrderAnalyticsTab({ data }: OrderAnalyticsTabProps) {
-  const getCurrencySymbol = (currency: string) => {
-    const symbols: Record<string, string> = {
-      USD: '$',
-      usd: '$',
-      EUR: '€',
-      GBP: '£',
-      RUB: '₽',
-      rub: '₽'
-    };
-    return symbols[currency] || currency;
-  };
-
-  const formatRevenues = (revenues: Array<{ currency: string; amount: number }>) => {
-    if (!revenues || revenues.length === 0) return 'No revenue';
-    
-    return revenues.map(r => 
-      `${getCurrencySymbol(r.currency)}${r.amount.toLocaleString(undefined, { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      })}`
-    ).join(' | ');
-  };
-
-  const formatGrowthRate = (rate: number) => {
-    const formatted = Math.abs(rate).toFixed(1);
-    return rate >= 0 ? `+${formatted}%` : `-${formatted}%`;
-  };
+  const periods = [
+    { label: "Today", orders: data.ordersToday, key: "revenueToday" as const },
+    { label: "This week", orders: data.ordersThisWeek, key: "revenueThisWeek" as const },
+    { label: "This month", orders: data.ordersThisMonth, key: "revenueThisMonth" as const },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.totalOrders.toLocaleString()}</div>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={data.orderGrowthRate >= 0 ? "default" : "destructive"} className={data.orderGrowthRate >= 0 ? "bg-success" : ""}>
-                {formatGrowthRate(data.orderGrowthRate)}
-              </Badge>
-              <p className="text-xs text-muted-foreground">vs last period</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{formatRevenues(data.revenues.map(r => ({ currency: r.currency, amount: r.totalRevenue })))}</div>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={data.revenueGrowthRate >= 0 ? "default" : "destructive"} className={data.revenueGrowthRate >= 0 ? "bg-success" : ""}>
-                {formatGrowthRate(data.revenueGrowthRate)}
-              </Badge>
-              <p className="text-xs text-muted-foreground">vs last period</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Order Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">
-              {data.revenues.map(r => 
-                `${getCurrencySymbol(r.currency)}${r.averageOrderValue.toLocaleString(undefined, { 
-                  minimumFractionDigits: 2, 
-                  maximumFractionDigits: 2 
-                })}`
-              ).join(' | ')}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Per order</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orders This Month</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.ordersThisMonth.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {formatRevenues(data.revenues.map(r => ({ currency: r.currency, amount: r.revenueThisMonth })))}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Orders"
+          value={formatNumber(data.totalOrders)}
+          trend={data.orderGrowthRate}
+          hint="vs last month"
+          icon={ShoppingBag}
+        />
+        <StatCard
+          label="Revenue"
+          value={formatMoneyByCurrency(
+            data.revenues.map((r) => ({ currency: r.currency, amount: r.totalRevenue })),
+            true
+          )}
+          trend={data.revenueGrowthRate}
+          hint="vs last month"
+          icon={Coins}
+        />
+        <StatCard
+          label="Average order"
+          value={formatMoney(primary?.averageOrderValue ?? 0, currency)}
+          hint="what a typical basket is worth"
+          icon={TrendingUp}
+        />
+        <StatCard
+          label="Delivered"
+          value={formatNumber(data.deliveredOrders)}
+          hint={
+            data.totalOrders > 0
+              ? `${((data.deliveredOrders / data.totalOrders) * 100).toFixed(0)}% of all orders`
+              : undefined
+          }
+          icon={Package}
+        />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Orders by Status</CardTitle>
-            <CardDescription>Distribution of order statuses</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DonutChart
-              className="h-80 text-xs"
-              data={data.ordersByStatus}
-              category="count"
-              index="status"
-              colors={['blue', 'amber', 'lime', 'emerald', 'violet', 'gray']}
-              valueFormatter={(value) => `${value.toLocaleString()} orders`}
-              showAnimation={true}
-              showTooltip={true}
-            />
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SectionCard title="Where orders sit">
+          <DonutChart
+            data={data.ordersByStatus
+              .filter((row) => row.count > 0)
+              .map((row) => ({
+                name: ORDER_STATUS[row.status]?.label ?? row.status,
+                value: row.count,
+              }))}
+            total={data.totalOrders}
+            totalLabel="Orders"
+          />
+        </SectionCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue by Status</CardTitle>
-            <CardDescription>Multi-currency revenue breakdown</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {data.ordersByStatus.map((status) => (
-                <div key={status.status} className="p-3 rounded-lg border">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className="capitalize">
-                      {status.status}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {status.count} orders
-                    </span>
-                  </div>
-                  {status.revenues && status.revenues.length > 0 && (
-                    <div className="text-sm font-medium">
-                      {formatRevenues(status.revenues)}
-                    </div>
-                  )}
-                </div>
+        <SectionCard title="Value held at each stage" flush>
+          <ul className="divide-y divide-rule">
+            {data.ordersByStatus
+              .filter((row) => row.count > 0)
+              .map((row) => (
+                <li
+                  key={row.status}
+                  className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                >
+                  <StatusPill status={row.status} map={ORDER_STATUS} />
+                  <span className="font-body text-xs tabular-nums text-ink-muted">
+                    {formatNumber(row.count)} {row.count === 1 ? "order" : "orders"}
+                  </span>
+                  <span className="ml-auto font-body text-sm font-medium tabular-nums text-foreground">
+                    {formatMoneyByCurrency(row.revenues)}
+                  </span>
+                </li>
               ))}
-            </div>
-          </CardContent>
-        </Card>
+          </ul>
+        </SectionCard>
       </div>
 
-      {/* Order Timeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Order Timeline</CardTitle>
-          <CardDescription>Orders and revenue over time periods</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-lg border space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Today</p>
-              <div className="space-y-1">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Orders</span>
-                  <span className="text-2xl font-bold">{data.ordersToday.toLocaleString()}</span>
-                </div>
-                <div className="text-sm font-semibold">
-                  {formatRevenues(data.revenues.map(r => ({ currency: r.currency, amount: r.revenueToday })))}
-                </div>
-              </div>
+      <SectionCard title="Recent activity">
+        <dl className="grid gap-4 sm:grid-cols-3">
+          {periods.map((period) => (
+            <div key={period.label} className="rounded-sm border border-rule p-4">
+              <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                {period.label}
+              </dt>
+              <dd className="mt-2 font-body text-2xl font-medium tabular-nums leading-none text-foreground">
+                {formatNumber(period.orders)}
+                <span className="ml-1.5 text-sm font-normal text-ink-muted">
+                  {period.orders === 1 ? "order" : "orders"}
+                </span>
+              </dd>
+              <dd className="mt-2 font-body text-sm tabular-nums text-ink-muted">
+                {formatMoneyByCurrency(
+                  data.revenues.map((r) => ({ currency: r.currency, amount: r[period.key] }))
+                )}
+              </dd>
             </div>
+          ))}
+        </dl>
+      </SectionCard>
 
-            <div className="p-4 rounded-lg border space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">This Week</p>
-              <div className="space-y-1">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Orders</span>
-                  <span className="text-2xl font-bold">{data.ordersThisWeek.toLocaleString()}</span>
-                </div>
-                <div className="text-sm font-semibold">
-                  {formatRevenues(data.revenues.map(r => ({ currency: r.currency, amount: r.revenueThisWeek })))}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg border space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">This Month</p>
-              <div className="space-y-1">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Orders</span>
-                  <span className="text-2xl font-bold">{data.ordersThisMonth.toLocaleString()}</span>
-                </div>
-                <div className="text-sm font-semibold">
-                  {formatRevenues(data.revenues.map(r => ({ currency: r.currency, amount: r.revenueThisMonth })))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Revenue Breakdown by Currency */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Revenue by Currency</CardTitle>
-          <CardDescription>Breakdown of revenue by currency type</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
+      {data.revenues.length > 1 && (
+        <SectionCard title="By currency" flush>
+          <ul className="divide-y divide-rule">
             {data.revenues.map((revenue) => (
-              <div key={revenue.currency} className="flex items-center justify-between p-4 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <DollarSign className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">{revenue.currency.toUpperCase()}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Avg: {getCurrencySymbol(revenue.currency)}{revenue.averageOrderValue.toLocaleString(undefined, { 
-                        minimumFractionDigits: 2, 
-                        maximumFractionDigits: 2 
-                      })}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold">
-                    {getCurrencySymbol(revenue.currency)}{revenue.totalRevenue.toLocaleString(undefined, { 
-                      minimumFractionDigits: 2, 
-                      maximumFractionDigits: 2 
-                    })}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {getCurrencySymbol(revenue.currency)}{revenue.revenueThisMonth.toLocaleString(undefined, { 
-                      minimumFractionDigits: 2, 
-                      maximumFractionDigits: 2 
-                    })} this month
-                  </p>
-                </div>
-              </div>
+              <li
+                key={revenue.currency}
+                className="flex items-center justify-between gap-4 px-5 py-3"
+              >
+                <span className="font-body text-sm text-foreground">
+                  {revenue.currency.toUpperCase()}
+                </span>
+                <span className="font-body text-xs text-ink-muted">
+                  average {formatMoney(revenue.averageOrderValue, revenue.currency)}
+                </span>
+                <span className="ml-auto font-body text-sm font-medium tabular-nums text-foreground">
+                  {formatMoney(revenue.totalRevenue, revenue.currency)}
+                </span>
+              </li>
             ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Metrics */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance Metrics</CardTitle>
-          <CardDescription>Key performance indicators</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-lg border">
-              <p className="text-sm text-muted-foreground mb-1">Pending Orders</p>
-              <p className="text-2xl font-bold">{data.pendingOrders.toLocaleString()}</p>
-              <Badge variant="secondary" className="mt-2">
-                {((data.pendingOrders / data.totalOrders) * 100).toFixed(1)}%
-              </Badge>
-            </div>
-
-            <div className="p-4 rounded-lg border">
-              <p className="text-sm text-muted-foreground mb-1">Processing</p>
-              <p className="text-2xl font-bold">{data.processingOrders.toLocaleString()}</p>
-              <Badge variant="default" className="mt-2 bg-primary">
-                {((data.processingOrders / data.totalOrders) * 100).toFixed(1)}%
-              </Badge>
-            </div>
-
-            <div className="p-4 rounded-lg border">
-              <p className="text-sm text-muted-foreground mb-1">Delivered</p>
-              <p className="text-2xl font-bold">{data.deliveredOrders.toLocaleString()}</p>
-              <Badge variant="default" className="mt-2 bg-success">
-                {((data.deliveredOrders / data.totalOrders) * 100).toFixed(1)}%
-              </Badge>
-            </div>
-
-            <div className="p-4 rounded-lg border">
-              <p className="text-sm text-muted-foreground mb-1">Cancelled</p>
-              <p className="text-2xl font-bold">{data.cancelledOrders.toLocaleString()}</p>
-              <Badge variant="destructive" className="mt-2">
-                {((data.cancelledOrders / data.totalOrders) * 100).toFixed(1)}%
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </ul>
+        </SectionCard>
+      )}
     </div>
   );
 }

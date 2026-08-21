@@ -186,7 +186,7 @@ export default function ColorPicker({ colors, onChange }: ColorPickerProps) {
           ))}
         </div>
       ) : (
-        <div className="text-sm text-muted-foreground border-2 border-dashed rounded-lg p-4 text-center">
+        <div className="text-sm text-muted-foreground border border-dashed rounded-sm p-4 text-center">
           <Palette className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p>No colors added yet</p>
           <p className="text-xs mt-1">Click "Add Color" to get started</p>

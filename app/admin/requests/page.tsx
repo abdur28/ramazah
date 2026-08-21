@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCcw, Search, ExternalLink } from "lucide-react";
+import { Check, ExternalLink, Loader2, RefreshCcw, Search, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import PageHeader from "@/components/admin/ui/PageHeader";
+import EmptyState from "@/components/admin/ui/EmptyState";
+import StatusPill, { REQUEST_STATUS } from "@/components/admin/ui/StatusPill";
+import { cn } from "@/lib/utils";
+import { formatDate, formatMoney, formatRelative } from "@/lib/admin/format";
 import { getRequestsForStaff, setRequestStatus, type ProductRequest } from "@/lib/account";
 
 /**
@@ -16,15 +21,23 @@ import { getRequestsForStaff, setRequestStatus, type ProductRequest } from "@/li
  * function that checks `is_admin()`. Without this screen the request form would
  * be a queue nobody could drain — the same failure the review form would have
  * had without /admin/reviews.
+ *
+ * Two changes beyond the restyle. Sending a quote now requires an amount:
+ * "Send quote" with the field empty used to set the status to `quoted` with a
+ * null price, and the customer would see their request marked Quoted with no
+ * figure attached. And each request carries the quote and note it already has,
+ * rather than only offering blank fields — you can see what you told someone
+ * last week before you tell them something else.
  */
 type StaffRequest = ProductRequest & { customerName: string; customerEmail: string };
 
 const TABS: { label: string; status?: ProductRequest["status"] }[] = [
-  { label: "All" },
   { label: "With us", status: "asked" },
   { label: "Quoted", status: "quoted" },
   { label: "Buying", status: "buying" },
   { label: "Fulfilled", status: "fulfilled" },
+  { label: "Declined", status: "declined" },
+  { label: "All" },
 ];
 
 export default function AdminRequestsPage() {
@@ -39,7 +52,23 @@ export default function AdminRequestsPage() {
     setIsLoading(true);
     const { requests: fetched, error } = await getRequestsForStaff(status);
     if (error) toast.error(error);
-    setRequests(fetched as StaffRequest[]);
+
+    const staffRequests = fetched as StaffRequest[];
+    setRequests(staffRequests);
+
+    // Seed the fields with what has already been said, so an edit is an edit.
+    setQuotes(
+      Object.fromEntries(
+        staffRequests.map((request) => [
+          request.id,
+          request.quotedAmount != null ? String(request.quotedAmount) : "",
+        ])
+      )
+    );
+    setNotes(
+      Object.fromEntries(staffRequests.map((request) => [request.id, request.staffNote ?? ""]))
+    );
+
     setIsLoading(false);
   }, [status]);
 
@@ -48,9 +77,23 @@ export default function AdminRequestsPage() {
   }, [load]);
 
   const move = async (request: StaffRequest, next: ProductRequest["status"]) => {
+    const raw = quotes[request.id]?.trim();
+    const quote = raw ? Number(raw) : null;
+
+    if (next === "quoted") {
+      if (quote === null || Number.isNaN(quote) || quote <= 0) {
+        toast.error("Enter the quoted amount before sending it.");
+        return;
+      }
+    }
+
     setBusyId(request.id);
-    const quote = quotes[request.id] ? Number(quotes[request.id]) : null;
-    const { error } = await setRequestStatus(request.id, next, quote, notes[request.id] || null);
+    const { error } = await setRequestStatus(
+      request.id,
+      next,
+      Number.isNaN(quote as number) ? null : quote,
+      notes[request.id]?.trim() || null
+    );
     setBusyId(null);
 
     if (error) {
@@ -58,128 +101,216 @@ export default function AdminRequestsPage() {
       return;
     }
 
-    toast.success(`Marked ${next}.`);
+    toast.success(MOVED[next]);
     load();
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <Search className="h-5 w-5" />
-            Requests
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Items customers have asked you to source. Quote before buying.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
-          <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Waiting on you"
+        title="Requests"
+        description="Things customers have asked you to bring back from Egypt. Quote before you buy."
+        actions={
+          <Button variant="outline" onClick={load} disabled={isLoading}>
+            <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        }
+      />
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
         {TABS.map((tab) => (
-          <Button
+          <button
             key={tab.label}
-            variant={status === tab.status ? "default" : "outline"}
-            size="sm"
+            type="button"
             onClick={() => setStatus(tab.status)}
+            aria-pressed={status === tab.status}
+            className={cn(
+              "rounded-sm border px-3 py-1.5 font-body text-sm transition-colors",
+              status === tab.status
+                ? "border-sage-deep bg-sage-deep text-background"
+                : "border-rule bg-card text-ink-muted hover:border-sage hover:text-foreground"
+            )}
           >
             {tab.label}
-          </Button>
+          </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <div className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-rule py-20 font-body text-sm text-ink-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading requests…
         </div>
       ) : requests.length === 0 ? (
-        <div className="rounded-md border border-dashed py-20 text-center text-sm text-muted-foreground">
-          Nothing here.
-        </div>
+        <EmptyState
+          icon={Search}
+          title={status === "asked" ? "No open requests" : "Nothing here"}
+          description={
+            status === "asked"
+              ? "When a customer asks you to source something, it lands here with their budget and any reference they gave."
+              : undefined
+          }
+        />
       ) : (
-        <ul className="space-y-4">
-          {requests.map((request) => (
-            <li key={request.id} className="rounded-md border p-5">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{request.item}</span>
-                  {request.quantity > 1 && (
-                    <span className="text-sm text-muted-foreground">× {request.quantity}</span>
+        <ul className="space-y-3">
+          {requests.map((request) => {
+            const busy = busyId === request.id;
+
+            return (
+              <li key={request.id} className="rounded-sm border border-rule bg-card">
+                <div className="border-b border-rule p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="flex flex-wrap items-center gap-2 font-body text-sm font-medium text-foreground">
+                        {request.item}
+                        {request.quantity > 1 && (
+                          <span className="font-normal tabular-nums text-ink-muted">
+                            × {request.quantity}
+                          </span>
+                        )}
+                      </h2>
+                      <p className="mt-1 font-body text-xs text-ink-muted">
+                        {request.customerName} ·{" "}
+                        <a
+                          href={`mailto:${request.customerEmail}`}
+                          className="text-sage-deep hover:underline"
+                        >
+                          {request.customerEmail}
+                        </a>
+                      </p>
+                    </div>
+                    <StatusPill status={request.status} map={REQUEST_STATUS} />
+                  </div>
+
+                  {request.details && (
+                    <p className="mt-3 max-w-[70ch] font-body text-sm leading-relaxed text-ink-muted">
+                      {request.details}
+                    </p>
                   )}
-                  <Badge variant="secondary">{request.status}</Badge>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-body text-xs text-ink-muted">
+                    {request.budget !== null && (
+                      <span>
+                        Their budget{" "}
+                        <span className="font-medium tabular-nums text-foreground">
+                          {formatMoney(request.budget)}
+                        </span>
+                      </span>
+                    )}
+                    {request.quotedAmount !== null && (
+                      <span>
+                        You quoted{" "}
+                        <span className="font-medium tabular-nums text-foreground">
+                          {formatMoney(request.quotedAmount)}
+                        </span>
+                      </span>
+                    )}
+                    {request.referenceUrl && (
+                      <a
+                        href={request.referenceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sage-deep hover:underline"
+                      >
+                        Their reference
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    <span title={formatDate(request.createdAt)}>
+                      Asked {formatRelative(request.createdAt)}
+                    </span>
+                  </div>
                 </div>
 
-                {request.details && (
-                  <p className="mt-2 max-w-[70ch] text-sm text-muted-foreground">
-                    {request.details}
-                  </p>
-                )}
+                {/* ------------------------------------------------- respond */}
+                <div className="space-y-3 bg-wash/50 p-5">
+                  <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                    <label className="block">
+                      <span className="mb-1.5 block font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                        Your price (₦)
+                      </span>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        placeholder="0"
+                        value={quotes[request.id] ?? ""}
+                        onChange={(event) =>
+                          setQuotes({ ...quotes, [request.id]: event.target.value })
+                        }
+                        className="bg-card tabular-nums"
+                      />
+                    </label>
 
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <span>
-                    {request.customerName} · {request.customerEmail}
-                  </span>
-                  {request.budget !== null && (
-                    <span>Budget ₦{request.budget.toLocaleString("en-NG")}</span>
-                  )}
-                  {request.referenceUrl && (
-                    <a
-                      href={request.referenceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 hover:text-foreground"
+                    <label className="block">
+                      <span className="mb-1.5 block font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                        Note to the customer
+                      </span>
+                      <Textarea
+                        rows={2}
+                        placeholder="What you found, how long it will take, anything they should know."
+                        value={notes[request.id] ?? ""}
+                        onChange={(event) =>
+                          setNotes({ ...notes, [request.id]: event.target.value })
+                        }
+                        className="min-h-0 resize-y bg-card"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => move(request, "quoted")} disabled={busy}>
+                      {busy ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="mr-2 h-4 w-4" />
+                      )}
+                      Send quote
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => move(request, "buying")}
+                      disabled={busy}
                     >
-                      Reference
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                  <span>
-                    {new Date(request.createdAt).toLocaleDateString("en-NG", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </span>
+                      <ShoppingBag className="mr-2 h-4 w-4" />
+                      Buying it
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => move(request, "fulfilled")}
+                      disabled={busy}
+                    >
+                      Fulfilled
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => move(request, "declined")}
+                      disabled={busy}
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Decline
+                    </Button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
-                <Input
-                  type="number"
-                  placeholder={request.quotedAmount ? `₦${request.quotedAmount}` : "Quote ₦"}
-                  value={quotes[request.id] ?? ""}
-                  onChange={(event) => setQuotes({ ...quotes, [request.id]: event.target.value })}
-                  className="w-32"
-                />
-                <Input
-                  placeholder="Note to the customer"
-                  value={notes[request.id] ?? ""}
-                  onChange={(event) => setNotes({ ...notes, [request.id]: event.target.value })}
-                  className="max-w-sm flex-1"
-                />
-
-                <Button size="sm" onClick={() => move(request, "quoted")} disabled={busyId === request.id}>
-                  Send quote
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => move(request, "buying")} disabled={busyId === request.id}>
-                  Buying
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => move(request, "fulfilled")} disabled={busyId === request.id}>
-                  Fulfilled
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => move(request, "declined")} disabled={busyId === request.id}>
-                  Decline
-                </Button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
   );
 }
+
+const MOVED: Record<ProductRequest["status"], string> = {
+  asked: "Moved back to the queue.",
+  quoted: "Quote sent — the customer can see it on their account now.",
+  buying: "Marked as being bought.",
+  fulfilled: "Marked fulfilled.",
+  declined: "Declined.",
+};

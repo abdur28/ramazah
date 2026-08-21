@@ -141,7 +141,7 @@ export default function ImageUpload({ images, onChange, maxImages = 10 }: ImageU
         onDragOver={handleDrag}
         onDrop={handleDrop}
         className={cn(
-          "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+          "border border-dashed rounded-sm p-8 text-center transition-colors",
           dragActive
             ? "border-primary bg-primary/5"
             : "border-muted-foreground/25 hover:border-muted-foreground/50"
@@ -185,7 +185,7 @@ export default function ImageUpload({ images, onChange, maxImages = 10 }: ImageU
             .map((image, index) => (
               <div
                 key={image.id}
-                className="relative group border rounded-lg overflow-hidden"
+                className="relative group border rounded-sm overflow-hidden"
               >
                 {/* Image */}
                 <div className="aspect-square relative bg-muted">

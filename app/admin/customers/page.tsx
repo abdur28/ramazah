@@ -1,33 +1,29 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Users,
+  AlertTriangle,
+  Ban,
+  Eye,
+  Loader2,
+  MoreHorizontal,
   RefreshCcw,
   Search,
-  ChevronRight,
-  MoreHorizontal,
-  UserCog,
-  UserX,
   Shield,
+  UserCheck,
+  Users,
   X,
-  AlertTriangle,
-  Check,
-  Loader2,
-  Eye
 } from "lucide-react";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   Select,
@@ -36,14 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,512 +42,473 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
-import { UserProfile } from "@/types/types";
-import useAdmin from "@/hooks/admin/useAdmin";
+import PageHeader from "@/components/admin/ui/PageHeader";
+import StatCard from "@/components/admin/ui/StatCard";
+import EmptyState from "@/components/admin/ui/EmptyState";
+import StatusPill, { ACCOUNT_STATUS, ROLE } from "@/components/admin/ui/StatusPill";
 import UserDetailsDialog from "@/components/admin/UserDetailsDialog";
+import useAdmin from "@/hooks/admin/useAdmin";
+import { useAuth } from "@/contexts/AuthContext";
+import { getCustomerStats, type CustomerStats } from "@/lib/admin/customers";
+import { formatDate, formatMoney, formatNumber } from "@/lib/admin/format";
+import type { UserProfile } from "@/types/types";
 
-// Note: Install shadcn components
-// npx shadcn@latest add avatar button input badge dropdown-menu select table alert-dialog
-
+/**
+ * Customers.
+ *
+ * The suspend action was inverted. `handleToggleStatus` computed
+ * `const newStatus = 'active'` with a `// Simplified for now` comment and sent
+ * that, so confirming "Suspend Customer" set the account **active** — the
+ * opposite of what the dialog said it would do, with a success toast either
+ * way. There was also no way back: nothing in the admin could reinstate an
+ * account, and `profiles.status` was never displayed, so a suspended customer
+ * looked identical to an active one.
+ *
+ * The Orders column was `0` for everyone (see `lib/admin/customers.ts`). It now
+ * carries real order counts and lifetime spend, which is what makes this a
+ * customer list rather than a sign-up log.
+ *
+ * Self-destructive actions are refused: an admin cannot demote or suspend their
+ * own account, and the last admin cannot be demoted at all. Enforced in the
+ * database — see `20260822000011_admin_self_guard.sql` — and reflected here so
+ * the buttons are not offered in the first place.
+ */
 export default function AdminCustomersPage() {
-  const router = useRouter();
-  const {
-    fetchUsers,
-    toggleUserStatus,
-    assignUserRole,
-    users,
-    loading,
-    error,
-    pagination,
-    resetUsers
-  } = useAdmin();
+  const { fetchUsers, toggleUserStatus, assignUserRole, users, loading, error, pagination, resetUsers } =
+    useAdmin();
+  const { user: currentUser } = useAuth();
 
-  // State variables
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
-  const [processingAction, setProcessingAction] = useState(false);
-  
-  // Dialogs state
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'user' | 'admin'>('user');
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [processing, setProcessing] = useState(false);
+  const [stats, setStats] = useState<Map<string, CustomerStats>>(new Map());
 
-  // Load users when component mounts
+  const [suspendTarget, setSuspendTarget] = useState<UserProfile | null>(null);
+  const [roleTarget, setRoleTarget] = useState<UserProfile | null>(null);
+  const [nextRole, setNextRole] = useState<"user" | "admin">("user");
+  const [detailsUserId, setDetailsUserId] = useState<string | null>(null);
+
   useEffect(() => {
     loadUsers();
   }, []);
 
-  // Filter users based on search and role
-  useEffect(() => {
-    if (!users) return;
-
-    let filtered = [...users];
-
-    // Apply role filter
-    if (roleFilter !== "all") {
-      filtered = filtered.filter(user => user.role === roleFilter);
-    }
-
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(user => 
-        (user.displayName?.toLowerCase().includes(query)) ||
-        (user.email?.toLowerCase().includes(query))
-      );
-    }
-
-    setFilteredUsers(filtered);
-  }, [users, roleFilter, searchQuery]);
-
-  const loadUsers = async (options = {}) => {
+  const loadUsers = async () => {
+    setRefreshing(true);
+    resetUsers();
     try {
-      setRefreshing(true);
-      resetUsers();
-      await fetchUsers({
-        limit: 50,
-        ...options
-      });
+      const [, { stats: fetched, error: statsError }] = await Promise.all([
+        fetchUsers({ limit: 50 }),
+        getCustomerStats(),
+      ]);
+      if (statsError) throw new Error(statsError);
+      setStats(fetched);
     } catch (err) {
-      console.error("Error loading users:", err);
-      toast.error("Failed to load customers");
+      console.error("Error loading customers:", err);
+      toast.error("Could not load customers.");
     } finally {
       setRefreshing(false);
     }
   };
 
-  const loadMoreUsers = async () => {
-    if (!pagination.users.hasMore) return;
-    
-    try {
-      await fetchUsers({
-        limit: 50,
-        startAfter: pagination.users.lastDoc
-      });
-    } catch (err) {
-      console.error("Error loading more users:", err);
-      toast.error("Failed to load more customers");
-    }
+  const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return users.filter((user) => {
+      if (roleFilter !== "all" && user.role !== roleFilter) return false;
+      if (statusFilter !== "all" && (user.status ?? "active") !== statusFilter) return false;
+
+      if (query) {
+        const haystack = `${user.displayName ?? ""} ${user.email ?? ""} ${user.phone ?? ""}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      return true;
+    });
+  }, [users, roleFilter, statusFilter, searchQuery]);
+
+  const hasFilters = roleFilter !== "all" || statusFilter !== "all" || Boolean(searchQuery);
+  const clearFilters = () => {
+    setRoleFilter("all");
+    setStatusFilter("all");
+    setSearchQuery("");
   };
 
-  const handleRefresh = () => {
-    loadUsers();
-  };
+  const adminCount = users.filter((user) => user.role === "admin").length;
+  const suspendedCount = users.filter((user) => (user.status ?? "active") === "inactive").length;
 
-  const handleToggleStatus = async (user: UserProfile) => {
-    if (!user.uid) return;
-    
+  const handleSuspendToggle = async () => {
+    if (!suspendTarget) return;
+    const suspending = (suspendTarget.status ?? "active") === "active";
+
+    setProcessing(true);
     try {
-      setSelectedUser(user);
-      setProcessingAction(true);
-      
-      // Toggle between active and inactive
-      const newStatus = 'active'; // Simplified for now
-      
-      await toggleUserStatus(user.uid, newStatus);
-      toast.success(`Customer status updated successfully`);
-      
-      setBlockDialogOpen(false);
-    } catch (err) {
-      console.error("Error toggling user status:", err);
-      toast.error("Failed to update customer status");
+      await toggleUserStatus(suspendTarget.uid, suspending ? "inactive" : "active");
+      toast.success(
+        suspending
+          ? `${suspendTarget.displayName || suspendTarget.email} suspended.`
+          : `${suspendTarget.displayName || suspendTarget.email} reinstated.`
+      );
+      setSuspendTarget(null);
+      loadUsers();
+    } catch (err: any) {
+      toast.error(err?.message || "Could not change the account status.");
     } finally {
-      setProcessingAction(false);
-      setSelectedUser(null);
+      setProcessing(false);
     }
   };
 
-  const handleAssignRole = async () => {
-    if (!selectedUser?.uid || !selectedRole) return;
-    
+  const handleRoleChange = async () => {
+    if (!roleTarget) return;
+    setProcessing(true);
     try {
-      setProcessingAction(true);
-      
-      await assignUserRole(selectedUser.uid, selectedRole);
-      toast.success(`User role updated to ${selectedRole}`);
-      
-      setRoleDialogOpen(false);
-    } catch (err) {
-      console.error("Error assigning user role:", err);
-      toast.error("Failed to update user role");
+      await assignUserRole(roleTarget.uid, nextRole);
+      toast.success(
+        nextRole === "admin"
+          ? `${roleTarget.displayName || roleTarget.email} is now an admin.`
+          : `${roleTarget.displayName || roleTarget.email} is now a customer.`
+      );
+      setRoleTarget(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Could not change the role.");
     } finally {
-      setProcessingAction(false);
-      setSelectedUser(null);
+      setProcessing(false);
     }
   };
-
-  const getUserRoleBadge = (user: UserProfile) => {
-    switch (user.role) {
-      case 'admin':
-        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Admin</Badge>;
-      default:
-        return <Badge variant="outline">Customer</Badge>;
-    }
-  };
-
-  const handleViewDetails = (userId: string) => {
-    setSelectedUserId(userId);
-    setDetailsDialogOpen(true);
-  };
-
-  // Loading state
-  if (loading.users && !refreshing && users.length === 0) {
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold font-heading uppercase tracking-tight">Customer Management</h1>
-            <p className="text-muted-foreground">
-              Manage all customers registered on ramazah.
-            </p>
-          </div>
-          <Button 
-            className="self-start sm:self-auto"
-            disabled={true}
-          >
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Loading...
-          </Button>
-        </div>
-
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-          <p className="text-lg font-medium">Loading Customers</p>
-          <p className="text-sm text-muted-foreground">
-            Please wait while we fetch the customer data...
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6">
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold font-heading uppercase tracking-tight">Customer Management</h1>
-          <p className="text-muted-foreground">
-            Manage all customers registered on ramazah.
-          </p>
-        </div>
-        <Button 
-          onClick={handleRefresh} 
-          disabled={refreshing || loading.users} 
-          className="self-start sm:self-auto"
-        >
-          <RefreshCcw className={`h-4 w-4 mr-2 ${refreshing || loading.users ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Selling"
+        title="Customers"
+        description="Everyone with an account, what they have bought, and who can reach the admin."
+        actions={
+          <Button variant="outline" onClick={loadUsers} disabled={refreshing || loading.users}>
+            <RefreshCcw
+              className={`mr-2 h-4 w-4 ${refreshing || loading.users ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Accounts" value={formatNumber(users.length)} icon={Users} />
+        <StatCard
+          label="Administrators"
+          value={formatNumber(adminCount)}
+          hint={adminCount === 1 ? "only one — consider a second" : "full admin access"}
+          icon={Shield}
+          tone={adminCount === 1 ? "attention" : "default"}
+        />
+        <StatCard
+          label="Suspended"
+          value={formatNumber(suspendedCount)}
+          hint="cannot place orders"
+          tone={suspendedCount > 0 ? "attention" : "default"}
+        />
       </div>
 
-      {/* Filters and search */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex gap-2">
-          <Select 
-            value={roleFilter} 
-            onValueChange={setRoleFilter}
-          >
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Filter by role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="user">Customers</SelectItem>
-              <SelectItem value="admin">Admins</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {(roleFilter !== "all" || searchQuery) && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => {
-                setRoleFilter("all");
-                setSearchQuery("");
-              }}
-              title="Clear filters"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
           <Input
-            placeholder="Search by name, email..."
+            placeholder="Search by name, email or phone…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="pl-10"
           />
         </div>
+
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-full sm:w-[150px]">
+            <SelectValue placeholder="Any role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any role</SelectItem>
+            <SelectItem value="user">Customers</SelectItem>
+            <SelectItem value="admin">Admins</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[150px]">
+            <SelectValue placeholder="Any status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Suspended</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {hasFilters && (
+          <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
-      {/* Error state */}
-      {error.users && (
-        <div className="rounded-lg border border-destructive p-4">
-          <div className="flex items-start gap-4">
-            <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <h3 className="font-medium font-body">Error loading customers</h3>
-              <p className="text-sm text-muted-foreground">{error.users}</p>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={handleRefresh}
-                disabled={refreshing || loading.users}
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading.users && !error.users && filteredUsers.length === 0 && (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Users className="h-8 w-8 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-lg font-medium">No customers found</p>
-          <p className="text-sm text-muted-foreground">
-            {searchQuery || roleFilter !== "all" 
-              ? "Try changing your search or filter criteria"
-              : "No customers have registered on ramazah yet"}
-          </p>
-          {(searchQuery || roleFilter !== "all") && (
-            <Button 
-              variant="outline" 
-              className="mt-4"
-              onClick={() => {
-                setRoleFilter("all");
-                setSearchQuery("");
-              }}
-            >
-              Clear Filters
+      {error.users ? (
+        <EmptyState
+          icon={AlertTriangle}
+          title="Could not load customers"
+          description={error.users}
+          action={
+            <Button variant="outline" onClick={loadUsers}>
+              Try again
             </Button>
-          )}
+          }
+        />
+      ) : loading.users && users.length === 0 ? (
+        <div className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-rule py-20 font-body text-sm text-ink-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading customers…
         </div>
-      )}
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title={hasFilters ? "Nobody matches those filters" : "No accounts yet"}
+          description={
+            hasFilters
+              ? "Try a different search, or clear the filters."
+              : "Customers appear here the moment they create an account."
+          }
+          action={
+            hasFilters ? (
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="overflow-hidden rounded-sm border border-rule bg-card">
+          <div className="hidden border-b border-rule bg-wash/60 px-4 py-2.5 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted lg:grid lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_2.5rem] lg:gap-4">
+            <span>Customer</span>
+            <span className="text-right">Orders</span>
+            <span className="text-right">Spent</span>
+            <span>Role</span>
+            <span>Account</span>
+            <span />
+          </div>
 
-      {/* Users table */}
-      {filteredUsers.length > 0 && (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[250px]">Customer</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Orders</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.uid}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={user.photoURL} alt={user.displayName || "User"} />
-                        <AvatarFallback>{user.displayName?.[0] || "U"}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{user.displayName || "Unnamed User"}</div>
-                        <div className="text-xs text-muted-foreground capitalize">{user.signInMethod}</div>
-                      </div>
+          <ul className="divide-y divide-rule">
+            {filtered.map((user) => {
+              const stat = stats.get(user.uid);
+              const isSelf = currentUser?.id === user.uid;
+              const suspended = (user.status ?? "active") === "inactive";
+
+              return (
+                <li
+                  key={user.uid}
+                  className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-wash/50 lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_2.5rem] lg:items-center lg:gap-4"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar className="h-9 w-9 shrink-0">
+                      <AvatarImage src={user.photoURL} alt="" />
+                      <AvatarFallback className="bg-wash font-body text-xs text-sage-deep">
+                        {(user.displayName || user.email || "?").charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 truncate font-body text-sm text-foreground">
+                        {user.displayName || "Unnamed"}
+                        {isSelf && (
+                          <span className="shrink-0 font-body text-[10px] uppercase tracking-[0.12em] text-ink-muted">
+                            you
+                          </span>
+                        )}
+                      </p>
+                      <p className="truncate font-body text-xs text-ink-muted">{user.email}</p>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {user.email || "No email"}
-                      {user.emailVerified && (
-                        <Badge variant="outline" className="text-xs">
-                          Verified
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {getUserRoleBadge(user)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{user.orders?.length || 0}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      {new Date(user.createdAt).toLocaleDateString()}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
+                  </div>
+
+                  <span className="font-body text-sm tabular-nums text-foreground lg:text-right">
+                    {formatNumber(stat?.orderCount ?? 0)}
+                    <span className="ml-1 text-xs text-ink-muted lg:hidden">orders</span>
+                  </span>
+
+                  <span className="font-body text-sm tabular-nums text-foreground lg:text-right">
+                    {stat && stat.spend > 0 ? (
+                      <>
+                        <span className="font-medium">{formatMoney(stat.spend, stat.currency)}</span>
+                        <span className="block text-xs text-ink-muted">
+                          last {formatDate(stat.lastOrderAt)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-ink-muted">—</span>
+                    )}
+                  </span>
+
+                  <span>
+                    <StatusPill status={user.role} map={ROLE} />
+                  </span>
+
+                  <span>
+                    <StatusPill status={user.status ?? "active"} map={ACCOUNT_STATUS} />
+                  </span>
+
+                  <span className="justify-self-end">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
+                          <span className="sr-only">Actions for {user.displayName || user.email}</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem 
-                          onClick={() => handleViewDetails(user.uid)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
+                        <DropdownMenuItem onClick={() => setDetailsUserId(user.uid)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View details
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setSelectedRole(user.role as 'user' | 'admin' || 'user');
-                            setRoleDialogOpen(true);
-                          }}
-                        >
-                          <Shield className="h-4 w-4 mr-2" />
-                          Change Role
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setBlockDialogOpen(true);
-                          }}
-                          className="text-destructive"
-                        >
-                          <UserX className="h-4 w-4 mr-2" />
-                          Suspend Customer
-                        </DropdownMenuItem>
+
+                        {/* Both actions are refused by the database for your own
+                            account, so they are not offered here either. */}
+                        {!isSelf && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setRoleTarget(user);
+                                setNextRole(user.role === "admin" ? "user" : "admin");
+                              }}
+                            >
+                              <Shield className="mr-2 h-4 w-4" />
+                              {user.role === "admin" ? "Remove admin access" : "Make admin"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setSuspendTarget(user)}
+                              className={suspended ? "" : "text-destructive"}
+                            >
+                              {suspended ? (
+                                <>
+                                  <UserCheck className="mr-2 h-4 w-4" />
+                                  Reinstate account
+                                </>
+                              ) : (
+                                <>
+                                  <Ban className="mr-2 h-4 w-4" />
+                                  Suspend account
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
-      {/* Pagination/Load more */}
-      {filteredUsers.length > 0 && pagination.users.hasMore && (
-        <div className="flex justify-center mt-4">
-          <Button 
-            variant="outline" 
-            onClick={loadMoreUsers}
+      {pagination.users.hasMore && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => fetchUsers({ limit: 50, startAfter: pagination.users.lastDoc })}
             disabled={loading.users}
           >
-            {loading.users ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                Load More 
-                <ChevronRight className="h-4 w-4 ml-2" />
-              </>
-            )}
+            {loading.users && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Load more
           </Button>
         </div>
       )}
 
-      {/* Suspend Customer Dialog */}
-      <AlertDialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
+      {/* --------------------------------------------------- suspend/reinstate */}
+      <AlertDialog
+        open={Boolean(suspendTarget)}
+        onOpenChange={(open) => !open && setSuspendTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-body">Suspend Customer</AlertDialogTitle>
+            <AlertDialogTitle className="font-body">
+              {(suspendTarget?.status ?? "active") === "inactive"
+                ? `Reinstate ${suspendTarget?.displayName || "this customer"}?`
+                : `Suspend ${suspendTarget?.displayName || "this customer"}?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to suspend {selectedUser?.displayName || 'this customer'}? They will lose access to placing orders.
+              {(suspendTarget?.status ?? "active") === "inactive"
+                ? "They will be able to sign in and place orders again."
+                : "They keep their account and their history, but cannot place new orders until you reinstate them."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => handleToggleStatus(selectedUser!)}
-              className="bg-destructive hover:bg-destructive"
-              disabled={processingAction}
+              onClick={handleSuspendToggle}
+              disabled={processing}
+              className={
+                (suspendTarget?.status ?? "active") === "inactive"
+                  ? ""
+                  : "bg-destructive hover:bg-destructive/90"
+              }
             >
-              {processingAction ? (
+              {processing ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Working…
                 </>
+              ) : (suspendTarget?.status ?? "active") === "inactive" ? (
+                "Reinstate"
               ) : (
-                'Suspend'
+                "Suspend"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Change Role Dialog */}
-      <AlertDialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+      {/* ---------------------------------------------------------------- role */}
+      <AlertDialog open={Boolean(roleTarget)} onOpenChange={(open) => !open && setRoleTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-body">Change User Role</AlertDialogTitle>
+            <AlertDialogTitle className="font-body">
+              {nextRole === "admin"
+                ? `Make ${roleTarget?.displayName || "this person"} an admin?`
+                : `Remove admin access from ${roleTarget?.displayName || "this person"}?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Select a new role for {selectedUser?.displayName || 'this user'}. This will change their permissions and access level.
+              {nextRole === "admin"
+                ? "Admins can see every order and customer, change prices and stock, moderate reviews, and email your whole list. They will need to sign out and back in for it to take effect."
+                : "They keep their account and their order history, and lose access to the admin area."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
-          <div className="py-4">
-            <Select 
-              value={selectedRole} 
-              onValueChange={(value) => setSelectedRole(value as 'user' | 'admin')}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">Customer</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <div className="mt-4 text-sm">
-              {selectedRole === 'admin' && (
-                <div className="flex items-start gap-2 text-warning bg-warning/10 p-3 rounded">
-                  <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                  <div>
-                    <strong>Warning:</strong> Admins have full access to the admin panel and can manage all aspects of the store. Only assign this role to trusted individuals.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          
+
+          {nextRole === "admin" && (
+            <p className="flex items-start gap-2 rounded-sm bg-terra/[0.06] p-3 font-body text-sm text-terra-ink">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              Only do this for someone you trust with the whole shop.
+            </p>
+          )}
+
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleAssignRole}
-              disabled={processingAction || (selectedUser?.role === selectedRole)}
-            >
-              {processingAction ? (
+            <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRoleChange} disabled={processing}>
+              {processing ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Updating...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating…
                 </>
+              ) : nextRole === "admin" ? (
+                "Make admin"
               ) : (
-                'Update Role'
+                "Remove access"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* User Details Dialog */}
       <UserDetailsDialog
-        open={detailsDialogOpen}
-        onOpenChange={setDetailsDialogOpen}
-        userId={selectedUserId}
+        open={Boolean(detailsUserId)}
+        onOpenChange={(open) => !open && setDetailsUserId(null)}
+        userId={detailsUserId}
       />
     </div>
   );

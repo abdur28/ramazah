@@ -54,7 +54,7 @@ export default function EditProductPage() {
   if (error || !product) {
     return (
       <div className="container mx-auto py-12">
-        <div className="rounded-lg border border-destructive p-8 text-center">
+        <div className="rounded-sm border border-destructive p-8 text-center">
           <p className="text-lg font-medium text-destructive">{error || "Product not found"}</p>
           <p className="text-sm text-muted-foreground mt-2">
             The product you're looking for doesn't exist or has been deleted.

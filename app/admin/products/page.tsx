@@ -1,40 +1,33 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
+  CalendarClock,
+  Edit,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Package,
   Plus,
   RefreshCcw,
   Search,
-  MoreHorizontal,
-  Edit,
   Trash2,
   X,
-  AlertTriangle,
-  Loader2,
-  Package,
-  DollarSign,
-  TrendingUp
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,515 +39,378 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
-import { Product } from "@/types/admin";
-import { CurrencyCode } from "@/types/types";
+import PageHeader from "@/components/admin/ui/PageHeader";
+import StatCard from "@/components/admin/ui/StatCard";
+import EmptyState from "@/components/admin/ui/EmptyState";
+import StatusPill, {
+  PRODUCT_STATUS,
+  STOCK_STATUS,
+  stockBucket,
+} from "@/components/admin/ui/StatusPill";
 import useAdmin from "@/hooks/admin/useAdmin";
+import { formatMoney, formatNumber } from "@/lib/admin/format";
 import { availableCurrencies } from "@/constants";
+import type { Product } from "@/types/types";
+import type { CurrencyCode } from "@/types/types";
 
+/**
+ * The catalogue.
+ *
+ * Two things it never told you, both of which decide whether a product is
+ * actually for sale:
+ *
+ * **Publication state.** `products.status` gates the storefront — `draft` and
+ * `archived` rows are filtered out of `product_listing` entirely — and the list
+ * showed no trace of it. A product could be saved, sit in this table looking
+ * exactly like its published neighbours, and be invisible to every shopper.
+ *
+ * **Expiry.** Half this catalogue is food. `create_order()` refuses a variant
+ * whose expiry date has passed, so expired stock silently stops being sellable
+ * while still reading "In stock" here.
+ */
 export default function AdminProductsPage() {
+  const router = useRouter();
   const {
     fetchProducts,
-    fetchCategories,
     deleteProduct,
     products,
-    categories,
     loading,
     error,
     pagination,
-    resetProducts
+    resetProducts,
   } = useAdmin();
 
-  // Get default currency
-  const defaultCurrency = availableCurrencies.find(c => c.isDefault) || availableCurrencies[0];
+  const defaultCurrency = availableCurrencies.find((c) => c.isDefault) || availableCurrencies[0];
 
-  // State variables
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [stockFilter, setStockFilter] = useState<string>("all");
-  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>(defaultCurrency.code);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [processingAction, setProcessingAction] = useState(false);
-  
-  // Dialog states
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currency, setCurrency] = useState<CurrencyCode>(defaultCurrency.code);
+  const [processing, setProcessing] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
-  // Load products and categories when component mounts
   useEffect(() => {
     loadProducts();
-    loadCategories();
   }, []);
 
-  // Filter products based on search, category, and stock
-  useEffect(() => {
-    if (!products) return;
-
-    let filtered = [...products];
-
-    // Apply category filter
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter(p => p.categoryPath === categoryFilter);
-    }
-
-    // Apply stock filter
-    if (stockFilter !== "all") {
-      if (stockFilter === "inStock") {
-        filtered = filtered.filter(p => p.inStock);
-      } else if (stockFilter === "outOfStock") {
-        filtered = filtered.filter(p => !p.inStock);
-      } else if (stockFilter === "lowStock") {
-        filtered = filtered.filter(p => p.inStock && p.totalStock < (p.lowStockAlert || 10));
-      }
-    }
-
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(product => 
-        product.name.toLowerCase().includes(query) ||
-        product.sku.toLowerCase().includes(query) ||
-        (product.description && product.description.toLowerCase().includes(query))
-      );
-    }
-
-    setFilteredProducts(filtered);
-  }, [products, categoryFilter, stockFilter, searchQuery]);
-
   const loadProducts = async () => {
+    setRefreshing(true);
+    resetProducts();
     try {
-      setRefreshing(true);
-      resetProducts();
-      await fetchProducts({
-        limit: 50,
-        orderByField: 'createdAt',
-        orderDirection: 'desc'
-      });
+      await fetchProducts({ limit: 50, orderByField: "createdAt", orderDirection: "desc" });
     } catch (err) {
       console.error("Error loading products:", err);
-      toast.error("Failed to load products");
+      toast.error("Could not load the catalogue.");
     } finally {
       setRefreshing(false);
     }
   };
 
-  const loadCategories = async () => {
-    try {
-      await fetchCategories({
-        limit: 100,
-        orderByField: 'name',
-        orderDirection: 'asc'
-      });
-    } catch (err) {
-      console.error("Error loading categories:", err);
-    }
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => p.categoryPath))).filter(Boolean).sort(),
+    [products]
+  );
+
+  const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return products.filter((product) => {
+      if (categoryFilter !== "all" && product.categoryPath !== categoryFilter) return false;
+      if (statusFilter !== "all" && (product.status ?? "draft") !== statusFilter) return false;
+
+      if (stockFilter !== "all") {
+        const bucket = stockBucket(product.inStock, product.totalStock, product.lowStockAlert || 10);
+        if (stockFilter !== bucket) return false;
+      }
+
+      if (query) {
+        const haystack = `${product.name} ${product.sku} ${product.categoryPath}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      return true;
+    });
+  }, [products, categoryFilter, statusFilter, stockFilter, searchQuery]);
+
+  const hasFilters =
+    categoryFilter !== "all" || stockFilter !== "all" || statusFilter !== "all" || Boolean(searchQuery);
+
+  const clearFilters = () => {
+    setCategoryFilter("all");
+    setStockFilter("all");
+    setStatusFilter("all");
+    setSearchQuery("");
   };
 
-  const handleRefresh = () => {
-    loadProducts();
-  };
-
-  const handleDeleteProduct = async () => {
+  const handleDelete = async () => {
     if (!productToDelete) return;
-    
+    setProcessing(true);
     try {
-      setProcessingAction(true);
       await deleteProduct(productToDelete.id);
-      toast.success("Product deleted successfully");
-      setDeleteDialogOpen(false);
+      toast.success(`${productToDelete.name} archived.`);
       setProductToDelete(null);
     } catch (err: any) {
-      console.error("Error deleting product:", err);
-      toast.error(err.message || "Failed to delete product");
+      toast.error(err?.message || "Could not archive the product.");
     } finally {
-      setProcessingAction(false);
+      setProcessing(false);
     }
   };
 
-  const openDeleteDialog = (product: Product) => {
-    setProductToDelete(product);
-    setDeleteDialogOpen(true);
-  };
-
-  // Get price for a specific currency from product
-  const getProductPrice = (product: Product, currencyCode: CurrencyCode, field: 'price' | 'compareAtPrice'): number => {
-    const priceObj = product.prices?.find(p => p.currency === currencyCode);
-    return priceObj?.[field] || 0;
-  };
-
-  // Format price with currency
-  const formatPrice = (amount: number, currencyCode: CurrencyCode) => {
-    const currency = availableCurrencies.find(c => c.code === currencyCode);
-    if (!currency) return `${amount.toFixed(2)}`;
-    
-    return `${currency.symbol}${amount.toFixed(2)}`;
-  };
-
-  const getStockBadge = (product: Product) => {
-    if (!product.inStock) {
-      return <Badge variant="destructive">Out of Stock</Badge>;
-    }
-    if (product.totalStock < (product.lowStockAlert || 10)) {
-      return <Badge className="bg-warning/10 text-warning">Low Stock</Badge>;
-    }
-    return <Badge className="bg-success/10 text-success">In Stock</Badge>;
-  };
-
-  // Get unique category paths from products
-  const uniqueCategories = Array.from(new Set(products.map(p => p.categoryPath))).filter(Boolean);
-
-  // Get currency symbol for display
-  const getCurrentCurrencySymbol = () => {
-    return availableCurrencies.find(c => c.code === selectedCurrency)?.symbol || '$';
-  };
-
-  // Loading state
-  if (loading.products && !refreshing && products.length === 0) {
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold font-heading uppercase tracking-tight">Products</h1>
-            <p className="text-muted-foreground">
-              Manage your product catalog.
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-          <p className="text-lg font-medium">Loading Products</p>
-        </div>
-      </div>
-    );
-  }
+  const liveCount = products.filter((p) => (p.status ?? "draft") === "active").length;
+  const lowCount = products.filter(
+    (p) => stockBucket(p.inStock, p.totalStock, p.lowStockAlert || 10) === "low"
+  ).length;
+  const outCount = products.filter(
+    (p) => stockBucket(p.inStock, p.totalStock, p.lowStockAlert || 10) === "out"
+  ).length;
 
   return (
-    <div className="space-y-6">
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-heading uppercase font-bold tracking-tight">Products</h1>
-          <p className="text-muted-foreground">
-            Manage your ramazah product catalog.
-          </p>
-        </div>
-        <div className="flex gap-2 self-start sm:self-auto">
-          <Button 
-            onClick={handleRefresh} 
-            disabled={refreshing || loading.products}
-            variant="outline"
-          >
-            <RefreshCcw className={`h-4 w-4 mr-2 ${refreshing || loading.products ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button onClick={() => window.location.href = '/admin/products/new'}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
-        </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Catalogue"
+        title="Products"
+        description="Everything you sell, and everything you have drafted but not published."
+        actions={
+          <>
+            <Button variant="outline" onClick={loadProducts} disabled={refreshing || loading.products}>
+              <RefreshCcw
+                className={`mr-2 h-4 w-4 ${refreshing || loading.products ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+            <Button asChild>
+              <Link href="/admin/products/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Add product
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="In the catalogue" value={formatNumber(products.length)} icon={Package} />
+        <StatCard
+          label="Live on the shop"
+          value={formatNumber(liveCount)}
+          hint={
+            products.length - liveCount > 0
+              ? `${products.length - liveCount} draft or archived`
+              : "all published"
+          }
+        />
+        <StatCard
+          label="Low stock"
+          value={formatNumber(lowCount)}
+          hint="need restocking"
+          tone={lowCount > 0 ? "attention" : "default"}
+          icon={AlertTriangle}
+        />
+        <StatCard
+          label="Out of stock"
+          value={formatNumber(outCount)}
+          hint="not sellable"
+          tone={outCount > 0 ? "attention" : "default"}
+        />
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{products.length}</div>
-            <p className="text-xs text-muted-foreground">In your catalog</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">In Stock</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {products.filter(p => p.inStock).length}
-            </div>
-            <p className="text-xs text-muted-foreground">Available for sale</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {products.filter(p => p.inStock && p.totalStock < (p.lowStockAlert || 10)).length}
-            </div>
-            <p className="text-xs text-muted-foreground">Need restocking</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* ----------------------------------------------------------- filters */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+          <Input
+            placeholder="Search by name, SKU or category…"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="pl-10"
+          />
+        </div>
 
-      {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex gap-2 flex-wrap">
-          {/* Currency Selector */}
-          <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as CurrencyCode)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Currency" />
+        <div className="flex flex-wrap gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[145px]">
+              <SelectValue placeholder="All states" />
             </SelectTrigger>
             <SelectContent>
-              {availableCurrencies.map(currency => (
-                <SelectItem key={currency.code} value={currency.code}>
-                  {currency.symbol} {currency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {uniqueCategories.map(cat => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-              ))}
+              <SelectItem value="all">All states</SelectItem>
+              <SelectItem value="active">Live</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={stockFilter} onValueChange={setStockFilter}>
             <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="All Stock" />
+              <SelectValue placeholder="All stock" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Stock</SelectItem>
-              <SelectItem value="inStock">In Stock</SelectItem>
-              <SelectItem value="outOfStock">Out of Stock</SelectItem>
-              <SelectItem value="lowStock">Low Stock</SelectItem>
+              <SelectItem value="all">All stock</SelectItem>
+              <SelectItem value="in">In stock</SelectItem>
+              <SelectItem value="low">Low stock</SelectItem>
+              <SelectItem value="out">Out of stock</SelectItem>
             </SelectContent>
           </Select>
 
-          {(categoryFilter !== "all" || stockFilter !== "all" || searchQuery) && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => {
-                setCategoryFilter("all");
-                setStockFilter("all");
-                setSearchQuery("");
-              }}
-            >
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {availableCurrencies.length > 1 && (
+            <Select value={currency} onValueChange={(value) => setCurrency(value as CurrencyCode)}>
+              <SelectTrigger className="w-[110px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableCurrencies.map((option) => (
+                  <SelectItem key={option.code} value={option.code}>
+                    {option.symbol} {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {hasFilters && (
+            <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
               <X className="h-4 w-4" />
             </Button>
           )}
         </div>
-
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products by name, SKU..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
       </div>
 
-      {/* Error state */}
-      {error.products && (
-        <div className="rounded-lg border border-destructive p-4">
-          <div className="flex items-start gap-4">
-            <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <h3 className="font-medium font-body">Error loading products</h3>
-              <p className="text-sm text-muted-foreground">{error.products}</p>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={handleRefresh}
-                disabled={refreshing || loading.products}
+      {/* ------------------------------------------------------------- list */}
+      {error.products ? (
+        <EmptyState
+          icon={AlertTriangle}
+          title="Could not load the catalogue"
+          description={error.products}
+          action={
+            <Button variant="outline" onClick={loadProducts}>
+              Try again
+            </Button>
+          }
+        />
+      ) : loading.products && products.length === 0 ? (
+        <div className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-rule py-20 font-body text-sm text-ink-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading the catalogue…
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Package}
+          title={hasFilters ? "Nothing matches those filters" : "The catalogue is empty"}
+          description={
+            hasFilters
+              ? "Try widening the search, or clear the filters to see everything."
+              : "Add your first product and it will appear here."
+          }
+          action={
+            hasFilters ? (
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : (
+              <Button asChild>
+                <Link href="/admin/products/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add product
+                </Link>
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <>
+          <p className="font-body text-xs text-ink-muted">
+            {formatNumber(filtered.length)} of {formatNumber(products.length)} products
+          </p>
+
+          <div className="overflow-hidden rounded-sm border border-rule bg-card">
+            {/* One row per product. A grid rather than a <table> so the same
+                markup can stack on a phone, where seven columns cannot fit. */}
+            <div className="hidden border-b border-rule bg-wash/60 px-4 py-2.5 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_2.5rem] lg:gap-4">
+              <span>Product</span>
+              <span>Category</span>
+              <span className="text-right">Price</span>
+              <span>Stock</span>
+              <span>State</span>
+              <span />
+            </div>
+
+            <ul className="divide-y divide-rule">
+              {filtered.map((product) => (
+                <ProductRow
+                  key={product.id}
+                  product={product}
+                  currency={currency}
+                  onEdit={() => router.push(`/admin/products/${product.id}`)}
+                  onDelete={() => setProductToDelete(product)}
+                />
+              ))}
+            </ul>
+          </div>
+
+          {pagination.products.hasMore && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => fetchProducts({ startAfter: pagination.products.lastDoc })}
+                disabled={loading.products}
               >
-                Try Again
+                {loading.products && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Load more
               </Button>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
-      {/* Empty state */}
-      {!loading.products && !error.products && filteredProducts.length === 0 && (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-lg font-medium">No products found</p>
-          <p className="text-sm text-muted-foreground mb-4">
-            {searchQuery || categoryFilter !== "all" || stockFilter !== "all"
-              ? "Try changing your filters"
-              : "Get started by adding your first product"}
-          </p>
-          <Button onClick={() => window.location.href = '/admin/products/new'}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
-        </div>
-      )}
-
-      {/* Products table */}
-      {filteredProducts.length > 0 && (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[80px]">Image</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Price ({getCurrentCurrencySymbol()})</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProducts.map((product) => {
-                const price = getProductPrice(product, selectedCurrency, 'price');
-                const compareAtPrice = getProductPrice(product, selectedCurrency, 'compareAtPrice');
-                const priceObj = product.prices?.find(p => p.currency === selectedCurrency);
-                const discountPercent = priceObj?.discountPercent || 0;
-
-                return (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      {product.images?.[0] ? (
-                        <Image
-                          src={product.images[0].secureUrl}
-                          alt={product.name}
-                          width={60}
-                          height={60}
-                          className="rounded object-cover"
-                        />
-                      ) : (
-                        <div className="w-[60px] h-[60px] bg-muted rounded flex items-center justify-center">
-                          <Package className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{product.name}</div>
-                        <div className="text-xs text-muted-foreground">SKU: {product.sku}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{product.categoryPath}</span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        <div className="font-medium">
-                          {formatPrice(price, selectedCurrency)}
-                          {discountPercent > 0 && (
-                            <Badge variant="secondary" className="ml-2 text-xs">
-                              -{discountPercent}%
-                            </Badge>
-                          )}
-                        </div>
-                        {compareAtPrice > 0 && (
-                          <div className="text-xs text-muted-foreground line-through">
-                            {formatPrice(compareAtPrice, selectedCurrency)}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">{product.totalStock} units</div>
-                    </TableCell>
-                    <TableCell>
-                      {getStockBadge(product)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem 
-                            onClick={() => window.location.href = `/admin/products/${product.id}`}
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => openDeleteDialog(product)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* Load more */}
-      {filteredProducts.length > 0 && pagination.products.hasMore && (
-        <div className="flex justify-center">
-          <Button 
-            variant="outline" 
-            onClick={() => fetchProducts({ startAfter: pagination.products.lastDoc })}
-            disabled={loading.products}
-          >
-            {loading.products ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-            Load More
-          </Button>
-        </div>
-      )}
-
-      {/* Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog
+        open={Boolean(productToDelete)}
+        onOpenChange={(open) => !open && setProductToDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-body">Delete Product</AlertDialogTitle>
+            <AlertDialogTitle className="font-body">
+              Archive {productToDelete?.name}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{productToDelete?.name}"? This will also delete all associated images. This action cannot be undone.
+              It comes off the shop immediately. Past orders keep their record of it, so nothing in
+              your order history changes.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={processingAction}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={processing}>Keep it</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteProduct}
-              className="bg-destructive hover:bg-destructive"
-              disabled={processingAction}
+              onClick={handleDelete}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={processing}
             >
-              {processingAction ? (
+              {processing ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Archiving…
                 </>
               ) : (
-                'Delete Product'
+                "Archive product"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -562,4 +418,127 @@ export default function AdminProductsPage() {
       </AlertDialog>
     </div>
   );
+}
+
+function ProductRow({
+  product,
+  currency,
+  onEdit,
+  onDelete,
+}: {
+  product: Product;
+  currency: CurrencyCode;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const price = product.prices?.find((p) => p.currency === currency);
+  const bucket = stockBucket(product.inStock, product.totalStock, product.lowStockAlert || 10);
+  const expiry = soonestExpiry(product);
+  const image = product.images?.[0]?.secureUrl;
+
+  return (
+    <li className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-wash/50 lg:grid-cols-[minmax(0,3fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_2.5rem] lg:items-center lg:gap-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-sm bg-wash">
+          {/* An empty `src` makes next/image re-request the current page. */}
+          {image ? (
+            <Image src={image} alt="" fill sizes="48px" className="object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center">
+              <Package className="h-4 w-4 text-ink-faint" />
+            </span>
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate font-body text-sm text-foreground">{product.name}</span>
+          <span className="block truncate font-body text-xs tabular-nums text-ink-muted">
+            {product.sku}
+          </span>
+        </span>
+      </div>
+
+      <span className="truncate font-body text-sm text-ink-muted lg:block">
+        {product.categoryPath || "—"}
+      </span>
+
+      <span className="font-body text-sm tabular-nums text-foreground lg:text-right">
+        {price ? (
+          <>
+            <span className="font-medium">{formatMoney(price.price, currency)}</span>
+            {(price.compareAtPrice ?? 0) > price.price && (
+              <span className="ml-2 text-xs text-ink-muted line-through lg:ml-0 lg:block">
+                {formatMoney(price.compareAtPrice ?? 0, currency)}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-ink-muted" title={`No ${currency.toUpperCase()} price set`}>
+            Not priced
+          </span>
+        )}
+      </span>
+
+      <span className="flex flex-wrap items-center gap-2">
+        <StatusPill status={bucket} map={STOCK_STATUS} />
+        <span className="font-body text-xs tabular-nums text-ink-muted">
+          {formatNumber(product.totalStock)} units
+        </span>
+        {expiry && (
+          <span
+            className="inline-flex items-center gap-1 font-body text-xs text-terra-ink"
+            title={`Earliest expiry ${expiry.toLocaleDateString("en-NG")}`}
+          >
+            <CalendarClock className="h-3 w-3" />
+            {expiry.toLocaleDateString("en-NG", { month: "short", year: "2-digit" })}
+          </span>
+        )}
+      </span>
+
+      <span>
+        <StatusPill status={product.status ?? "draft"} map={PRODUCT_STATUS} />
+      </span>
+
+      <span className="justify-self-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Actions for {product.name}</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            {product.status === "active" && (
+              <DropdownMenuItem asChild>
+                <a href={`/product/${product.slug}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View on shop
+                </a>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Archive
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
+    </li>
+  );
+}
+
+/** The earliest expiry across a product's variants, if it is perishable. */
+function soonestExpiry(product: Product): Date | null {
+  const dates = (product.variants ?? [])
+    .map((variant) => variant.expiryDate)
+    .filter(Boolean)
+    .map((value) => new Date(value as string))
+    .filter((date) => !Number.isNaN(date.getTime()));
+
+  if (dates.length === 0) return null;
+  return dates.sort((a, b) => a.getTime() - b.getTime())[0];
 }

@@ -5,6 +5,142 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-22 — Admin area
+
+The last part of the app that had never had a design pass, brought onto the Ramazah
+system. Along the way the pass turned up a set of screens that were showing numbers
+nobody had checked.
+
+### Fabricated data, removed
+
+**`/admin/transactions` was entirely fake.** `generateMockTransactions()` produced a
+hundred rows of `Math.random()` on every mount — John Doe and Jane Smith paying in USD
+and RUB through PayPal and Stripe — under a heading reading **Total Revenue**. Nothing
+on the screen touched the database, and the figure changed on every reload. The
+**Transactions tab of `/admin/analytics` was fed from the same generator**, seeded into
+the analytics store before a single query ran.
+
+Both now read the orders, which are the payment record on this installation — the
+schema already carries `payment_status`, `payment_method`, `payment_intent_id` and
+`paid_at`. New `lib/admin/payments.ts`. The page is renamed **Payments**, and revenue
+means *settled* money: the old totals summed every row regardless of status, so failed
+and unpaid orders counted as income.
+
+### Money had no currency
+
+Every money figure in the admin ran through a symbol table inherited from hoodskool —
+`{ USD, EUR, GBP, RUB }` — with **no entry for Naira**. The shop's own currency fell
+through to the fallback and rendered `NGN410005.00`: unsymbolled, ungrouped, quoting a
+subunit nobody prices in. `lib/admin/format.ts` now matches the storefront's rules,
+and ₦410,005 reads the same to the shopkeeper as to the customer.
+
+### Things the screens claimed but did not do
+
+- **Suspend did the opposite.** `handleToggleStatus` computed `const newStatus =
+  'active'` under a `// Simplified for now` comment, so confirming "Suspend Customer"
+  set the account **active** — with a success toast either way. Nothing could reinstate
+  an account, and `profiles.status` was never displayed, so a suspended customer looked
+  identical to an active one.
+- **The Orders column was `0` for everyone.** It read `user.orders?.length`, a field the
+  profile mapper never populates — relations moved into their own tables during the
+  Supabase migration. Customers with a dozen orders showed as new. Real counts and
+  lifetime spend now come from `lib/admin/customers.ts`.
+- **The customer details dialog was mostly theatre.** Its Orders tab was a hardcoded
+  "No Orders Yet" panel that never queried anything; Account Status was a literal
+  `Active` badge; and the entire edit mode was unreachable, because the button that set
+  `isEditing` had been commented out, leaving four branches of dead form code behind it.
+- **Two sidebar links 404'd.** `Pages` and `Settings` pointed at routes that do not
+  exist.
+- **Export and Download Receipt did nothing.** Export now writes a real CSV, quoted
+  properly so a customer named O'Brien does not shift every column after them.
+
+### Things the screens never showed
+
+- **Publication state.** `products.status` gates the storefront, and the catalogue
+  showed no trace of it — a product could be saved, look exactly like its published
+  neighbours, and be invisible to every shopper. Added to `Product`, the mapper, the
+  table and a filter.
+- **Expiry.** Half this catalogue is food and `create_order()` refuses an expired
+  variant, so stock silently stops being sellable while still reading "In stock".
+- **The queues.** Unapproved reviews and unquoted sourcing requests accumulate where
+  nothing else in the app mentions them. They are now badged in the sidebar and lead
+  the dashboard.
+- **Empty categories and collections.** A category with no products is a dead link in
+  the shop's menu; nothing said which ones were empty.
+
+### Footer signups were unreachable
+
+`newsletter_subscribers` had been collecting every address typed into the storefront
+footer — visitors with no account, which is most of them — and the mailer only ever read
+`profiles`. The form said "subscribed", the row was written, and the list could not be
+reached from the one screen that sends mail. Those addresses are now newsletter
+recipients, tagged **Footer**, de-duplicated against account holders.
+
+### Design
+
+A shared kit — `PageHeader`, `StatCard`, `SectionCard`, `EmptyState`, `StatusPill` —
+replaces eleven pages of drifting one-offs. `StatusPill` holds the admin's whole status
+vocabulary in one table; there had been six copies of an order-status map that disagreed
+with each other, and the dashboard rendered `shipped` and `delivered` identically.
+
+**Tremor is gone.** Its charts used a palette that appears nowhere else in Ramazah —
+blue, emerald, fuchsia, violet, amber — and were the loudest thing in the admin.
+Replaced by `components/admin/charts/` built from the design tokens. This also removes
+the `legacy-peer-deps=true` override: `@tremor/react` is React 18-only, and the project
+now installs clean on React 19.
+
+The "Customer Growth" area chart is gone too. It plotted two points — the total minus
+this month's arrivals, then the total — which is a subtraction drawn 320 pixels tall.
+The dashboard's revenue trend is a real twelve-month series with empty months filled in.
+
+### Contrast
+
+`scripts/check-admin-contrast.mjs` reads every class string in the admin, composites
+tinted backgrounds over the page ground, and fails any element setting both a background
+and a text colour below 4.5:1. It caught nine, including the same ink-on-sage pairing
+(2.28:1) already fixed on the customer side that the admin still carried, and four uses
+of `--ink-faint` — 2.4:1, marked decorative-only — as running text.
+
+One new token: **`--terra-ink` `#9C5433`**. `--terra-text` is legal on the page ground
+but reaches only 4.03:1 once the surface beneath it is `terra/10`, which is exactly
+where badges and warnings put it.
+
+### Database
+
+`20260822000011_admin_self_guard.sql` — `set_user_role` and `set_user_status` checked
+`is_admin()` and nothing else, so an admin could demote or suspend their own account.
+With one administrator on this installation either action locks the admin area away
+behind a service-role key and a terminal. Both refused now, along with demoting the last
+remaining admin. Verified: self-demote and self-suspend raise `42501`, suspending a
+customer still works.
+
+### Seed
+
+Nine demo orders sat at `delivered` with `payment_status = 'pending'`, no `paid_at` and
+no `delivered_at` — a state this shop cannot be in, and invisible while the admin summed
+revenue regardless of status. Fixed in `scripts/seed-demo-reviews.js`, which now dates
+its orders across two months so the trend chart has something real to draw.
+
+**Verified against the live database:** ten RLS boundary checks as an anonymous visitor
+and as a signed-in customer — orders, the newsletter list, other people's profiles and
+reviews, and the three privileged RPCs all correctly refused. All twelve admin routes
+still 307 for an anonymous request; the storefront is untouched.
+
+### Still open
+
+- `/admin/products/new` and `/admin/products/[id]` had a colour and radius pass only.
+  The product form is plan item 4 — a rebuild, not a restyle: it still only understands
+  `size` and `color`, so a "Weight: 250g / Grind: Ground" product cannot be created
+  through the UI, and there is no expiry-date field.
+- **Collections have no storefront route.** `app/` has `/categories/[...slug]` and
+  `/product/[slug]` and nothing for collections, so a collection is data with no page.
+  The admin screen now says so rather than leaving it to be discovered after curating
+  one.
+- `npm audit` reports two pre-existing high-severity advisories (`nodemailer`, `sharp`),
+  both needing major-version bumps. Untouched here.
+
+---
+
 ## 2026-08-21 — Home page, product page, reviews, account area
 
 The storefront redesigned section by section against the client's own direction,

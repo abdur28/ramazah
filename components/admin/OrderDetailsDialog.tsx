@@ -1,365 +1,420 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, User, MapPin, CreditCard, Truck, Save } from "lucide-react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import {
+  CreditCard,
+  Loader2,
+  MapPin,
+  Package,
+  Save,
+  Store,
+  Truck,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Order, OrderStatus, PaymentStatus } from "@/types/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import StatusPill, { ORDER_STATUS, PAYMENT_STATUS } from "@/components/admin/ui/StatusPill";
 import useAdmin from "@/hooks/admin/useAdmin";
-import { format } from "date-fns";
+import useScrollLock from "@/hooks/useScrollLock";
+import { formatDateTime, formatMoney } from "@/lib/admin/format";
+import type { Order, OrderStatus, PaymentStatus } from "@/types/types";
 
-interface OrderDetailsDialogProps {
+/**
+ * One order, and the controls that move it.
+ *
+ * Three fixes beyond the restyle.
+ *
+ * The page no longer scrolls behind it. Lenis drives the window directly and
+ * ignores both `overflow: hidden` and Radix's own scroll lock, so every overlay
+ * in this app has to call `useScrollLock`; the admin dialogs never did, and the
+ * page slid away underneath while the dialog's own content stayed put.
+ *
+ * Money is formatted rather than concatenated — `NGN 410005.00` became ₦410,005.
+ *
+ * And a line whose product has lost its image no longer renders `<Image src="">`,
+ * which the browser resolves against the current URL and re-downloads the whole
+ * admin page as if it were a JPEG.
+ */
+export default function OrderDetailsDialog({
+  open,
+  onOpenChange,
+  order,
+}: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: Order | null;
-}
+}) {
+  const { updateOrderStatus, updatePaymentStatus, updateOrder } = useAdmin();
 
-const formatDate = (timestamp: any) => {
-  if (!timestamp) return 'N/A';
-  try {
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return format(date, 'PPpp');
-  } catch {
-    return 'Invalid date';
-  }
-};
-
-export default function OrderDetailsDialog({ 
-  open, 
-  onOpenChange, 
-  order 
-}: OrderDetailsDialogProps) {
-  const { updateOrderStatus, updatePaymentStatus, updateOrder, loading } = useAdmin();
-  
-  const [orderStatus, setOrderStatus] = useState<OrderStatus>('pending');
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pending');
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [carrier, setCarrier] = useState('');
-  const [hasChanges, setHasChanges] = useState(false);
+  const [orderStatus, setOrderStatus] = useState<OrderStatus>("pending");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("pending");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [carrier, setCarrier] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  useScrollLock(open);
 
   useEffect(() => {
     if (open && order) {
       setOrderStatus(order.status);
       setPaymentStatus(order.paymentStatus);
-      setTrackingNumber(order.trackingNumber || '');
-      setCarrier(order.carrier || '');
-      setHasChanges(false);
+      setTrackingNumber(order.trackingNumber || "");
+      setCarrier(order.carrier || "");
     }
   }, [open, order]);
 
-  useEffect(() => {
-    if (order) {
-      const changed = 
-        orderStatus !== order.status ||
-        paymentStatus !== order.paymentStatus ||
-        trackingNumber !== (order.trackingNumber || '') ||
-        carrier !== (order.carrier || '');
-      setHasChanges(changed);
-    }
-  }, [orderStatus, paymentStatus, trackingNumber, carrier, order]);
+  if (!order) return null;
+
+  const hasChanges =
+    orderStatus !== order.status ||
+    paymentStatus !== order.paymentStatus ||
+    trackingNumber !== (order.trackingNumber || "") ||
+    carrier !== (order.carrier || "");
 
   const handleSave = async () => {
-    if (!order) return;
-    
     setIsSaving(true);
     try {
-      const promises = [];
-      
-      if (orderStatus !== order.status) {
-        promises.push(updateOrderStatus(order.id, orderStatus));
-      }
-      
-      if (paymentStatus !== order.paymentStatus) {
-        promises.push(updatePaymentStatus(order.id, paymentStatus));
-      }
-      
-      if (trackingNumber !== (order.trackingNumber || '') || carrier !== (order.carrier || '')) {
-        promises.push(updateOrder(order.id, { trackingNumber, carrier }));
-      }
-      
-      await Promise.all(promises);
-      
-      toast.success("Order updated successfully");
-      setHasChanges(false);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to update order");
+      const work: Promise<unknown>[] = [];
+
+      if (orderStatus !== order.status) work.push(updateOrderStatus(order.id, orderStatus));
+      if (paymentStatus !== order.paymentStatus)
+        work.push(updatePaymentStatus(order.id, paymentStatus));
+      if (trackingNumber !== (order.trackingNumber || "") || carrier !== (order.carrier || ""))
+        work.push(updateOrder(order.id, { trackingNumber, carrier }));
+
+      await Promise.all(work);
+      toast.success(`${order.orderNumber} updated.`);
+    } catch (err: any) {
+      toast.error(err?.message || "Could not update the order.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (!order) return null;
+  const timeline = [
+    { label: "Placed", value: order.createdAt },
+    { label: "Paid", value: order.paidAt },
+    { label: "Shipped", value: order.shippedAt },
+    { label: "Delivered", value: order.deliveredAt },
+    { label: "Collected", value: order.pickedUpAt },
+  ].filter((entry) => Boolean(entry.value));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-body flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Order Details - {order.orderNumber}
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto p-0">
+        <DialogHeader className="border-b border-rule px-6 py-5 text-left">
+          <DialogTitle className="flex flex-wrap items-center gap-3 font-body text-base font-medium">
+            <span className="tabular-nums">{order.orderNumber}</span>
+            <StatusPill status={order.status} map={ORDER_STATUS} />
+            <StatusPill status={order.paymentStatus} map={PAYMENT_STATUS} />
           </DialogTitle>
-          <DialogDescription>
-            View and manage order information
+          <DialogDescription className="font-body text-sm text-ink-muted">
+            Placed {formatDateTime(order.createdAt)} · {formatMoney(order.total, order.currency)}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Status Updates */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-            <div className="space-y-2">
-              <Label>Order Status</Label>
-              <Select value={orderStatus} onValueChange={(value) => setOrderStatus(value as OrderStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="shipped">Shipped</SelectItem>
-                  <SelectItem value="delivered">Delivered</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="space-y-8 px-6 py-6">
+          {/* ------------------------------------------------------ controls */}
+          <section className="rounded-sm border border-rule bg-wash/50 p-4">
+            <h3 className="mb-4 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+              Move this order
+            </h3>
 
-            <div className="space-y-2">
-              <Label>Payment Status</Label>
-              <Select value={paymentStatus} onValueChange={(value) => setPaymentStatus(value as PaymentStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="font-body text-xs text-ink-muted">Order status</Label>
+                <Select
+                  value={orderStatus}
+                  onValueChange={(value) => setOrderStatus(value as OrderStatus)}
+                >
+                  <SelectTrigger className="bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(ORDER_STATUS).map((status) => (
+                      <SelectItem key={status} value={status} className="capitalize">
+                        {ORDER_STATUS[status].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-2">
-              <Label>Tracking Number</Label>
-              <Input 
-                value={trackingNumber}
-                onChange={(e) => setTrackingNumber(e.target.value)}
-                placeholder="Enter tracking number"
-              />
-            </div>
+              <div className="space-y-1.5">
+                <Label className="font-body text-xs text-ink-muted">Payment</Label>
+                <Select
+                  value={paymentStatus}
+                  onValueChange={(value) => setPaymentStatus(value as PaymentStatus)}
+                >
+                  <SelectTrigger className="bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(PAYMENT_STATUS).map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {PAYMENT_STATUS[status].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-2">
-              <Label>Carrier</Label>
-              <Input 
-                value={carrier}
-                onChange={(e) => setCarrier(e.target.value)}
-                placeholder="e.g., UPS, FedEx, DHL"
-              />
+              <div className="space-y-1.5">
+                <Label className="font-body text-xs text-ink-muted">Tracking number</Label>
+                <Input
+                  value={trackingNumber}
+                  onChange={(event) => setTrackingNumber(event.target.value)}
+                  placeholder="From the courier"
+                  className="bg-card"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-body text-xs text-ink-muted">Courier</Label>
+                <Input
+                  value={carrier}
+                  onChange={(event) => setCarrier(event.target.value)}
+                  placeholder="GIG, DHL, Kwik…"
+                  className="bg-card"
+                />
+              </div>
             </div>
 
             {hasChanges && (
-              <div className="col-span-2">
-                <Button onClick={handleSave} disabled={isSaving} className="w-full">
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Button onClick={handleSave} disabled={isSaving} className="mt-4 w-full sm:w-auto">
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save changes
+                  </>
+                )}
+              </Button>
             )}
-          </div>
+          </section>
 
-          <Separator />
-
-          {/* Customer Info */}
-          <div>
-            <h3 className="font-semibold font-body flex items-center gap-2 mb-3">
-              <User className="h-4 w-4" />
-              Customer Information
-            </h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">Name</p>
-                <p className="font-medium">{order.customerName}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Email</p>
-                <p className="font-medium">{order.customerEmail}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Phone</p>
-                <p className="font-medium">{order.customerPhone}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Delivery Type</p>
-                <Badge variant="outline" className="capitalize">{order.deliveryType}</Badge>
-              </div>
+          {/* ------------------------------------------------------ customer */}
+          <section className="grid gap-8 md:grid-cols-2">
+            <div>
+              <Heading icon={User}>Customer</Heading>
+              <dl className="space-y-2 font-body text-sm">
+                <Field label="Name">{order.customerName}</Field>
+                <Field label="Email">
+                  <a href={`mailto:${order.customerEmail}`} className="text-sage-deep hover:underline">
+                    {order.customerEmail}
+                  </a>
+                </Field>
+                <Field label="Phone">
+                  <a href={`tel:${order.customerPhone}`} className="text-sage-deep hover:underline">
+                    {order.customerPhone}
+                  </a>
+                </Field>
+              </dl>
             </div>
-          </div>
 
-          {/* Shipping Address */}
-          {order.shippingAddress && order.deliveryType === 'delivery' && (
-            <>
-              <Separator />
-              <div>
-                <h3 className="font-semibold font-body flex items-center gap-2 mb-3">
-                  <MapPin className="h-4 w-4" />
-                  Shipping Address
-                </h3>
-                <div className="text-sm space-y-1">
-                  <p>{order.shippingAddress.street}</p>
-                  <p>
-                    {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
-                  </p>
-                  <p>{order.shippingAddress.country}</p>
-                </div>
-              </div>
-            </>
-          )}
+            <div>
+              <Heading icon={order.deliveryType === "inStore" ? Store : MapPin}>
+                {order.deliveryType === "inStore" ? "Collection" : "Delivery"}
+              </Heading>
 
-          <Separator />
+              {order.deliveryType === "inStore" ? (
+                <p className="font-body text-sm text-ink-muted">
+                  Collected in store. No address was taken.
+                </p>
+              ) : order.shippingAddress ? (
+                <address className="font-body text-sm not-italic text-foreground">
+                  {order.shippingAddress.fullName}
+                  <br />
+                  {order.shippingAddress.street}
+                  <br />
+                  {order.shippingAddress.city}
+                  {order.shippingAddress.state && `, ${order.shippingAddress.state}`}
+                  {order.shippingAddress.zipCode && ` ${order.shippingAddress.zipCode}`}
+                  <br />
+                  {order.shippingAddress.country}
+                </address>
+              ) : (
+                <p className="font-body text-sm text-ink-muted">No address recorded.</p>
+              )}
 
-          {/* Order Items */}
-          <div>
-            <h3 className="font-semibold font-body flex items-center gap-2 mb-3">
-              <Package className="h-4 w-4" />
-              Order Items ({order.items.length})
-            </h3>
-            <div className="space-y-3">
+              {(order.trackingNumber || order.carrier) && (
+                <p className="mt-3 inline-flex items-center gap-2 rounded-sm bg-wash/60 px-2.5 py-1.5 font-body text-xs text-ink-muted">
+                  <Truck className="h-3.5 w-3.5" />
+                  {order.carrier || "Courier"} · {order.trackingNumber || "no tracking number"}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* --------------------------------------------------------- items */}
+          <section>
+            <Heading icon={Package}>
+              {order.items.length} {order.items.length === 1 ? "item" : "items"}
+            </Heading>
+
+            <ul className="divide-y divide-rule rounded-sm border border-rule">
               {order.items.map((item) => (
-                <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                  <div className="relative w-16 h-16 rounded overflow-hidden bg-muted flex-shrink-0">
-                    <Image 
-                      src={item.imageUrl} 
-                      alt={item.name} 
-                      fill 
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
-                    {item.size && <p className="text-sm">Size: {item.size}</p>}
-                    {item.color && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span>Color:</span>
-                        <div 
-                          className="w-4 h-4 rounded-full border" 
-                          style={{ backgroundColor: item.color.hex }}
-                        />
-                        <span>{item.color.name}</span>
-                      </div>
+                <li key={item.id} className="flex items-center gap-3 p-3">
+                  <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-sm bg-wash">
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt=""
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center">
+                        <Package className="h-4 w-4 text-ink-faint" />
+                      </span>
                     )}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">
-                      {order.currency.toUpperCase()} {item.price.toFixed(2)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
-                    <p className="font-semibold mt-1">
-                      {(item.price * item.quantity).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-body text-sm text-foreground">
+                      {item.name}
+                    </span>
+                    <span className="block truncate font-body text-xs text-ink-muted">
+                      {item.variantLabel ? `${item.variantLabel} · ` : ""}
+                      {item.sku}
+                    </span>
+                  </span>
+
+                  <span className="shrink-0 text-right font-body text-sm">
+                    <span className="block tabular-nums text-ink-muted">
+                      {item.quantity} × {formatMoney(item.price, order.currency)}
+                    </span>
+                    <span className="block font-medium tabular-nums text-foreground">
+                      {formatMoney(item.lineTotal ?? item.price * item.quantity, order.currency)}
+                    </span>
+                  </span>
+                </li>
               ))}
+            </ul>
+          </section>
+
+          {/* ------------------------------------------------------- summary */}
+          <section className="grid gap-8 md:grid-cols-2">
+            <div>
+              <Heading icon={CreditCard}>Totals</Heading>
+              <dl className="space-y-2 font-body text-sm">
+                <Row label="Subtotal" value={formatMoney(order.subtotal, order.currency)} />
+                {(order.discount ?? 0) > 0 && (
+                  <Row
+                    label="Discount"
+                    value={`−${formatMoney(order.discount ?? 0, order.currency)}`}
+                    tone="positive"
+                  />
+                )}
+                {(order.tax ?? 0) > 0 && (
+                  <Row label="VAT" value={formatMoney(order.tax ?? 0, order.currency)} />
+                )}
+                {(order.shippingCost ?? 0) > 0 && (
+                  <Row
+                    label="Shipping"
+                    value={formatMoney(order.shippingCost ?? 0, order.currency)}
+                  />
+                )}
+                <div className="flex items-baseline justify-between border-t border-rule pt-2">
+                  <dt className="font-body text-sm font-medium text-foreground">Total</dt>
+                  <dd className="font-body text-base font-medium tabular-nums text-foreground">
+                    {formatMoney(order.total, order.currency)}
+                  </dd>
+                </div>
+                {order.paymentMethod && (
+                  <p className="pt-1 font-body text-xs text-ink-muted">
+                    Paid by {order.paymentMethod}
+                  </p>
+                )}
+              </dl>
             </div>
-          </div>
 
-          <Separator />
+            <div>
+              <Heading>Timeline</Heading>
+              <ol className="space-y-2 font-body text-sm">
+                {timeline.map((entry) => (
+                  <li key={entry.label} className="flex items-baseline justify-between gap-4">
+                    <span className="text-ink-muted">{entry.label}</span>
+                    <span className="tabular-nums text-foreground">
+                      {formatDateTime(entry.value)}
+                    </span>
+                  </li>
+                ))}
+              </ol>
 
-          {/* Order Summary */}
-          <div>
-            <h3 className="font-semibold font-body flex items-center gap-2 mb-3">
-              <CreditCard className="h-4 w-4" />
-              Order Summary
-            </h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{order.currency.toUpperCase()} {order.subtotal.toFixed(2)}</span>
-              </div>
-              {order.tax !== undefined && order.tax > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span>{order.currency.toUpperCase()} {order.tax.toFixed(2)}</span>
-                </div>
-              )}
-              {order.shippingCost !== undefined && order.shippingCost > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping</span>
-                  <span>{order.currency.toUpperCase()} {order.shippingCost.toFixed(2)}</span>
-                </div>
-              )}
-              {order.discount !== undefined && order.discount > 0 && (
-                <div className="flex justify-between text-success">
-                  <span>Discount</span>
-                  <span>-{order.discount.toFixed(2)}</span>
-                </div>
-              )}
-              <Separator />
-              <div className="flex justify-between font-bold text-base">
-                <span>Total</span>
-                <span>{order.currency.toUpperCase()} {order.total.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Timestamps */}
-          <div>
-            <h3 className="font-semibold font-body mb-3">Timeline</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Created</span>
-                <span>{formatDate(order.createdAt)}</span>
-              </div>
-              {order.paidAt && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Paid</span>
-                  <span>{formatDate(order.paidAt)}</span>
-                </div>
-              )}
-              {order.shippedAt && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipped</span>
-                  <span>{formatDate(order.shippedAt)}</span>
-                </div>
-              )}
-              {order.deliveredAt && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Delivered</span>
-                  <span>{formatDate(order.deliveredAt)}</span>
+              {order.customerNotes && (
+                <div className="mt-5">
+                  <Heading>Customer note</Heading>
+                  <p className="max-w-[60ch] font-body text-sm text-ink-muted">
+                    {order.customerNotes}
+                  </p>
                 </div>
               )}
             </div>
-          </div>
-
-          {order.customerNotes && (
-            <>
-              <Separator />
-              <div>
-                <h3 className="font-semibold mb-2">Customer Notes</h3>
-                <p className="text-sm text-muted-foreground">{order.customerNotes}</p>
-              </div>
-            </>
-          )}
+          </section>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Heading({
+  icon: Icon,
+  children,
+}: {
+  icon?: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <h3 className="mb-3 flex items-center gap-2 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {children}
+    </h3>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className="shrink-0 text-ink-muted">{label}</dt>
+      <dd className="min-w-0 truncate text-right text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "positive";
+}) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <dt className="text-ink-muted">{label}</dt>
+      <dd
+        className={`tabular-nums ${tone === "positive" ? "text-sage-deep" : "text-foreground"}`}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }

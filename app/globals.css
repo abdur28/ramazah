@@ -25,6 +25,7 @@
   --color-wash: var(--wash);
   --color-terra: var(--terra);
   --color-terra-text: var(--terra-text);
+  --color-terra-ink: var(--terra-ink);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-ink-faint: var(--ink-faint);
@@ -92,6 +93,10 @@
   --terra:       #B4633E;   /*  4.16:1 — badges, large sale prices */
   --terra-text:  #AB5E3A;   /*  4.54:1 — small sale text */
   --terra-deep:  #AB5E3A;   /*  4.54:1 as a background with a light label */
+  /* Terracotta dark enough to be read ON a terracotta tint. `--terra-text` is
+     legal on the page ground but only reaches 4.03:1 once the surface beneath
+     it is `terra/10`, which is exactly where badges and warnings put it. */
+  --terra-ink:   #9C5433;   /*  5.34:1 on ground, 4.74:1 on a terra/10 tint */
 
   /* ---- semantic (colour never carries meaning alone) ---- */
   --success:     var(--sage-deep);

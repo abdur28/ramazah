@@ -1,529 +1,416 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  Users,
-  Package,
-  ShoppingBag,
-  DollarSign,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  RefreshCcw,
-  Loader2,
   AlertTriangle,
-  Clock,
-  Truck,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  Activity
+  ArrowUpRight,
+  CalendarClock,
+  Coins,
+  Loader2,
+  MessageSquare,
+  Package,
+  PackageX,
+  RefreshCcw,
+  Search,
+  ShoppingBag,
+  Users,
 } from "lucide-react";
-import { AreaChart, DonutChart } from "@tremor/react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import PageHeader from "@/components/admin/ui/PageHeader";
+import StatCard from "@/components/admin/ui/StatCard";
+import SectionCard from "@/components/admin/ui/SectionCard";
+import EmptyState from "@/components/admin/ui/EmptyState";
+import StatusPill, { ORDER_STATUS } from "@/components/admin/ui/StatusPill";
+import DonutChart from "@/components/admin/charts/DonutChart";
+import BarList from "@/components/admin/charts/BarList";
+import TrendChart, { type TrendPoint } from "@/components/admin/charts/TrendChart";
 import useAdmin from "@/hooks/admin/useAdmin";
-import { Order } from "@/types/types";
-import { format } from "date-fns";
+import useAdminQueues from "@/hooks/admin/useAdminQueues";
+import { getPayments } from "@/lib/admin/payments";
+import {
+  formatDate,
+  formatMoney,
+  formatMoneyByCurrency,
+  formatMoneyCompact,
+  formatNumber,
+} from "@/lib/admin/format";
+import type { Order } from "@/types/types";
+import type { Transaction } from "@/types/admin";
 
+/**
+ * The dashboard.
+ *
+ * Reordered around a question the old one did not answer: *what needs me
+ * today?* It opened on four totals — customers, products, orders, revenue —
+ * which are the numbers you check once a week, while the two queues that
+ * silently accumulate (unapproved reviews, unquoted sourcing requests) appeared
+ * nowhere at all. Work first, totals second, trend third.
+ *
+ * Every figure on this page now comes from the database. Revenue is settled
+ * money only, in Naira, with a symbol.
+ */
 export default function AdminDashboardPage() {
-  const router = useRouter();
   const { analytics, orders, loading, error, fetchAnalytics, fetchOrders } = useAdmin();
+  const { counts, refresh: refreshQueues } = useAdminQueues();
+  const [payments, setPayments] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  useEffect(() => {
-    if (orders && orders.length > 0) {
-      // Get 5 most recent orders
-      setRecentOrders(orders.slice(0, 5));
-    }
-  }, [orders]);
-
-  const loadDashboardData = async () => {
+  const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
+      const [, , { payments: fetched, error: paymentsError }] = await Promise.all([
         fetchAnalytics(),
-        fetchOrders({ limit: 10, orderByField: 'createdAt', orderDirection: 'desc' })
+        fetchOrders({ limit: 10, orderByField: "createdAt", orderDirection: "desc" }),
+        getPayments(),
       ]);
+      if (paymentsError) throw new Error(paymentsError);
+      setPayments(fetched);
+      refreshQueues();
     } catch (err) {
       console.error("Error loading dashboard:", err);
-      toast.error("Failed to load dashboard data");
+      toast.error("Could not load the dashboard. Try refreshing.");
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [fetchAnalytics, fetchOrders, refreshQueues]);
 
-  const getCurrencySymbol = (currency: string) => {
-    const symbols: Record<string, string> = {
-      USD: '$',
-      usd: '$',
-      EUR: '€',
-      GBP: '£',
-      RUB: '₽',
-      rub: '₽'
-    };
-    return symbols[currency] || currency;
-  };
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const formatRevenues = (revenues: Array<{ currency: string; amount: number }>) => {
-    if (!revenues || revenues.length === 0) return 'No revenue';
-    
-    return revenues.map(r => 
-      `${getCurrencySymbol(r.currency)}${r.amount.toLocaleString(undefined, { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      })}`
-    ).join(' | ');
-  };
+  /** Settled revenue by month, oldest first — the real series, not two points. */
+  const revenueTrend = useMemo<TrendPoint[]>(() => buildMonthlySeries(payments), [payments]);
 
-  const getTotalRevenue = () => {
-    if (!analytics) return 'No data';
-    const revenues = analytics.orders.revenues;
-    if (!revenues || revenues.length === 0) return 'No revenue';
-    
-    return revenues.map(r => 
-      `${getCurrencySymbol(r.currency)}${r.totalRevenue.toLocaleString(undefined, { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      })}`
-    ).join(' | ');
-  };
+  const recentOrders = orders?.slice(0, 6) ?? [];
 
-  const getMonthlyRevenue = () => {
-    if (!analytics) return 'No data';
-    const revenues = analytics.orders.revenues;
-    if (!revenues || revenues.length === 0) return 'No revenue';
-    
-    return revenues.map(r => 
-      `${getCurrencySymbol(r.currency)}${r.revenueThisMonth.toLocaleString(undefined, { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      })}`
-    ).join(' | ');
-  };
-
-  const formatPercent = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
-  };
-
-  const GrowthBadge = ({ value }: { value: number }) => {
-    const isPositive = value >= 0;
-    return (
-      <Badge 
-        variant={isPositive ? "default" : "destructive"}
-        className={`flex items-center gap-1 ${isPositive ? 'bg-success' : ''}`}
-      >
-        {isPositive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-        {formatPercent(value)}
-      </Badge>
-    );
-  };
-
-  const getOrderStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline", icon: React.ReactNode }> = {
-      pending: { variant: "secondary", icon: <Clock className="h-3 w-3 mr-1" /> },
-      processing: { variant: "default", icon: <Package className="h-3 w-3 mr-1" /> },
-      shipped: { variant: "default", icon: <Truck className="h-3 w-3 mr-1" /> },
-      delivered: { variant: "default", icon: <CheckCircle2 className="h-3 w-3 mr-1" /> },
-      cancelled: { variant: "destructive", icon: <XCircle className="h-3 w-3 mr-1" /> },
-      refunded: { variant: "outline", icon: <XCircle className="h-3 w-3 mr-1" /> }
-    };
-    
-    const config = variants[status] || variants.pending;
-    return (
-      <Badge variant={config.variant} className="flex items-center w-fit">
-        {config.icon}
-        <span className="capitalize">{status}</span>
-      </Badge>
-    );
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A';
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return format(date, 'MMM dd, HH:mm');
-    } catch {
-      return 'Invalid date';
-    }
-  };
-
-  // Loading state
   if (loading.analytics && !analytics) {
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="h-8 w-48 bg-muted animate-pulse rounded mb-2"></div>
-            <div className="h-4 w-72 bg-muted animate-pulse rounded"></div>
-          </div>
-          <div className="h-10 w-24 bg-muted animate-pulse rounded"></div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array(4).fill(0).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <div className="h-5 w-24 bg-muted animate-pulse rounded"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-7 w-16 bg-muted animate-pulse rounded mb-1"></div>
-                <div className="h-4 w-24 bg-muted animate-pulse rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-          <p className="text-lg font-medium">Loading Dashboard</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
-  // Error state
   if (error.analytics) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-heading uppercase font-bold tracking-tight">
-              Dashboard
-            </h1>
-            <p className="text-muted-foreground">
-              Welcome to ramazah admin panel
-            </p>
-          </div>
-          <Button onClick={loadDashboardData} disabled={refreshing}>
-            <RefreshCcw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Retry
-          </Button>
-        </div>
-
-        <div className="rounded-lg border border-destructive p-8 text-center">
-          <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-destructive" />
-          <p className="text-lg font-medium text-destructive">Error loading dashboard</p>
-          <p className="text-sm text-muted-foreground mt-2">{error.analytics}</p>
-        </div>
+        <PageHeader title="Dashboard" description="Your shop at a glance." />
+        <EmptyState
+          icon={AlertTriangle}
+          title="Could not load the dashboard"
+          description={error.analytics}
+          action={
+            <Button onClick={load} disabled={refreshing}>
+              <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Try again
+            </Button>
+          }
+        />
       </div>
     );
   }
 
-  if (!analytics) {
-    return null;
-  }
+  if (!analytics) return null;
+
+  const revenues = analytics.orders.revenues ?? [];
+  const settled = payments.filter((payment) => payment.status === "success");
+  const settledTotal = settled.reduce((sum, payment) => sum + payment.amount, 0);
+  const awaitingPayment = payments.filter((payment) => payment.status === "pending");
+  const awaitingTotal = awaitingPayment.reduce((sum, payment) => sum + payment.amount, 0);
+
+  const queue = [
+    {
+      label: "Orders to fulfil",
+      count: counts.ordersPending,
+      href: "/admin/orders",
+      icon: ShoppingBag,
+    },
+    {
+      label: "Requests to quote",
+      count: counts.requestsOpen,
+      href: "/admin/requests",
+      icon: Search,
+    },
+    {
+      label: "Reviews to approve",
+      count: counts.reviewsPending,
+      href: "/admin/reviews",
+      icon: MessageSquare,
+    },
+    {
+      label: "Low stock",
+      count: counts.lowStock,
+      href: "/admin/products",
+      icon: PackageX,
+    },
+    {
+      label: "Expiring soon",
+      count: counts.expiringSoon,
+      href: "/admin/products",
+      icon: CalendarClock,
+    },
+  ];
+
+  const needsAttention = queue.filter((item) => item.count > 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-heading uppercase font-bold tracking-tight">
-            Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Welcome to ramazah admin panel
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Ramazah"
+        title="Dashboard"
+        description="Everything moving through the shop, and everything waiting on you."
+        actions={
+          <>
+            <Button variant="outline" onClick={load} disabled={refreshing}>
+              <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Button asChild>
+              <Link href="/admin/products/new">
+                <Package className="mr-2 h-4 w-4" />
+                Add product
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      {/* ---------------------------------------------------- waiting on you */}
+      <SectionCard
+        title="Waiting on you"
+        description={
+          needsAttention.length === 0
+            ? "Nothing is queued. Reviews and sourcing requests appear here as they arrive."
+            : undefined
+        }
+      >
+        {needsAttention.length === 0 ? (
+          <p className="font-body text-sm text-ink-muted">
+            All clear — the queues are empty.
           </p>
-        </div>
-        <Button 
-          onClick={loadDashboardData} 
-          disabled={refreshing}
-          variant="outline"
+        ) : (
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {needsAttention.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    className="flex items-center gap-3 rounded-sm border border-terra/30 bg-terra/[0.04] px-4 py-3 transition-colors hover:border-terra/60"
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-terra" />
+                    <span className="font-body text-2xl font-medium tabular-nums leading-none text-foreground">
+                      {item.count}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-body text-sm text-ink-muted">
+                      {item.label}
+                    </span>
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-faint" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </SectionCard>
+
+      {/* ------------------------------------------------------------ totals */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Revenue settled"
+          value={formatMoneyCompact(settledTotal, revenues[0]?.currency ?? "ngn")}
+          hint={`across ${formatNumber(settled.length)} paid orders`}
+          trend={analytics.orders.revenueGrowthRate}
+          icon={Coins}
+          href="/admin/transactions"
+        />
+        <StatCard
+          label="Awaiting payment"
+          value={formatMoneyCompact(awaitingTotal, revenues[0]?.currency ?? "ngn")}
+          hint={`${formatNumber(awaitingPayment.length)} orders not yet paid`}
+          icon={AlertTriangle}
+          href="/admin/transactions"
+          tone={awaitingPayment.length > 0 ? "attention" : "default"}
+        />
+        <StatCard
+          label="Orders"
+          value={formatNumber(analytics.orders.totalOrders)}
+          hint={`${analytics.orders.ordersThisMonth} this month`}
+          trend={analytics.orders.orderGrowthRate}
+          icon={ShoppingBag}
+          href="/admin/orders"
+        />
+        <StatCard
+          label="Customers"
+          value={formatNumber(analytics.customers.totalCustomers)}
+          hint={`${analytics.customers.newCustomersThisMonth} new this month`}
+          trend={analytics.customers.customerGrowthRate}
+          icon={Users}
+          href="/admin/customers"
+        />
+      </div>
+
+      {/* ------------------------------------------------- trend and orders */}
+      <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
+        <SectionCard
+          title="Settled revenue by month"
+          description={
+            revenues.length > 1
+              ? `Totals across ${revenues.length} currencies: ${formatMoneyByCurrency(
+                  revenues.map((r) => ({ currency: r.currency, amount: r.totalRevenue })),
+                  true
+                )}`
+              : undefined
+          }
         >
-          <RefreshCcw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
+          <TrendChart
+            data={revenueTrend}
+            valueFormatter={(value) => formatMoney(value, revenues[0]?.currency ?? "ngn")}
+          />
+        </SectionCard>
 
-      {/* Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push('/admin/customers')}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics.customers.totalCustomers.toLocaleString()}</div>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-muted-foreground">
-                {analytics.customers.newCustomersThisMonth} new this month
-              </p>
-              <GrowthBadge value={analytics.customers.customerGrowthRate} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push('/admin/products')}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics.products.totalProducts.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {analytics.products.inStockProducts} in stock, {analytics.products.lowStockProducts} low stock
+        <SectionCard
+          title="Latest orders"
+          action={
+            <Link
+              href="/admin/orders"
+              className="inline-flex items-center gap-1 font-body text-xs text-sage-deep hover:underline"
+            >
+              All orders
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          }
+          flush
+        >
+          {recentOrders.length === 0 ? (
+            <p className="px-5 py-10 text-center font-body text-sm text-ink-muted">
+              No orders yet.
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push('/admin/orders')}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics.orders.totalOrders.toLocaleString()}</div>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-muted-foreground">
-                {analytics.orders.ordersThisMonth} this month
-              </p>
-              <GrowthBadge value={analytics.orders.orderGrowthRate} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push('/admin/analytics')}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{getTotalRevenue()}</div>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-muted-foreground">
-                {getMonthlyRevenue()} this month
-              </p>
-              <GrowthBadge value={analytics.orders.revenueGrowthRate} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-
-      {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Customer Growth Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Customer Growth</CardTitle>
-            <CardDescription>Total customer acquisition over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AreaChart
-              className="h-80 text-xs"
-              data={[
-                { 
-                  period: 'Last Month', 
-                  customers: analytics.customers.totalCustomers - analytics.customers.newCustomersThisMonth 
-                },
-                { 
-                  period: 'Current', 
-                  customers: analytics.customers.totalCustomers 
-                }
-              ]}
-              index="period"
-              categories={["customers"]}
-              colors={["blue"]}
-              valueFormatter={(number) => `${number.toLocaleString()}`}
-              showLegend={false}
-              showYAxis={true}
-              showGradient={true}
-              showAnimation={true}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Recent Orders */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Recent Orders</CardTitle>
-                <CardDescription>Latest customer orders</CardDescription>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => router.push('/admin/orders')}
-              >
-                View All
-                <ArrowUpRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {recentOrders.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <ShoppingBag className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No recent orders</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentOrders.map((order) => (
-                  <div 
-                    key={order.id} 
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => router.push('/admin/orders')}
+          ) : (
+            <ul className="divide-y divide-rule">
+              {recentOrders.map((order: Order) => (
+                <li key={order.id}>
+                  <Link
+                    href="/admin/orders"
+                    className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-wash"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{order.orderNumber}</p>
-                      <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
-                    </div>
-                    <div className="flex items-center gap-2 ml-2">
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{getCurrencySymbol(order.currency)}{order.total.toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
-                      </div>
-                      {getOrderStatusBadge(order.status)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-body text-sm text-foreground">
+                        {order.customerName}
+                      </span>
+                      <span className="block truncate font-body text-xs tabular-nums text-ink-muted">
+                        {order.orderNumber} · {formatDate(order.createdAt)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-body text-sm font-medium tabular-nums text-foreground">
+                        {formatMoney(order.total, order.currency)}
+                      </span>
+                    </span>
+                    <StatusPill status={order.status} map={ORDER_STATUS} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
 
-      {/* Two Column Layout */}
-      <div className="grid gap-6 md:grid-cols-2">
-                {/* Top Products */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Top Selling Products</CardTitle>
-                <CardDescription>Best performing products</CardDescription>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => router.push('/admin/products')}
-              >
-                View All
-                <ArrowUpRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {analytics.products.topSellingProducts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No product data</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {analytics.products.topSellingProducts.slice(0, 5).map((product, index) => (
-                  <div 
-                    key={product.id} 
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => router.push('/admin/products')}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                        #{index + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{product.name}</p>
-                        <p className="text-xs text-muted-foreground">{product.viewCount} views</p>
-                      </div>
-                    </div>
-                    <div className="text-right ml-2 flex-shrink-0">
-                      <p className="text-sm font-semibold">{product.salesCount} sold</p>
-                      <Badge variant="secondary" className="text-xs">
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        Popular
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* --------------------------------------------- products and stock */}
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard
+          title="Best sellers"
+          action={
+            <Link
+              href="/admin/products"
+              className="inline-flex items-center gap-1 font-body text-xs text-sage-deep hover:underline"
+            >
+              Catalogue
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          }
+        >
+          <BarList
+            data={analytics.products.topSellingProducts.slice(0, 6).map((product) => ({
+              name: product.name,
+              value: product.salesCount,
+              display: `${formatNumber(product.salesCount)} sold`,
+              meta: `${formatNumber(product.viewCount)} views`,
+              href: `/admin/products/${product.id}`,
+            }))}
+            emptyMessage="No sales recorded yet."
+          />
+        </SectionCard>
 
-                {/* Stock Status Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Stock Status Distribution</CardTitle>
-            <CardDescription>Products by availability</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DonutChart
-              className="h-80 text-xs"
-              data={[
-                { name: "In Stock", value: analytics.products.inStockProducts },
-                { name: "Out of Stock", value: analytics.products.outOfStockProducts },
-                { name: "Low Stock", value: analytics.products.lowStockProducts }
-              ]}
-              category="value"
-              index="name"
-              colors={['emerald', 'fuchsia', 'amber']}
-              valueFormatter={(value) => `${value.toLocaleString()} products`}
-              showAnimation={true}
-              showTooltip={true}
-            />
-          </CardContent>
-        </Card>
-
+        <SectionCard title="Stock health">
+          <DonutChart
+            data={[
+              { name: "In stock", value: analytics.products.inStockProducts },
+              { name: "Low stock", value: analytics.products.lowStockProducts },
+              { name: "Out of stock", value: analytics.products.outOfStockProducts },
+            ]}
+            total={analytics.products.totalProducts}
+            totalLabel="Products"
+          />
+        </SectionCard>
       </div>
+    </div>
+  );
+}
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Manage your store efficiently</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button 
-              variant="outline" 
-              className="h-auto flex-col gap-2 p-4"
-              onClick={() => router.push('/admin/products/new')}
-            >
-              <Package className="h-6 w-6" />
-              <span className="text-sm">Add Product</span>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="h-auto flex-col gap-2 p-4"
-              onClick={() => router.push('/admin/orders')}
-            >
-              <ShoppingBag className="h-6 w-6" />
-              <span className="text-sm">View Orders</span>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="h-auto flex-col gap-2 p-4"
-              onClick={() => router.push('/admin/customers')}
-            >
-              <Users className="h-6 w-6" />
-              <span className="text-sm">Manage Customers</span>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="h-auto flex-col gap-2 p-4"
-              onClick={() => router.push('/admin/analytics')}
-            >
-              <TrendingUp className="h-6 w-6" />
-              <span className="text-sm">View Analytics</span>
-            </Button>
+/**
+ * Settled payments bucketed by calendar month, covering the last twelve months
+ * with the empty ones filled in — a gap month must plot as zero, not close the
+ * line and make a quiet month look like a missing one.
+ */
+function buildMonthlySeries(payments: Transaction[]): TrendPoint[] {
+  const settled = payments.filter((payment) => payment.status === "success");
+  if (settled.length === 0) return [];
+
+  const buckets = new Map<string, number>();
+  const now = new Date();
+
+  for (let index = 11; index >= 0; index -= 1) {
+    const month = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    buckets.set(keyOf(month), 0);
+  }
+
+  settled.forEach((payment) => {
+    const key = keyOf(payment.date);
+    if (buckets.has(key)) {
+      buckets.set(key, (buckets.get(key) ?? 0) + payment.amount);
+    }
+  });
+
+  return Array.from(buckets.entries()).map(([key, value]) => {
+    const [year, month] = key.split("-").map(Number);
+    return {
+      label: new Date(year, month).toLocaleDateString("en-NG", { month: "short" }),
+      value,
+    };
+  });
+}
+
+const keyOf = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="border-b border-rule pb-6">
+        <div className="h-3 w-16 animate-pulse rounded-sm bg-wash" />
+        <div className="mt-3 h-9 w-52 animate-pulse rounded-sm bg-wash" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="rounded-sm border border-rule bg-card p-5">
+            <div className="h-3 w-20 animate-pulse rounded-sm bg-wash" />
+            <div className="mt-4 h-7 w-24 animate-pulse rounded-sm bg-wash" />
+            <div className="mt-3 h-3 w-28 animate-pulse rounded-sm bg-wash" />
           </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
+      <div className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-rule py-16 font-body text-sm text-ink-muted">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading your shop…
+      </div>
     </div>
   );
 }
