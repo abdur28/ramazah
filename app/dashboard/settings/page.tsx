@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Mail, Lock, MapPin, Trash2, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { User, Mail, Lock, MapPin, Trash2, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -24,28 +25,15 @@ import { deleteUser } from '@/lib/supabase/auth';
 
 export default function SettingsPage() {
   const { user, profile, refetch, signOut } = useAuth();
-  const { 
-    updateProfile, 
-    updateAddress, 
-    changePassword, 
-    isSavingProfile, 
-    isSavingAddress, 
-    isUpdatingPassword 
+  const {
+    updateProfile,
+    changePassword,
+    isSavingProfile,
+    isUpdatingPassword,
   } = useDashboard();
 
   // Profile state
   const [displayName, setDisplayName] = useState('');
-  // Address state
-  const [address, setAddress] = useState({
-    fullName: '',
-    phone: '',
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: '',
-  });
-
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -58,10 +46,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.displayName || '');
-      
-      if (profile.address) {
-        setAddress(profile.address);
-      }
     }
   }, [profile]);
 
@@ -78,24 +62,6 @@ export default function SettingsPage() {
       await refetch(user!);
     } else {
       toast.error(result.error || 'Failed to update profile');
-    }
-  };
-
-  // Handle address update
-  const handleUpdateAddress = async () => {
-    // Validation
-    if (!address.street || !address.city || !address.zipCode) {
-      toast.error('Please fill in all required address fields');
-      return;
-    }
-
-    const result = await updateAddress(address);
-    
-    if (result.success) {
-      toast.success('Address updated successfully!');
-      await refetch(user!);
-    } else {
-      toast.error(result.error || 'Failed to update address');
     }
   };
 
@@ -152,10 +118,10 @@ export default function SettingsPage() {
         transition={{ duration: 0.6 }}
         className="mb-8"
       >
-        <h1 className="font-heading text-4xl md:text-5xl tracking-wider mb-2">
+        <h1 className="font-heading text-4xl font-light md:text-5xl mb-2">
           SETTINGS
         </h1>
-        <p className="font-body text-sm text-foreground/60">
+        <p className="font-body text-sm text-ink-muted">
           Manage your account settings and security
         </p>
       </motion.div>
@@ -167,15 +133,15 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="p-6 bg-card border border-foreground/10 rounded-lg h-fit"
+          className="p-6 bg-card border border-rule rounded-sm h-fit"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-foreground/5 rounded-md">
+            <div className="p-2 bg-wash rounded-md">
               <User className="h-5 w-5" />
             </div>
             <div>
               <h2 className="font-body font-semibold">Profile Information</h2>
-              <p className="font-body text-sm text-foreground/60">
+              <p className="font-body text-sm text-ink-muted">
                 Update your personal details
               </p>
             </div>
@@ -198,9 +164,9 @@ export default function SettingsPage() {
                 type="email" 
                 value={user?.email || ''} 
                 disabled
-                className="bg-foreground/5"
+                className="bg-wash"
               />
-              <p className="text-xs text-foreground/60 mt-1">
+              <p className="text-xs text-ink-muted mt-1">
                 Email cannot be changed for security reasons
               </p>
             </div>
@@ -232,112 +198,37 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="p-6 bg-card border border-foreground/10 rounded-lg h-fit"
+          className="h-fit rounded-sm border border-rule bg-card p-6"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-foreground/5 rounded-md">
-              <MapPin className="h-5 w-5" />
+          {/* The form that used to live here edited a single row while
+              /dashboard/addresses manages the whole book — two screens writing
+              the same table with different models, disagreeing about which
+              address is the default one. The book won. */}
+          <div className="mb-6 flex items-center gap-3">
+            <div className="rounded-md bg-wash p-2">
+              <MapPin className="h-5 w-5 text-sage-deep" />
             </div>
             <div>
-              <h2 className="font-body font-semibold">Shipping Address</h2>
-              <p className="font-body text-sm text-foreground/60">
-                Your primary delivery address
+              <h2 className="font-body font-semibold text-foreground">Delivery addresses</h2>
+              <p className="font-body text-sm text-ink-muted">
+                Saved places you order to
               </p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="fullName" className="mb-2">Full Name</Label>
-                <Input 
-                  id="fullName" 
-                  value={address.fullName}
-                  onChange={(e) => setAddress({ ...address, fullName: e.target.value })}
-                  placeholder="John Doe"
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressPhone" className="mb-2">Phone</Label>
-                <Input 
-                  id="addressPhone" 
-                  value={address.phone}
-                  onChange={(e) => setAddress({ ...address, phone: e.target.value })}
-                  placeholder="+1 (555) 123-4567"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="street" className="mb-2">Street Address</Label>
-              <Input 
-                id="street" 
-                value={address.street}
-                onChange={(e) => setAddress({ ...address, street: e.target.value })}
-                placeholder="123 Main St"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="city" className="mb-2">City</Label>
-                <Input 
-                  id="city" 
-                  value={address.city}
-                  onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                  placeholder="New York"
-                />
-              </div>
-              <div>
-                <Label htmlFor="state" className="mb-2">State/Province</Label>
-                <Input 
-                  id="state" 
-                  value={address.state}
-                  onChange={(e) => setAddress({ ...address, state: e.target.value })}
-                  placeholder="NY"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="zipCode" className="mb-2">ZIP/Postal Code</Label>
-                <Input 
-                  id="zipCode" 
-                  value={address.zipCode}
-                  onChange={(e) => setAddress({ ...address, zipCode: e.target.value })}
-                  placeholder="10001"
-                />
-              </div>
-              <div>
-                <Label htmlFor="country" className="mb-2">Country</Label>
-                <Input 
-                  id="country" 
-                  value={address.country}
-                  onChange={(e) => setAddress({ ...address, country: e.target.value })}
-                  placeholder="United States"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                onClick={handleUpdateAddress}
-                disabled={isSavingAddress}
-                className="bg-sage-deep text-background hover:bg-foreground hover:text-background transition-colors"
-              >
-                {isSavingAddress ? (
-                  <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full mr-2"
-                    />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Address'
-                )}
-              </Button>
-            </div>
-          </div>
-        </motion.div>
+          <p className="max-w-[46ch] font-body text-sm text-ink-muted">
+            Addresses live in their own section now, so you can keep more than one — home
+            and the shop, say — and choose which is used by default at checkout.
+          </p>
+
+          <Link
+            href="/dashboard/addresses"
+            className="mt-5 inline-flex items-center gap-2 rounded-sm border border-rule px-5 py-2.5 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-foreground transition-colors hover:border-sage-deep hover:text-sage-deep"
+          >
+            Manage addresses
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+                </motion.div>
         </div>
 
         <div className="w-full lg:w-1/2 flex flex-col gap-6">
@@ -346,15 +237,15 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="p-6 bg-card border border-foreground/10 rounded-lg h-fit"
+          className="p-6 bg-card border border-rule rounded-sm h-fit"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-foreground/5 rounded-md">
+            <div className="p-2 bg-wash rounded-md">
               <Lock className="h-5 w-5" />
             </div>
             <div>
               <h2 className="font-body font-semibold">Change Password</h2>
-              <p className="font-body text-sm text-foreground/60">
+              <p className="font-body text-sm text-ink-muted">
                 Update your account password
               </p>
             </div>
@@ -374,7 +265,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-foreground"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -393,12 +284,12 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-foreground"
                 >
                   {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-foreground/60 mt-1">
+              <p className="text-xs text-ink-muted mt-1">
                 Must be at least 6 characters
               </p>
             </div>
@@ -415,7 +306,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/60 hover:text-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-foreground"
                 >
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -450,7 +341,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="p-6 bg-destructive/10 border border-destructive rounded-lg h-fit"
+          className="p-6 bg-destructive/10 border border-destructive rounded-sm h-fit"
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-destructive/10 rounded-md">

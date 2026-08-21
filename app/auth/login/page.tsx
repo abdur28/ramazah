@@ -1,14 +1,17 @@
 import LoginPage from "@/components/authPages/LoginPage";
+import { safeRedirect } from "@/lib/auth/redirect";
 
-export default async function Page({params}: any) {
-  const { redirect } = await params;
-  return (
-    <LoginPage redirect={redirect ? `${redirect}` : '/dashboard'} />
-  );
+export default async function Page({ searchParams }: any) {
+  // `searchParams`, not `params`: this route has no dynamic segments, so
+  // `params` is always empty and the `?redirect=` was being thrown away —
+  // signing in from a product page always dumped you on the dashboard.
+  const { redirect } = await searchParams;
+
+  return <LoginPage redirect={safeRedirect(redirect)} />;
 }
 
 export async function generateMetadata() {
   return {
-    title: 'Login | Ramazah',
+    title: 'Sign in | Ramazah',
   };
 }

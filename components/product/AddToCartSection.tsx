@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ShoppingBag, Heart, Check, Minus, Plus } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -10,6 +10,7 @@ import { useDashboard, useIsInWishlist } from "@/hooks/useDashboard";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import type { Product, ProductVariant, CartItem } from "@/types/types";
 import { toast } from "sonner";
+import { FREE_SHIPPING_THRESHOLD } from "@/constants";
 
 interface AddToCartSectionProps {
   product: Product;
@@ -27,7 +28,7 @@ export default function AddToCartSection({
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
-  const { getPrice } = useCurrency();
+  const { getPrice, formatPrice } = useCurrency();
   const addItem = useCart((state) => state.addItem);
   const isInCart = useIsInCart(product.id, selectedVariant?.id);
   const toggleWishlist = useDashboard((state) => state.toggleWishlist);
@@ -41,6 +42,12 @@ export default function AddToCartSection({
   
   // Get the current price in selected currency
   const currentPrice = getPrice(pricesSource);
+
+  // Clamp when the variant changes: a quantity chosen against one variant's
+  // stock is not valid against another's.
+  useEffect(() => {
+    setQuantity((current) => Math.min(current, Math.max(1, maxQuantity)));
+  }, [selectedVariant?.id, maxQuantity]);
 
   const handleQuantityChange = (delta: number) => {
     setQuantity((prev) => Math.max(1, Math.min(prev + delta, maxQuantity)));
@@ -115,24 +122,24 @@ export default function AddToCartSection({
     >
       {/* Quantity Selector */}
       <div className="flex items-center gap-4">
-        <label className="font-body text-sm font-medium text-foreground uppercase tracking-wider">
+        <label className="font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted">
           Quantity
         </label>
-        <div className="flex items-center border border-foreground/20">
+        <div className="flex items-center rounded-sm border border-rule">
           <button
             onClick={() => handleQuantityChange(-1)}
             disabled={quantity <= 1}
-            className="px-4 py-4 hover:bg-foreground/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="px-3.5 py-3 text-ink-muted transition-colors hover:bg-wash hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Minus className="h-4 w-4" />
           </button>
-          <span className="px-6 py-3 font-body text-base border-x border-foreground/20 min-w-[60px] text-center">
+          <span className="min-w-[56px] border-x border-rule px-5 py-3 text-center font-body text-sm tabular-nums">
             {quantity}
           </span>
           <button
             onClick={() => handleQuantityChange(1)}
             disabled={quantity >= maxQuantity}
-            className="px-4 py-4 hover:bg-foreground/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="px-3.5 py-3 text-ink-muted transition-colors hover:bg-wash hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -148,8 +155,8 @@ export default function AddToCartSection({
           whileHover={inStock && !isAdding && !isInCart ? { scale: 1.02 } : {}}
           whileTap={inStock && !isAdding && !isInCart ? { scale: 0.98 } : {}}
           className={`
-            flex-1 py-4 font-body text-sm font-medium uppercase tracking-wider
-            flex items-center justify-center gap-3 transition-all
+            flex-1 rounded-sm py-4 font-body text-xs font-medium uppercase tracking-[0.16em]
+            flex items-center justify-center gap-2.5 transition-colors
             ${
               isInCart
                 ? "bg-success text-background cursor-default"
@@ -157,7 +164,7 @@ export default function AddToCartSection({
                 ? "bg-foreground/50 text-background cursor-wait"
                 : inStock
                 ? "bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background"
-                : "bg-foreground/20 text-foreground/40 cursor-not-allowed"
+                : "bg-wash text-ink-faint cursor-not-allowed"
             }
           `}
         >
@@ -172,19 +179,19 @@ export default function AddToCartSection({
                 }}
                 className="w-5 h-5 border-2 border-background border-t-transparent rounded-full"
               />
-              Adding...
+              Adding
             </>
           ) : isInCart ? (
             <>
               <Check className="h-5 w-5" />
-              In Cart
+              In cart
             </>
           ) : !inStock ? (
-            "Out of Stock"
+            "Out of stock"
           ) : (
             <>
               <ShoppingBag className="h-5 w-5" />
-              Add to Cart
+              Add to cart
             </>
           )}
         </motion.button>
@@ -196,11 +203,11 @@ export default function AddToCartSection({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className={`
-            px-5 py-4 border transition-all
+            rounded-sm border px-5 py-4 transition-colors
             ${
               isLiked
-                ? "bg-sage-deep text-background border-sage"
-                : "bg-transparent text-foreground border-foreground/20 hover:border-sage"
+                ? "border-sage-deep bg-sage-deep text-background"
+                : "border-rule bg-transparent text-foreground hover:border-sage-deep hover:text-sage-deep"
             }
             ${isTogglingWishlist ? "opacity-50 cursor-wait" : ""}
           `}
@@ -211,12 +218,15 @@ export default function AddToCartSection({
         </motion.button>
       </div>
 
-      {/* Additional Info */}
-      <div className="space-y-2 text-sm text-foreground/60 font-body">
-        <p>✓ Free shipping on orders over $100</p>
-        <p>✓ 30-day returns and exchanges</p>
-        <p>✓ Authenticity guaranteed</p>
-      </div>
+      {/* Was "Free shipping on orders over $100 · 30-day returns and exchanges ·
+          Authenticity guaranteed" — a currency Ramazah does not trade in and a
+          returns policy that does not exist. These are the real terms, and the
+          threshold is read from the same constant checkout prices against. */}
+      <ul className="space-y-1.5 font-body text-sm text-ink-muted">
+        <li>Delivered in 2–3 weeks · express on request</li>
+        <li>Free delivery over {formatPrice(FREE_SHIPPING_THRESHOLD)}</li>
+        <li>Invoiced after ordering — no card payment</li>
+      </ul>
     </motion.div>
   );
 }

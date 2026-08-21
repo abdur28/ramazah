@@ -17,7 +17,9 @@ import {
   File,
   Mail,
   Coins,
-  Images
+  Images,
+  MessageSquare,
+  Search,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -32,6 +34,8 @@ const navigationItems = [
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
   { name: 'Collections', href: '/admin/collections', icon: Images },
   { name: 'Pages', href: '/admin/pages', icon: File },
+  { name: 'Requests', href: '/admin/requests', icon: Search },
+  { name: 'Reviews', href: '/admin/reviews', icon: MessageSquare },
   { name: 'Mailer', href: '/admin/mailer', icon: Mail },
   { name: 'Transactions', href: '/admin/transactions', icon: Coins },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },

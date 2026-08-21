@@ -3,15 +3,28 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
-import CrossedLink from "@/components/ui/crossed-link";
+import Link from "next/link";
+import Stars from "@/components/product/Stars";
 import VariantSelector from "@/components/product/VariantSelector";
 import AddToCartSection from "@/components/product/AddToCartSection";
 import ProductDetails from "@/components/product/ProductDetails";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import type { Product, ProductVariant } from "@/types/types";
 
-export default function ProductInfo({ productAsString }: { productAsString: string }) {
+interface Breadcrumb {
+  name: string;
+  href: string;
+}
+
+export default function ProductInfo({
+  productAsString,
+  breadcrumbsAsString,
+}: {
+  productAsString: string;
+  breadcrumbsAsString: string;
+}) {
   const product: Product = JSON.parse(productAsString);
+  const breadcrumbs: Breadcrumb[] = JSON.parse(breadcrumbsAsString);
   const { formatPrice, getPriceWithCompare } = useCurrency();
   
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
@@ -27,9 +40,6 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
   const pricesSource = selectedVariant?.prices || product.prices;
   const priceData = getPriceWithCompare(pricesSource);
 
-  // Parse category path for breadcrumb
-  const categoryParts = product.categoryPath.split(" > ");
-
   return (
     <div className="px-6 lg:px-12 py-8 lg:py-12">
       {/* Breadcrumb */}
@@ -37,27 +47,24 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex items-center gap-2 text-xs text-foreground/60 mb-6"
+        className="mb-6 flex flex-wrap items-center gap-1.5 font-body text-xs text-ink-muted"
+        aria-label="Breadcrumb"
       >
-        <CrossedLink href="/" lineColor="gold">
-          <span className="hover:text-foreground transition-colors">Home</span>
-        </CrossedLink>
-        
-        {categoryParts.map((part, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <ChevronRight className="h-3 w-3" />
-            {index === categoryParts.length - 1 ? (
-              <span className="text-foreground/90">{part}</span>
-            ) : (
-              <CrossedLink href={`/clothings`} lineColor="gold">
-                <span className="hover:text-foreground transition-colors">{part}</span>
-              </CrossedLink>
-            )}
-          </div>
+        <Link href="/" className="transition-colors hover:text-sage-deep">
+          Home
+        </Link>
+
+        {breadcrumbs.map((crumb) => (
+          <span key={crumb.href} className="flex items-center gap-1.5">
+            <ChevronRight className="h-3 w-3 text-ink-faint" />
+            <Link href={crumb.href} className="transition-colors hover:text-sage-deep">
+              {crumb.name}
+            </Link>
+          </span>
         ))}
-        
-        <ChevronRight className="h-3 w-3" />
-        <span className="text-foreground/90">{product.name}</span>
+
+        <ChevronRight className="h-3 w-3 text-ink-faint" />
+        <span className="text-foreground">{product.name}</span>
       </motion.nav>
 
       {/* Badges */}
@@ -68,22 +75,22 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
         className="flex flex-wrap gap-2 mb-4"
       >
         {product.isNew && (
-          <span className="px-3 py-1 bg-terra-deep text-background text-xs font-body font-semibold uppercase tracking-wider">
+          <span className="rounded-sm bg-terra-deep px-2.5 py-1 font-body text-[10px] font-medium uppercase tracking-[0.14em] text-background">
             New
           </span>
         )}
         {priceData.discountPercent > 0 && (
-          <span className="px-3 py-1 bg-destructive text-background text-xs font-body font-semibold uppercase tracking-wider">
-            -{priceData.discountPercent}% Off
+          <span className="rounded-sm bg-destructive px-2.5 py-1 font-body text-[10px] font-medium uppercase tracking-[0.14em] text-background">
+            -{priceData.discountPercent}%
           </span>
         )}
         {product.isLimitedEdition && (
-          <span className="px-3 py-1 bg-foreground text-sage-light text-xs font-body font-semibold uppercase tracking-wider">
-            Limited Edition
+          <span className="rounded-sm bg-foreground px-2.5 py-1 font-body text-[10px] font-medium uppercase tracking-[0.14em] text-sage-light">
+            Limited
           </span>
         )}
         {product.isBestseller && (
-          <span className="px-3 py-1 bg-foreground/10 text-foreground text-xs font-body font-semibold uppercase tracking-wider">
+          <span className="rounded-sm bg-wash px-2.5 py-1 font-body text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted">
             Bestseller
           </span>
         )}
@@ -94,10 +101,28 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="font-heading text-4xl lg:text-5xl tracking-wide mb-4 uppercase"
+        className="mb-4 font-heading text-4xl font-light leading-[1.08] text-foreground lg:text-5xl"
       >
         {product.name}
       </motion.h1>
+
+      {/* Rating. Renders only once a review has been approved, so a young
+          catalogue never shows an empty five-star outline. */}
+      {(product.ratingCount ?? 0) > 0 && (
+        <motion.a
+          href="#reviews"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.25 }}
+          className="mb-5 inline-flex items-center gap-2 font-body text-sm text-ink-muted transition-colors hover:text-foreground"
+        >
+          <Stars rating={product.ratingAvg ?? 0} />
+          <span className="tabular-nums">{(product.ratingAvg ?? 0).toFixed(1)}</span>
+          <span>
+            · {product.ratingCount} {product.ratingCount === 1 ? "review" : "reviews"}
+          </span>
+        </motion.a>
+      )}
 
       {/* Short Description */}
       {product.shortDescription && (
@@ -105,7 +130,7 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="font-body text-base text-foreground/70 mb-6"
+          className="mb-6 max-w-[52ch] font-body text-base text-ink-muted"
         >
           {product.shortDescription}
         </motion.p>
@@ -122,9 +147,9 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
           {product.tags.map((tag) => (
             <span
               key={tag}
-              className="px-3 py-1 border border-foreground/20 text-foreground/60 text-xs font-body rounded-sm"
+              className="rounded-full border border-rule px-3 py-1 font-body text-xs text-ink-muted"
             >
-              #{tag}
+              {tag}
             </span>
           ))}
         </motion.div>
@@ -138,31 +163,30 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
         className="mb-8"
       >
         <div className="flex items-baseline gap-3">
-          <span className="font-body text-3xl text-foreground">
+          <span className="font-body text-3xl font-medium tabular-nums text-foreground">
             {formatPrice(priceData.price)}
           </span>
           {priceData.compareAtPrice > 0 && (
-            <span className="font-body text-xl text-foreground/40 line-through">
+            <span className="font-body text-xl tabular-nums text-ink-muted line-through">
               {formatPrice(priceData.compareAtPrice)}
             </span>
           )}
         </div>
         {priceData.discountPercent > 0 && priceData.compareAtPrice > 0 && (
-          <p className="text-sm text-success mt-2">
+          <p className="mt-2 font-body text-sm text-success">
             You save {formatPrice(priceData.compareAtPrice - priceData.price)}
           </p>
         )}
       </motion.div>
 
       {/* Divider */}
-      <div className="h-px bg-foreground/10 mb-8" />
+      <div className="mb-8 h-px bg-rule" />
 
       {/* Variant Selector */}
       {product.variants && product.variants.length > 0 && (
         <VariantSelector
+          options={product.options ?? []}
           variants={product.variants}
-          colors={product.colors || []}
-          sizes={product.sizes || []}
           selectedVariant={selectedVariant}
           onVariantChange={handleVariantChange}
         />
@@ -175,10 +199,10 @@ export default function ProductInfo({ productAsString }: { productAsString: stri
       />
 
       {/* Divider */}
-      <div className="h-px bg-foreground/10 my-8" />
+      <div className="my-8 h-px bg-rule" />
 
       {/* Product Details */}
-      <ProductDetails product={product} />
+      <ProductDetails product={product} selectedVariant={selectedVariant} />
     </div>
   );
 }

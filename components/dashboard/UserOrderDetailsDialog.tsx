@@ -8,6 +8,8 @@ import { Package, User, MapPin, CreditCard, Truck, CheckCircle2, Clock, XCircle,
 import Image from "next/image";
 import { Order, OrderStatus } from "@/types/types";
 import { format } from "date-fns";
+import { useCurrency } from '@/contexts/CurrencyContext';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 interface UserOrderDetailsDialogProps {
   open: boolean;
@@ -78,13 +80,17 @@ export default function UserOrderDetailsDialog({
   onOpenChange, 
   order 
 }: UserOrderDetailsDialogProps) {
+  // Before the early return: hooks cannot run conditionally.
+  const { formatPrice } = useCurrency();
+  useScrollLock(open);
+
   if (!order) return null;
 
   const statusConfig = getOrderStatusConfig(order.status);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent data-lenis-prevent className="max-h-[90vh] max-w-3xl overflow-y-auto overscroll-contain">
         <DialogHeader>
           <DialogTitle className="font-body flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -97,7 +103,7 @@ export default function UserOrderDetailsDialog({
 
         <div className="space-y-6 py-4">
           {/* Order Status */}
-          <div className="bg-muted/50 rounded-lg p-4">
+          <div className="bg-muted/50 rounded-sm p-4">
             <div className="flex items-center justify-between mb-2">
               <Badge variant={statusConfig.variant} className="flex items-center gap-1">
                 {statusConfig.icon}
@@ -180,14 +186,19 @@ export default function UserOrderDetailsDialog({
             </h3>
             <div className="space-y-3">
               {order.items.map((item) => (
-                <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                  <div className="relative w-20 h-20 rounded overflow-hidden bg-muted flex-shrink-0">
-                    <Image 
-                      src={item.imageUrl} 
-                      alt={item.name} 
-                      fill 
-                      className="object-cover"
-                    />
+                <div key={item.id} className="flex gap-3 p-3 border rounded-sm">
+                  <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-sm bg-wash">
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <Package className="absolute inset-0 m-auto h-5 w-5 text-ink-faint" />
+                    )}
                   </div>
                   
                   <div className="flex-1 min-w-0">
@@ -217,13 +228,13 @@ export default function UserOrderDetailsDialog({
                   
                   <div className="text-right">
                     <p className="font-medium">
-                      {order.currency.toUpperCase()} {item.price.toFixed(2)}
+                      {formatPrice(item.price)}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       × {item.quantity}
                     </p>
                     <p className="font-semibold mt-1">
-                      {(item.price * item.quantity).toFixed(2)}
+                      {formatPrice(item.price * item.quantity)}
                     </p>
                   </div>
                 </div>
@@ -242,27 +253,27 @@ export default function UserOrderDetailsDialog({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{order.currency.toUpperCase()} {order.subtotal.toFixed(2)}</span>
+                <span>{formatPrice(order.subtotal)}</span>
               </div>
               
               {order.tax !== undefined && order.tax > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tax</span>
-                  <span>{order.currency.toUpperCase()} {order.tax.toFixed(2)}</span>
+                  <span>{formatPrice(order.tax)}</span>
                 </div>
               )}
               
               {order.shippingCost !== undefined && order.shippingCost > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Shipping</span>
-                  <span>{order.currency.toUpperCase()} {order.shippingCost.toFixed(2)}</span>
+                  <span>{formatPrice(order.shippingCost)}</span>
                 </div>
               )}
               
               {order.discount !== undefined && order.discount > 0 && (
                 <div className="flex justify-between text-success">
                   <span>Discount</span>
-                  <span>-{order.discount.toFixed(2)}</span>
+                  <span>-{formatPrice(order.discount)}</span>
                 </div>
               )}
               
@@ -270,7 +281,7 @@ export default function UserOrderDetailsDialog({
               
               <div className="flex justify-between font-bold text-base pt-1">
                 <span>Total</span>
-                <span>{order.currency.toUpperCase()} {order.total.toFixed(2)}</span>
+                <span>{formatPrice(order.total)}</span>
               </div>
 
               <div className="flex justify-between text-xs text-muted-foreground">

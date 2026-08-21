@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { navigationStructure, type NavItem } from '@/constants/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 /**
  * The menu sheet, below `lg`. It carries what the desktop bar spreads across
@@ -36,16 +37,11 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
   // Reset the drill-down and hold the page still while the sheet is open.
+  useScrollLock(isOpen);
+
+  // Never reopen three levels deep.
   useEffect(() => {
-    if (!isOpen) return;
-
-    setActiveCategory(null);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
+    if (isOpen) setActiveCategory(null);
   }, [isOpen]);
 
   const handleCategoryClick = (item: NavItem) => {

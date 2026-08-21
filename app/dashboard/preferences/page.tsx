@@ -79,10 +79,10 @@ export default function PreferencesPage() {
         transition={{ duration: 0.6 }}
         className="mb-8"
       >
-        <h1 className="font-heading text-4xl md:text-5xl tracking-wider mb-2">
+        <h1 className="font-heading text-4xl font-light md:text-5xl mb-2">
           PREFERENCES
         </h1>
-        <p className="font-body text-sm text-foreground/60">
+        <p className="font-body text-sm text-ink-muted">
           Customize your shopping experience
         </p>
       </motion.div>
@@ -93,15 +93,15 @@ export default function PreferencesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="lg:col-span-2 p-6 bg-card border border-foreground/10 rounded-lg"
+          className="lg:col-span-2 p-6 bg-card border border-rule rounded-sm"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-foreground/5 rounded-md">
+            <div className="p-2 bg-wash rounded-md">
               <Mail className="h-5 w-5" />
             </div>
             <div>
               <h2 className="font-body font-semibold">Email Notifications</h2>
-              <p className="font-body text-sm text-foreground/60">
+              <p className="font-body text-sm text-ink-muted">
                 Manage your email preferences
               </p>
             </div>
@@ -137,7 +137,7 @@ export default function PreferencesPage() {
             ].map((item) => (
               <div
                 key={item.key}
-                className="flex items-start gap-3 p-3 hover:bg-foreground/5 rounded-md transition-colors"
+                className="flex items-start gap-3 p-3 hover:bg-wash rounded-md transition-colors"
               >
                 <Checkbox
                   id={item.key}
@@ -159,7 +159,7 @@ export default function PreferencesPage() {
                     <p className="font-body font-medium text-sm">
                       {item.label}
                     </p>
-                    <p className="font-body text-xs text-foreground/60">
+                    <p className="font-body text-xs text-ink-muted">
                       {item.description}
                     </p>
                   </div>
@@ -176,15 +176,15 @@ export default function PreferencesPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="p-6 bg-card border border-foreground/10 rounded-lg"
+            className="p-6 bg-card border border-rule rounded-sm"
           >
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-foreground/5 rounded-md">
+              <div className="p-2 bg-wash rounded-md">
                 <DollarSign className="h-5 w-5" />
               </div>
               <div>
                 <h2 className="font-body font-semibold">Currency</h2>
-                <p className="font-body text-sm text-foreground/60">
+                <p className="font-body text-sm text-ink-muted">
                   Choose your preferred currency
                 </p>
               </div>

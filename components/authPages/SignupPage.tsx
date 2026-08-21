@@ -11,12 +11,9 @@ import { Mail, Lock, User, Chrome, ArrowRight, AlertCircle, CheckCircle } from '
 import CrossedLink from '@/components/ui/crossed-link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
+import { authImages as backgroundImages } from '@/constants/demo';
 
-const backgroundImages = [
-  '/banner/Ramazah_банер 1 _resized.jpg',
-  '/banner/Ramazah_банер правка.jpg',
-  '/banner/Ramazah_банер 2 копия_resized.jpg',
-];
+
 
 export default function SignupPage({redirect}: {redirect: string}) {
   const [displayName, setDisplayName] = useState('');

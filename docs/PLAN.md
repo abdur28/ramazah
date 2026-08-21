@@ -1,12 +1,47 @@
 # Plan
 
-Ramazah is a Nigeria-based general import store sourcing from Egypt — veils and
-scarves, coffee and tea, beauty and personal care, dry foods, spices, kitchenware,
-home decor, school supplies. It started as a copy of the
-[hoodskool](https://github.com/abdur28/hoodskool) streetwear codebase, which shapes
-what still needs replacing.
+Ramazah is a **personalised shopping and shipping service** from Egypt to Nigeria. It
+sells a stocked catalog — veils and scarves, coffee and tea, beauty and personal care,
+dry foods, spices, kitchenware, home decor, school supplies — *and* sources items to
+order: "just tell us what you need, and we'll do the rest."
+
+It started as a copy of the
+[hoodskool](https://github.com/abdur28/hoodskool) streetwear codebase, which shapes what
+still needs replacing.
 
 **Trading in NGN. No payment processing — orders and invoices only.**
+
+## How the business describes itself
+
+The WhatsApp listing, verbatim from the client (2026-08-20), is the source of truth for
+tone and scope:
+
+> Assalamu Alaikum everyone and Welcome!
+>
+> We're excited to introduce our Personalized Shopping & Shipping Service from Egypt to
+> Nigeria!
+>
+> Tired of searching for unique, affordable, and quality items you can't find locally?
+> We've got you covered! Whether it's fashion, beauty products, electronics, home decor,
+> or anything in between — we help you shop directly from Egypt, and deliver straight to
+> your doorstep in Nigeria.
+>
+> We take the stress out of international shopping by handling everything from sourcing
+> to shipping, with options for standard delivery (2–3 weeks) or express shipping at an
+> extra cost if you're in a hurry.
+>
+> Let's make shopping fun, easy, and global — just tell us what you need, and we'll do
+> the rest!
+
+**Four things in there the site does not yet model.** They are broken out under Next.
+
+- **Sourcing to order is the headline service**, and the storefront has no way to ask for
+  something that is not already in the catalog. Every screen assumes a fixed catalog.
+- **Delivery takes 2–3 weeks**, with express at extra cost. The site quotes neither, and
+  a 2–3 week lead time is the single biggest expectation to set before someone orders.
+- **Electronics and fashion** are named as categories and neither exists in the tree.
+- **The audience is addressed as Muslim** ("Assalamu Alaikum"), warmly and informally.
+  Ramadan is a real trading season for this shop, not a marketing theme.
 
 ---
 
@@ -16,6 +51,13 @@ what still needs replacing.
 (Postgres 17 + Auth + RLS). Next.js upgraded 15.5.4 → 16.3.1. Firebase fully removed.
 See [PROGRESS.md](PROGRESS.md) for the log and
 [database-design.md](database-design.md) for the schema and decisions.
+
+**Account area — complete.** Redesigned, plus order tracking from
+`order_status_history`, reorder, printable invoices, an address book, the customer's
+own reviews, and sourcing requests (`product_requests`) with a staff queue.
+
+**Reviews — complete.** Verified-purchaser only, moderated through `/admin/reviews`,
+with `review_public` exposing an author name and nothing else from the profile.
 
 **Storefront chrome — complete.** Navigation, search, cart and the menu sheet. One
 navigation source in `constants/navigation.ts` replaces four hardcoded copies, and
@@ -40,13 +82,27 @@ The chrome is done; the **words and the pictures** are still hoodskool's:
   model in a HOOD hoodie. They are referenced by `Hero.tsx` and the home sections, so
   they go when the content pass replaces those sections, not before.
 
-### 2. Admin product form
+### 2. Turning a request into an order
+Requests themselves are built — `/dashboard/requests` for the customer,
+`/admin/requests` for staff, moving asked → quoted → buying → fulfilled. What is
+missing is the last step: accepting a quote still means someone creating the order by
+hand. A "convert to order" action on a quoted request would close the loop, and is
+what finally takes the sourcing service off WhatsApp.
+
+### 3. Shipping: two speeds, and a lead time
+`STANDARD_SHIPPING` and `FREE_SHIPPING_THRESHOLD` are single placeholder Naira amounts.
+The real model has **standard (2–3 weeks)** and **express at extra cost**, which means
+checkout needs a shipping-method choice, `orders` needs to record which was taken, and
+every product page and the cart need to state the lead time. A customer who expects
+next-day delivery and waits three weeks is a refund request.
+
+### 4. Admin product form
 The data layer writes the generic option model, but the form still only understands
 `size` and `color`. Until it is rebuilt you cannot create a
 "Weight: 250g / Grind: Ground" product through the UI — only via SQL. Also needs
 expiry-date entry for perishables. This is a UI rebuild, not a port.
 
-### 3. Product pages and filters
+### 5. Product pages and filters
 Size filters and size guides do not fit coffee and spices. Filtering should move to
 the generic options plus tags, using `product_listing` and `search_product_ids()`.
 
@@ -57,11 +113,24 @@ place. Deliberate, but it is the same rebuild.
 **A search results page** would also belong here. Search currently lives entirely in
 the dialog, which shows the top six matches and asks you to refine.
 
-### 4. Google sign-in
+### 6. Notifications and admin — deferred by the client (2026-08-21)
+Working, but nobody is told anything by email:
+
+- **Wishlist back-in-stock alerts.** `preferences.emailNotifications.wishlistAlerts`
+  exists and `emails/wishlist_alert.html` exists; nothing watches stock and nothing
+  sends. The toggle is currently a promise the system does not keep.
+- **Review and request notifications.** A review lands as `pending` and a sourcing
+  request lands as `asked`; both are invisible until someone opens
+  `/admin/reviews` or `/admin/requests`. No email says one is waiting, and the
+  customer is not told when their review is published or their request quoted.
+- **Admin polish.** The admin screens work but have not had the design pass the
+  storefront and the account area have had.
+
+### 7. Google sign-in
 Currently an unconfigured button that returns a raw `400`. Either enable the provider
 (Google Cloud OAuth client → Supabase → URL Configuration) or hide it.
 
-### 5. Deployment
+### 8. Deployment
 Vercel. Needs the Supabase env vars, a production Site URL and redirect allowlist, and
 real values for `FREE_SHIPPING_THRESHOLD` / `STANDARD_SHIPPING` (currently placeholder
 Naira amounts).
@@ -84,6 +153,10 @@ Naira amounts).
   changing shape; the labels and order would still need somewhere to live.
 - **Rounding display** — Naira prices drop kobo, so a cart's displayed parts can sum
   ₦1 off its displayed total. Harmless until invoices exist; not once they do.
+- **Electronics and fashion categories** — both are advertised on WhatsApp and neither
+  is in the category tree. Adding them is one seed migration plus a line in
+  `constants/navigation.ts`, but electronics carries warranty and returns questions the
+  rest of the catalog does not.
 
 ## Deliberately not doing
 

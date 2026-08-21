@@ -76,3 +76,16 @@ export const trendingSearches: string[] = [
   'Cumin',
   'Brass tray',
 ];
+
+/**
+ * Social accounts, for the footer. Empty hrefs are skipped rather than rendered
+ * as dead links — fill one in and its icon appears.
+ *
+ * The business runs on WhatsApp, so that is the one worth having first: use
+ * `https://wa.me/<number in full international form, no +>`.
+ */
+export const socialLinks: { name: string; href: string }[] = [
+  { name: 'WhatsApp', href: '' },
+  { name: 'Instagram', href: '' },
+  { name: 'Facebook', href: '' },
+];

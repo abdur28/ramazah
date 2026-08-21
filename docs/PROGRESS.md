@@ -5,6 +5,133 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-21 — Home page, product page, reviews, account area
+
+The storefront redesigned section by section against the client's own direction,
+plus three features the database already supported and nothing exposed.
+
+**Home page rebuilt.** Editorial bands for the two lead categories, a weighted
+twelve-column table for all six, a product rail, one story band and a newsletter
+close. Structural notes worth keeping:
+
+- The category table **pins while the rail scrolls over it**. A sticky block has to
+  fit one screen or it can never show its own bottom, so the section is `100svh`
+  with its rows as fractions of what is left — `svh` rather than `vh` because mobile
+  browsers measure `vh` against the largest viewport, which is taller than the screen
+  for most of a scroll.
+- The rail needed `relative z-10` to ride over it: a sticky element is *positioned*,
+  so it paints above ordinary siblings whatever the DOM order says.
+- The navbar's transparent → solid switch watched the hero, and **the hero is
+  sticky** — it never stops intersecting, so the bar only changed at the footer. It
+  now watches a marker at the hero's end, testing `boundingClientRect.top` rather
+  than `isIntersecting`, since a marker below the fold is also "not intersecting".
+
+**Photography.** All eight hoodskool images deleted, including the three the login,
+signup and reset pages each carried their own copy of. Replaced by
+`constants/demo.ts` — Unsplash placeholders chosen by eye against the palette, one
+module to swap for Cloudinary later. `supabase/seed.sql` pointed every product at
+`/DSC09599.jpg`, so **every product image on the site was a 404**; the seed now
+assigns one per product and the live rows were repointed.
+
+**Footer** rebuilt: it linked nine routes that were never built. Those pages now
+exist — FAQ, Shipping, Returns, Privacy, Terms, Cookies — written from facts where
+facts exist, and saying plainly that the policy is being finalised where only the
+client can write it. Legal text is not invented. The subscribe form called
+`console.log` and then said "Subscribed!"; it now writes to `newsletter_subscribers`,
+where anonymous visitors may insert and nothing else — reading the list back is
+blocked, so the form cannot double as an address dump.
+
+**Product page.** `VariantSelector` rendered exactly two controls, Size and Colour,
+which is the shape of an apparel shop — so coffee (Weight × Grind), oil (Size) and
+dates (Weight) **had no axes on screen at all**. It now renders one row per option
+from `product.options`, which `mapProduct()` has always derived, with cross-axis
+availability: picking 250g correctly greys out a grind that only exists in 1kg.
+
+Every page also told customers **"Free shipping on orders over $100 · 30-day returns
+and exchanges"**, and the details accordion carried eight more bullets of invented
+policy in dollars. Replaced with the real terms, linking to the pages above.
+Breadcrumbs linked every category to `/clothings`; they now resolve the real
+hierarchy server-side. Related products added, and the details panel finally shows
+the selected variant's expiry date, weight, option label and its own SKU.
+
+**Reviews — built end to end.** The schema was already complete and secured; nothing
+in the UI read it. Added the display, the form (verified purchasers only, which the
+insert policy enforces), `/dashboard/reviews` so an author can see their moderation
+status, and `/admin/reviews`, without which the queue could never be drained.
+
+One migration was needed: `profiles` is readable only by its owner, so a review could
+not show its author. `review_public` exposes the display name and the verified flag
+**for approved rows only** — no email, no phone, no role, no user_id.
+
+**Account area redesigned**, and six things added:
+
+| | |
+|---|---|
+| Order tracking | `order_status_history` is trigger-written and was displayed nowhere |
+| Reorder | Re-priced from today's catalog, never from the order |
+| Invoices | Printable A4, matching the client's own printed template |
+| Address book | `addresses` always allowed several; Settings edited one |
+| Your reviews | Moderation status, so a review never just disappears |
+| Requests | `product_requests` — the sourcing service, off WhatsApp at last |
+
+The Settings address form was removed rather than left beside the book: the two
+disagreed about the model, and saving in Settings would silently overwrite whichever
+address happened to be default.
+
+**The invoice** is the payment instrument — there is no card checkout — and now
+matches the printed original: amber band, cart with its shadow, rounded white heading
+bar on a pale green page, totals in green. Printing notes, all of which cost a
+round trip to learn:
+
+- Browsers **drop background colours** when printing unless `print-color-adjust:
+  exact`; the band and totals are the document's identity, not decoration.
+- `width: 210mm` asserts A4's *nominal* width. Printers reserve an unprintable edge,
+  so the sheet overflowed and left a white gap; `100%` fills the real page box. The
+  same mistake vertically (`min-height: 297mm`) produces a **blank second page**.
+- A page *margin* prints white whatever the canvas is painted, because it sits
+  outside the page box. Space above the repeated column headings is made inside the
+  sheet with a transparent border and `background-clip: padding-box`.
+- The chrome was hidden by naming elements, and the names were wrong — the providers
+  render fragments, so the navbar is `body > nav`. Now: hide everything that is
+  neither the sheet, inside it, nor an ancestor of it.
+
+Phone numbers are part-masked on the invoice (`+234816.....37`), since an invoice is
+forwarded, printed and photographed. The full number stays in the database.
+
+**Bugs found and fixed along the way:**
+
+- **The auth redirect never worked.** Both `/auth/login` and `/auth/signup` read
+  `redirect` from `params` instead of `searchParams`; those routes have no dynamic
+  segments, so it was always empty and everyone landed on `/dashboard`. Every "sign
+  in and come back" path was broken. Fixed, with `safeRedirect` — honouring the
+  parameter unguarded is an open redirect, and the person following it has just
+  typed their password.
+- **Overlays did not lock the page.** Lenis drives scrolling from its own wheel
+  listener and calls `scrollTo` on the window, so `overflow: hidden` — and Radix's
+  own lock — had no effect. One `useScrollLock` hook now stops both; applied to six
+  overlays.
+- `<Image src="">` on order lines without a picture, which makes the browser
+  re-download the whole page.
+- The product details accordion opened nothing: its initial state said
+  `"description"`, the item is `"Description"`.
+- Quantity survived a variant change, so 20 of a 35-stock weight stayed at 20 against
+  a variant with 8 — rejected at checkout with no explanation.
+- The account rail's active item was ink on deep sage: **2.28:1**.
+- `useScroll` targets measured against a static `body`, so every parallax offset was
+  computed from the wrong origin.
+
+**Seed.** Eight products, one per category, so every tile leads somewhere with stock
+behind it — verified by running the whole file into an emptied `products` table
+inside a transaction and rolling back. `scripts/seed-demo-reviews.js` adds four demo
+customers with a known password, delivered orders, nine reviews (one left pending, one
+purchase left unreviewed so the form can be exercised) and a fourteen-line order for
+testing the invoice page break. `--clean` removes all of it.
+
+**Verified:** typecheck and production build clean throughout; reviews, requests,
+addresses, tracking and reorder each tested against the live database as a real
+signed-in customer and a real admin, including the negative cases — a customer cannot
+approve their own review, quote their own request, or read another's.
+
 ## 2026-08-20 — Navigation, search, cart
 
 The storefront chrome, redesigned end to end. Colour and type were already done; this

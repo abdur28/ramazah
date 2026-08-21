@@ -31,12 +31,17 @@ app/
 │   └── send-email/, send-order-email/  nodemailer
 ├── auth/             login · signup · reset-password · callback (OAuth/confirm)
 ├── categories/       [...slug] catch-all, slug-addressed
-├── checkout/, dashboard/, product/, contact/
+├── dashboard/        overview · orders (+ [id]/invoice) · wishlist · requests ·
+│                     reviews · addresses · preferences · settings
+├── faq/, shipping/, returns/, privacy/, terms/, cookies/
+│                     Support and Legal, linked from the footer
+├── checkout/, product/, contact/
 
 components/          ui/ (shadcn), admin/, home/, layout/, navbar/, footer/,
                      cart/, checkout/, product/, category/, brand/
 constants/
 ├── navigation.ts    The one navigation source — bar, menu sheet, search dialog
+├── demo.ts          Placeholder imagery; swap for Cloudinary URLs in one file
 └── index.ts         Currencies, VAT rate, shipping thresholds
 contexts/            AuthContext · CartInitializer · Currency
 hooks/
@@ -48,11 +53,16 @@ lib/
 ├── auth/server.ts   getCurrentUser · requireAuth · requireAdmin
 ├── products.ts      Catalog reads, cart, wishlist
 ├── orders.ts        Orders (create_order RPC)
+├── account.ts       Order tracking, reorder, addresses, own reviews, requests
+├── reviews.ts       Public reviews, eligibility, submission, moderation
+├── newsletter.ts    Subscribe (insert-only under RLS)
+├── auth/redirect.ts safeRedirect — same-site paths only
 ├── cloudinary.ts, email.ts, chartUtils.ts
 supabase/
 ├── migrations/      8 migrations (see below)
 └── seed.sql         Sample catalog
-scripts/             make-admin.js · seed.js
+scripts/             make-admin.js · seed.js · seed-demo-reviews.js
+                     (demo customers, orders and reviews; --clean removes them)
 types/               types.d.ts · admin.ts
 proxy.ts             Session refresh + route protection (Next 16 name)
 ```
@@ -69,6 +79,9 @@ proxy.ts             Session refresh + route protection (Next 16 name)
 | `...000005_column_privileges` | Column-level grants + admin RPCs |
 | `...000006_product_listing` | Listing view + full-text search |
 | `...000007_default_preferences` | Seeds preferences at signup |
+| `...000008_newsletter_subscribers` | Email captures; anon may insert, never read |
+| `...000009_review_public` | Approved reviews plus author name, and nothing else |
+| `...000010_product_requests` | Sourcing requests; quote and status are staff-only |
 
 ## Key conventions
 

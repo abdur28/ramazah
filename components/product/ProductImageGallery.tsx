@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ProductImage } from "@/types/types";
+import { useScrollLock } from "@/hooks/useScrollLock";
 
 interface ProductImageGalleryProps {
   imagesAsString: string;
@@ -39,17 +40,8 @@ export default function ProductImageGallery({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFullscreen, selectedImageIndex]);
 
-  // Prevent body scroll when fullscreen is open
-  useEffect(() => {
-    if (isFullscreen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [isFullscreen]);
+  // Freezes the native scroll and the smooth-scroll loop together.
+  useScrollLock(isFullscreen);
 
   const handlePrevious = () => {
     setSelectedImageIndex((prev) => 
@@ -69,7 +61,7 @@ export default function ProductImageGallery({
         {/* Main Image */}
         <button
           onClick={() => setIsFullscreen(true)}
-          className="relative aspect-[2/3] md:flex-1 bg-foreground/5 overflow-hidden cursor-zoom-in group"
+          className="group relative aspect-[4/5] cursor-zoom-in overflow-hidden bg-wash md:flex-1"
         >
           <AnimatePresence mode="wait">
             <motion.div

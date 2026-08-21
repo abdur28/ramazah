@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Minus, Trash2, ShoppingBag, Check, AlertTriangle } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { popularCategories } from '@/constants/navigation';
@@ -29,6 +30,8 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
   // Which line is mid-request. The store's `isLoading` is global, so a full
   // panel spinner used to cover the cart every time a quantity ticked by one.
   const [pendingId, setPendingId] = useState<string | null>(null);
+
+  useScrollLock(isOpen);
 
   // Calculate cart totals based on selected currency
   const cartTotals = useMemo(() => {

@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { Heart, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
-import CrossedLink from '@/components/ui/crossed-link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useCart } from '@/hooks/useCart';
@@ -35,7 +34,7 @@ export default function WishlistPage() {
           transition={{ duration: 0.6 }}
           className="mb-8"
         >
-          <h1 className="font-heading text-4xl md:text-5xl tracking-wider">
+          <h1 className="font-heading text-4xl font-light md:text-5xl">
             WISHLIST
           </h1>
         </motion.div>
@@ -58,10 +57,10 @@ export default function WishlistPage() {
         transition={{ duration: 0.6 }}
         className="mb-8"
       >
-        <h1 className="font-heading text-4xl md:text-5xl tracking-wider">
+        <h1 className="font-heading text-4xl font-light md:text-5xl">
           WISHLIST
         </h1>
-        <p className="font-body text-sm text-foreground/60 mt-2">
+        <p className="font-body text-sm text-ink-muted mt-2">
           {wishlistProducts.length} {wishlistProducts.length === 1 ? 'item' : 'items'} in your wishlist
         </p>
       </motion.div>
@@ -73,24 +72,25 @@ export default function WishlistPage() {
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center justify-center py-20 text-center"
         >
-          <Heart className="h-16 w-16 text-foreground/20 mb-4" />
-          <h2 className="font-heading text-2xl tracking-wider mb-2">
-            YOUR WISHLIST IS EMPTY
-          </h2>
-          <p className="font-body text-sm text-foreground/60 mb-6">
-            Start adding items you love to your wishlist
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-wash">
+            <Heart className="h-6 w-6 text-sage" />
+          </div>
+          <h2 className="mt-5 font-body text-base text-foreground">Nothing saved yet</h2>
+          <p className="mt-1 max-w-[38ch] font-body text-sm text-ink-muted">
+            Tap the heart on anything you want to come back to — it waits here, and we
+            email you if it goes out of stock and returns.
           </p>
           <Link
-            href="/clothings"
-            className="px-6 py-3 bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background transition-colors rounded-md font-body text-sm font-medium"
+            href="/"
+            className="mt-6 rounded-sm bg-sage-deep px-6 py-3 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-background transition-colors hover:bg-foreground"
           >
-            Start Shopping
+            Start shopping
           </Link>
         </motion.div>
       ) : (
         <>
           {/* Wishlist Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-2 mb-8">
+          <div className="mb-8 grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-4">
             {wishlistProducts.map((product, index) => (
               <ProductCard key={product.id} product={product} index={index} />
             ))}
@@ -99,34 +99,26 @@ export default function WishlistPage() {
           {/* Actions */}
           {inStockCount > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.7 }}
-              className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-gradient-to-r from-foreground to-ink-muted rounded-lg relative overflow-hidden"
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="flex flex-col items-start justify-between gap-4 rounded-sm border border-rule bg-wash p-6 sm:flex-row sm:items-center"
             >
-              {/* Background Pattern */}
-              <div className="absolute inset-0 opacity-10">
-                <div className="absolute top-0 right-0 w-40 h-40 bg-sage-deep rounded-full -translate-y-1/2 translate-x-1/2" />
-                <div className="absolute bottom-0 left-0 w-32 h-32 bg-sage-deep rounded-full translate-y-1/2 -translate-x-1/2" />
-              </div>
-
-              <div className="relative z-10">
-                <h3 className="font-body font-semibold mb-1 text-background">
-                  Looking for more?
+              <div>
+                <h3 className="font-body text-sm font-medium text-foreground">
+                  {inStockCount} of these {inStockCount === 1 ? 'is' : 'are'} in stock
                 </h3>
-                <p className="font-body text-sm text-background/60">
-                  {inStockCount} {inStockCount === 1 ? 'item' : 'items'} available in your wishlist
+                <p className="mt-1 font-body text-sm text-ink-muted">
+                  Stock moves in batches, so saved items do not stay available forever.
                 </p>
               </div>
-              <div className="flex gap-3 relative z-10">
-                <Link
-                  href="/clothings"
-                  className="px-6 py-3 bg-sage-deep text-background hover:bg-sage-deep/90 transition-colors rounded-md font-body text-sm font-medium flex items-center gap-2"
-                >
-                  Shop Now
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
+              <Link
+                href="/"
+                className="group inline-flex shrink-0 items-center gap-2 rounded-sm bg-sage-deep px-6 py-3 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-background transition-colors hover:bg-foreground"
+              >
+                Keep shopping
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+              </Link>
             </motion.div>
           )}
 
@@ -137,13 +129,12 @@ export default function WishlistPage() {
             transition={{ duration: 0.6, delay: 0.8 }}
             className="text-center mt-8"
           >
-            <CrossedLink
-              lineColor="gold"
-              href="/clothings"
-              className="inline-flex text-sm items-center"
+            <Link
+              href="/"
+              className="inline-flex items-center font-body text-sm text-sage-deep transition-colors hover:text-foreground"
             >
-              Continue Shopping
-            </CrossedLink>
+              Continue shopping
+            </Link>
           </motion.div>
         </>
       )}

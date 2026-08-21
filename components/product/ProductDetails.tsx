@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
-import type { Product } from "@/types/types";
+import type { Product, ProductVariant } from "@/types/types";
 
 interface ProductDetailsProps {
   product: Product;
+  /** So SKU, weight and expiry describe the variant on screen, not the product. */
+  selectedVariant?: ProductVariant | null;
 }
 
 interface AccordionItem {
@@ -14,8 +17,8 @@ interface AccordionItem {
   content: React.ReactNode;
 }
 
-export default function ProductDetails({ product }: ProductDetailsProps) {
-  const [openItems, setOpenItems] = useState<Set<string>>(new Set(["description"]));
+export default function ProductDetails({ product, selectedVariant }: ProductDetailsProps) {
+  const [openItems, setOpenItems] = useState<Set<string>>(new Set(["Description"]));
 
   const toggleItem = (title: string) => {
     setOpenItems((prev) => {
@@ -34,13 +37,13 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
       title: "Description",
       content: (
         <div className="space-y-3">
-          <p className="text-foreground/70 leading-relaxed">
+          <p className="leading-relaxed text-ink-muted">
             {product.description}
           </p>
           {product.materials && product.materials.length > 0 && (
             <div>
               <h4 className="font-medium text-foreground mb-2">Materials:</h4>
-              <ul className="list-disc list-inside space-y-1 text-foreground/70">
+              <ul className="list-inside list-disc space-y-1 text-ink-muted">
                 {product.materials.map((material, index) => (
                   <li key={index}>{material}</li>
                 ))}
@@ -51,27 +54,62 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
       ),
     },
     {
-      title: "Product Details",
+      title: "Details",
       content: (
-        <div className="grid grid-cols-2 gap-4">
+        <dl className="grid grid-cols-2 gap-4">
           {product.details &&
             Object.entries(product.details).map(([key, value]) => (
               <div key={key} className="space-y-1">
-                <dt className="text-xs uppercase tracking-wider text-foreground/50">
+                <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
                   {key.replace(/([A-Z])/g, " $1").trim()}
                 </dt>
-                <dd className="text-sm text-foreground/70">{String(value)}</dd>
+                <dd className="text-sm text-foreground">{String(value)}</dd>
               </div>
             ))}
-          {product.sku && (
+
+          {selectedVariant?.label && (
             <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-wider text-foreground/50">
-                SKU
+              <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                Option
               </dt>
-              <dd className="text-sm text-foreground/70">{product.sku}</dd>
+              <dd className="text-sm text-foreground">{selectedVariant.label}</dd>
             </div>
           )}
-        </div>
+
+          {selectedVariant?.weight ? (
+            <div className="space-y-1">
+              <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                Weight
+              </dt>
+              <dd className="text-sm tabular-nums text-foreground">{selectedVariant.weight} g</dd>
+            </div>
+          ) : null}
+
+          {/* The database has carried expiry all along; nothing displayed it. */}
+          {selectedVariant?.expiryDate && (
+            <div className="space-y-1">
+              <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                Best before
+              </dt>
+              <dd className="text-sm text-foreground">
+                {new Date(selectedVariant.expiryDate).toLocaleDateString("en-NG", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </dd>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+              SKU
+            </dt>
+            <dd className="text-sm tabular-nums text-foreground">
+              {selectedVariant?.sku || product.sku}
+            </dd>
+          </div>
+        </dl>
       ),
     },
   ];
@@ -79,10 +117,10 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
   // Add care instructions if available
   if (product.careInstructions) {
     accordionItems.push({
-      title: "Care Instructions",
+      title: "Care",
       content: (
         <div className="space-y-2">
-          <p className="text-foreground/70 leading-relaxed whitespace-pre-line">
+          <p className="whitespace-pre-line leading-relaxed text-ink-muted">
             {product.careInstructions}
           </p>
         </div>
@@ -96,7 +134,7 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
       title: "Size Guide",
       content: (
         <div className="space-y-2">
-          <p className="text-foreground/70 leading-relaxed whitespace-pre-line">
+          <p className="whitespace-pre-line leading-relaxed text-ink-muted">
             {product.sizeGuide}
           </p>
         </div>
@@ -104,28 +142,44 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
     });
   }
 
-  // Add shipping & returns
+  // Shipping and returns. Previously eight bullet points of invented policy —
+  // "$100", "3-7 business days", "30-day return policy", "unworn and in
+  // original packaging" — none of which describes this business. The pages it
+  // links to are the single place that policy lives, so it cannot drift.
   accordionItems.push({
-    title: "Shipping & Returns",
+    title: "Shipping & returns",
     content: (
-      <div className="space-y-3 text-foreground/70">
+      <div className="space-y-4 text-ink-muted">
         <div>
-          <h4 className="font-medium text-foreground mb-2">Shipping</h4>
+          <h4 className="mb-2 font-medium text-foreground">Shipping</h4>
           <ul className="space-y-1 text-sm">
-            <li>• Free standard shipping on orders over $100</li>
-            <li>• Express shipping available at checkout</li>
-            <li>• Estimated delivery: 3-7 business days</li>
-            <li>• International shipping available</li>
+            <li>Standard delivery takes two to three weeks, anywhere in Nigeria.</li>
+            <li>Express is available for an extra cost — ask before ordering.</li>
+            <li>Larger orders ship free; the threshold is shown in your cart.</li>
           </ul>
+          <Link
+            href="/shipping"
+            className="mt-2 inline-block text-sm text-sage-deep underline-offset-4 hover:underline"
+          >
+            Shipping &amp; delivery
+          </Link>
         </div>
         <div>
-          <h4 className="font-medium text-foreground mb-2">Returns & Exchanges</h4>
+          <h4 className="mb-2 font-medium text-foreground">If something is wrong</h4>
           <ul className="space-y-1 text-sm">
-            <li>• 30-day return policy</li>
-            <li>• Items must be unworn and in original packaging</li>
-            <li>• Free returns and exchanges</li>
-            <li>• Refunds processed within 5-7 business days</li>
+            <li>Damaged, wrong or missing items are put right by us.</li>
+            <li>
+              {product.isPerishable
+                ? "Food and cosmetics cannot be returned once opened, but anything past its expiry date on arrival is replaced or refunded."
+                : "Tell us within a few days of delivery, with a photograph."}
+            </li>
           </ul>
+          <Link
+            href="/returns"
+            className="mt-2 inline-block text-sm text-sage-deep underline-offset-4 hover:underline"
+          >
+            Returns
+          </Link>
         </div>
       </div>
     ),
@@ -136,22 +190,22 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.8 }}
-      className="space-y-0 border border-foreground/10"
+      className="space-y-0 rounded-sm border border-rule"
     >
       {accordionItems.map((item, index) => (
-        <div key={item.title} className={index > 0 ? "border-t border-foreground/10" : ""}>
+        <div key={item.title} className={index > 0 ? "border-t border-rule" : ""}>
           <button
             onClick={() => toggleItem(item.title)}
-            className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-foreground/5 transition-colors"
+            className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-wash"
           >
-            <span className="font-body text-sm font-medium uppercase tracking-wider">
+            <span className="font-body text-[11px] font-medium uppercase tracking-[0.16em] text-foreground">
               {item.title}
             </span>
             <motion.div
               animate={{ rotate: openItems.has(item.title) ? 180 : 0 }}
               transition={{ duration: 0.3 }}
             >
-              <ChevronDown className="h-5 w-5 text-foreground/60" />
+              <ChevronDown className="h-4 w-4 text-ink-muted" />
             </motion.div>
           </button>
 

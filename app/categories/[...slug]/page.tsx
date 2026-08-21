@@ -6,7 +6,6 @@ import {
   getAllCategories,
   pathToDisplayPath 
 } from "@/lib/products"
-import ArtPage from "@/components/category/ArtPage"
 
 
 export default async function CategoryDynamicPage({ params }: any) {
@@ -43,21 +42,6 @@ export default async function CategoryDynamicPage({ params }: any) {
 
   // Convert path to display path for the title
   const displayPath = category.path
-
-  if (pathParts[0] === 'artwork') {
-    return (
-      <ArtPage
-        title={category.name.toUpperCase()}
-        description={category.description}
-        subtitle={category.subtitle}
-        categoryPath={displayPath}
-        bannerImage={category.bannerImage?.secureUrl}
-        breadcrumbsAsString={JSON.stringify(breadcrumbs)}
-        productsAsString={JSON.stringify(products)}
-        isLoading={false}
-      />
-    )
-  }
 
   return (
     <CategoryPage

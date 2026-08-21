@@ -10,6 +10,7 @@ import { popularCategories, trendingSearches } from '@/constants/navigation';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { getProducts } from '@/lib/products';
 import type { Product } from '@/types/types';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 /**
  * Site search. A top-anchored dialog on desktop, full screen on mobile.
@@ -74,7 +75,10 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
   const isIdle = trimmed.length < MIN_QUERY;
   const showEmpty = !isIdle && !isSearching && results.length === 0;
 
-  // Open: reset to a clean dialog, take focus, and hold the page still.
+  // Holds the page still — both the native scroll and the Lenis loop.
+  useScrollLock(isOpen);
+
+  // Open: reset to a clean dialog and take focus.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -84,12 +88,9 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
     setRecentSearches(readRecent());
 
     const focus = setTimeout(() => inputRef.current?.focus(), 120);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
 
     return () => {
       clearTimeout(focus);
-      document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
 

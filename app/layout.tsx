@@ -20,7 +20,9 @@ const cormorant = Cormorant_Garamond({
 
 // Interface face — all body text, labels, buttons and prices
 const jost = Jost({
-  weight: ["300", "400", "500"],
+  // 600/700 exist for the invoice, which is set heavy like the printed
+  // original. The storefront still uses 300–500 only.
+  weight: ["300", "400", "500", "600", "700"],
   subsets: ["latin"],
   variable: "--font-body",
   display: "swap",

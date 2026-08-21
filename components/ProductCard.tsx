@@ -5,7 +5,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Heart, ShoppingBag, Check } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import CrossedLink from "@/components/ui/crossed-link";
+import Link from "next/link";
 import { useCart, useIsInCart } from "@/hooks/useCart";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboard, useIsInWishlist } from "@/hooks/useDashboard";
@@ -20,6 +20,10 @@ import { Button } from "@/components/ui/button";
 import type { CartItem, Product, Color } from "@/types/types";
 import { Skeleton } from "./ui/skeleton";
 import { toast } from "sonner";
+import { useScrollLock } from "@/hooks/useScrollLock";
+
+/** "Food & Pantry > Coffee & Tea" reads as "Coffee & Tea" on one line. */
+const leafCategory = (path: string) => path.split(">").pop()?.trim() ?? "";
 
 interface ProductCardProps {
   product: Product;
@@ -36,6 +40,8 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const [selectedSize, setSelectedSize] = useState<string | undefined>();
   const [selectedColor, setSelectedColor] = useState<Color | undefined>();
   
+  useScrollLock(showVariantDialog);
+
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
@@ -244,6 +250,41 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     return true;
   };
 
+  const addToCartButton = (
+    <button
+      onClick={handleAddToCartClick}
+      disabled={isAdding || isInCart}
+      className={`flex w-full items-center justify-center gap-2 rounded-sm py-2.5 font-body text-[11px] font-medium uppercase tracking-[0.14em] transition-colors md:text-xs ${
+        isInCart
+          ? 'cursor-default bg-success text-background'
+          : isAdding
+          ? 'cursor-wait bg-foreground/50 text-background'
+          : 'bg-sage-deep text-background hover:bg-foreground'
+      }`}
+    >
+      {isAdding ? (
+        <>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            className="h-3.5 w-3.5 rounded-full border-2 border-background border-t-transparent"
+          />
+          Adding
+        </>
+      ) : isInCart ? (
+        <>
+          <Check className="h-3.5 w-3.5" />
+          In cart
+        </>
+      ) : (
+        <>
+          <ShoppingBag className="h-3.5 w-3.5" />
+          Add
+        </>
+      )}
+    </button>
+  );
+
   return (
     <>
       <motion.div
@@ -253,10 +294,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         transition={{ duration: 0.5, delay: index * 0.1 }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className="group relative mb-4 md:mb-8"
+        className="group relative"
       >
         {/* Product Image Container */}
-        <div className="relative aspect-[2/3] bg-foreground/5 rounded-xs overflow-hidden mb-4">
+        <div className="relative aspect-[4/5] overflow-hidden rounded-sm bg-wash mb-3">
           {/* Primary Image */}
           <motion.div 
             className="absolute inset-0"
@@ -269,6 +310,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 src={primaryImage.secureUrl}
                 alt={primaryImage.altText || product.name}
                 fill
+                sizes="(max-width: 768px) 50vw, 25vw"
                 className="object-cover"
               />
             ) : (
@@ -290,18 +332,19 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 src={hoverImage.secureUrl}
                 alt={hoverImage.altText || `${product.name} alternate view`}
                 fill
+                sizes="(max-width: 768px) 50vw, 25vw"
                 className="object-cover"
               />
             </motion.div>
           )}
 
           {/* Badges */}
-          <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
+          <div className="absolute top-2.5 left-2.5 z-10 flex flex-col items-start gap-1.5">
             {product.isNew && (
               <motion.span 
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
-                className="px-3 py-1 bg-terra-deep text-background text-xs font-body font-semibold uppercase tracking-wider"
+                className="rounded-sm bg-terra-deep px-2 py-0.5 font-body text-[10px] font-medium uppercase tracking-[0.12em] text-background"
               >
                 New
               </motion.span>
@@ -311,7 +354,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.1 }}
-                className="px-3 py-1 bg-destructive text-background text-xs font-body font-semibold uppercase tracking-wider"
+                className="rounded-sm bg-destructive px-2 py-0.5 font-body text-[10px] font-medium uppercase tracking-[0.12em] text-background"
               >
                 -{priceData.discountPercent}%
               </motion.span>
@@ -321,7 +364,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="px-3 py-1 bg-foreground text-sage-light text-xs font-body font-semibold uppercase tracking-wider"
+                className="rounded-sm bg-foreground px-2 py-0.5 font-body text-[10px] font-medium uppercase tracking-[0.12em] text-sage-light"
               >
                 Limited
               </motion.span>
@@ -329,82 +372,35 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           </div>
 
           {/* Quick Actions - Wishlist Heart */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: isHovered ? 1 : 0 }}
-            transition={{ duration: 0.3 }}
-            className="absolute top-3 right-3 flex flex-col gap-2 z-20"
-          >
+          <div className="absolute top-2.5 right-2.5 z-20 opacity-100 transition-opacity duration-300 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
             <motion.button
               onClick={handleToggleLike}
               disabled={isTogglingWishlist}
-              whileHover={{ scale: 1.1 }}
+              aria-label={isLiked ? `Remove ${product.name} from wishlist` : `Save ${product.name}`}
               whileTap={{ scale: 0.9 }}
-              className={`p-2 rounded-full transition-all shadow-lg ${
-                isLiked 
-                  ? 'bg-sage-deep text-background' 
-                  : 'bg-card text-foreground hover:bg-sage-deep hover:text-background'
-              } ${isTogglingWishlist ? 'opacity-50 cursor-wait' : ''}`}
+              className={`rounded-full p-2 shadow-sm transition-colors ${
+                isLiked
+                  ? 'bg-sage-deep text-background'
+                  : 'bg-card/90 text-foreground hover:bg-sage-deep hover:text-background'
+              } ${isTogglingWishlist ? 'cursor-wait opacity-50' : ''}`}
             >
-              <Heart 
-                className={`h-4 w-4 transition-all ${
-                  isLiked ? 'fill-current' : ''
-                }`} 
-              />
+              <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
             </motion.button>
-          </motion.div>
+          </div>
 
           {/* Add to Cart Button */}
           {product.inStock && (
-            <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: isHovered ? 0 : 100, opacity: isHovered ? 1 : 0 }}
-              transition={{ duration: 0.3 }}
-              className="absolute bottom-0 left-0 right-0 p-4 justify-end flex"
-            >
-              <button 
-                onClick={handleAddToCartClick}
-                disabled={isAdding || isInCart}
-                className={`w-1/2 py-3 font-body text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                  isInCart
-                    ? 'bg-success text-background cursor-default'
-                    : isAdding
-                    ? 'bg-foreground/50 text-background cursor-wait'
-                    : 'bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background'
-                }`}
-              >
-                {isAdding ? (
-                  <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-background border-t-transparent rounded-full"
-                    />
-                    Adding...
-                  </>
-                ) : isInCart ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    In Cart
-                  </>
-                ) : (
-                  <>
-                    <ShoppingBag className="h-4 w-4" />
-                    Add to Cart
-                  </>
-                )}
-              </button>
-            </motion.div>
+            <div className="absolute inset-x-0 bottom-0 hidden p-2.5 transition-all duration-300 lg:block lg:translate-y-3 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 lg:group-focus-within:translate-y-0 lg:group-focus-within:opacity-100">
+              {addToCartButton}
+            </div>
           )}
 
           {/* Out of Stock Overlay */}
           {!product.inStock && (
-            <div className="absolute inset-0 z-10 bg-foreground/60 rounded-xs flex items-center justify-center">
-              <div className="text-center">
-                <div className="px-4 py-2 bg-destructive/30 text-background text-sm font-body font-semibold uppercase tracking-wider mb-2">
-                  Out of Stock
-                </div>
-              </div>
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-foreground/55">
+              <span className="rounded-sm border border-background/40 px-3 py-1.5 font-body text-[10px] font-medium uppercase tracking-[0.16em] text-background">
+                Out of stock
+              </span>
             </div>
           )}
 
@@ -413,52 +409,43 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: isHovered ? 1 : 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-0 bg-foreground/20 pointer-events-none"
+            className="pointer-events-none absolute inset-0 bg-foreground/10"
           />
         </div>
 
         {/* Product Info */}
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            {/* Category */}
-            <p className="text-[10px] text-foreground/60 font-body uppercase tracking-wider">
-              {product.categoryPath}
-            </p>
+        <div>
+          <p className="truncate font-body text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+            {leafCategory(product.categoryPath)}
+          </p>
 
-            {/* Product Name */}
-            <CrossedLink
+          <h3 className="mt-1">
+            <Link
               href={`/product/${product.slug}`}
-              lineColor="gold"
+              className="line-clamp-2 font-body text-sm text-foreground transition-colors hover:text-sage-deep"
             >
-              <h3 className="font-body text-sm font-medium text-foreground truncate">
-                {product.name}
-              </h3>
-            </CrossedLink>
-          </div>
+              {product.name}
+            </Link>
+          </h3>
 
-          {/* Price */}
-          <div className="flex flex-col items-center">
-            {priceData.compareAtPrice > 0 ? (
-              <>
-                <span className="font-body text-base font-semibold text-foreground">
-                  {formatPrice(priceData.price)}
-                </span>
-                <span className="font-body text-xs text-foreground/40 line-through">
-                  {formatPrice(priceData.compareAtPrice)}
-                </span>
-              </>
-            ) : (
-              <span className="font-body text-base font-semibold text-foreground">
-                {formatPrice(priceData.price)}
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+            <span className="font-body text-sm font-medium tabular-nums text-foreground">
+              {formatPrice(priceData.price)}
+            </span>
+            {priceData.compareAtPrice > 0 && (
+              <span className="font-body text-xs tabular-nums text-ink-muted line-through">
+                {formatPrice(priceData.compareAtPrice)}
               </span>
             )}
           </div>
+
+          {product.inStock && <div className="mt-3 lg:hidden">{addToCartButton}</div>}
         </div>
       </motion.div>
 
       {/* Variant Selection Dialog */}
       <Dialog open={showVariantDialog} onOpenChange={setShowVariantDialog}>
-        <DialogContent className="max-w-md rounded-sm">
+        <DialogContent data-lenis-prevent className="max-w-md rounded-sm overscroll-contain">
           <DialogHeader>
             <DialogTitle className="font-body text-xl">Select Options</DialogTitle>
           </DialogHeader>
@@ -614,9 +601,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
 export const ProductCardSkeleton = () => {
   return (
-    <div className="group relative mb-4 md:mb-8">
-      <Skeleton className="relative aspect-[2/3] rounded-xs mb-4" />
-      <Skeleton className="h-3 w-1/2 mb-1" />
+    <div className="group relative">
+      <Skeleton className="relative mb-3 aspect-[4/5] rounded-sm" />
+      <Skeleton className="mb-1.5 h-2.5 w-1/2" />
+      <Skeleton className="mb-1.5 h-3.5 w-4/5" />
       <Skeleton className="h-3 w-1/3" />
     </div>
   );

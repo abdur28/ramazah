@@ -14,7 +14,7 @@ export default async function Layout({
     <div className="min-h-screen bg-background">
       <DashboardLayout authUser={authUser} />
       {/* Main Content */}
-      <main className="lg:ml-72 pt-40 md:pt-44 lg:pt-28 p-6 md:p-8">
+      <main className="p-6 pt-32 md:p-8 md:pt-36 lg:ml-72 lg:pt-28">
         {children}
       </main>
     </div>

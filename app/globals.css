@@ -144,6 +144,13 @@
 body {
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   font-weight: 300;
+
+  /* Positioned so it can act as an offsetParent. framer-motion walks the
+     offsetParent chain to work out where a scroll target sits on the page; with
+     a static body that walk runs off the end of the document and it warns that
+     "the container has a non-static position ... to ensure scroll offset is
+     calculated correctly". Every parallax on the site depends on that number. */
+  position: relative;
 }
 
 /* Cormorant is a 300-weight serif — it is illegible below ~28px.
@@ -198,5 +205,128 @@ h4, h5, h6 {
   ::selection {
     background: var(--wash);
     color: var(--ink);
+  }
+}
+
+/* ============================================================
+   Print. Used by the invoice, which is the payment instrument
+   for a shop that takes no cards: the customer prints it or
+   saves it as a PDF through the browser. Chrome, navigation and
+   controls are marked `print:hidden` at the component level;
+   this handles the page itself.
+   ============================================================ */
+@media print {
+  :root {
+    --background: #FFFFFF;
+    --card: #FFFFFF;
+  }
+
+  body {
+    background: #FFFFFF;
+    color: #000000;
+  }
+
+  /* An element's background only covers the element. With the sheet sized to
+     its content, a short second page painted white below where the content
+     stopped. Painting the canvas itself means every page carries the invoice's
+     ground, full bleed, however far the content reaches.
+     Scoped with :has(), so printing anything else stays on white. */
+  html:has(.invoice-sheet),
+  body:has(.invoice-sheet) {
+    background: #EAF1E2 !important;
+  }
+
+  /* Print the invoice and nothing else.
+  
+     Naming the chrome element by element does not work: the providers in
+     layout.tsx render fragments, so the navbar is `body > nav` rather than
+     `body > div > nav`, and the account tab bar on mobile is an untargetable
+     plain div. Instead, hide every element that is neither the sheet, inside
+     it, nor an ancestor of it — which leaves the document in normal flow, so
+     it still paginates. */
+  body :not(:has(.invoice-sheet)):not(.invoice-sheet):not(.invoice-sheet *) {
+    display: none !important;
+  }
+
+  /* Ancestors survive the rule above; they must not impose page layout. */
+  body > div,
+  main {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+
+  /* Browsers drop background colours when printing unless asked. The amber
+     band and the green totals are the document's identity, not decoration. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* A4, edge to edge: the amber band runs to the paper's edge like the printed
+     original, so the page carries no margin and the document supplies its own
+     padding. */
+  /* No page margin anywhere: a margin is outside the page box and prints white,
+     whatever the canvas is painted. The breathing room above the repeated
+     column headings is made inside the sheet instead — see `thead th` below. */
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  /* Fill the printable area rather than assert A4's nominal size.
+  
+     A fixed `210mm` is the page's *nominal* width, but printers reserve an
+     unprintable strip at the edges and browsers apply their own default page
+     margins unless the reader picks "None". The sheet then no longer fits, and
+     what you get is a white gap down one side.
+  
+     `100%` fills whatever the page box actually is, at any paper size or margin
+     setting. `min-height` goes back to auto for the same reason: a sheet forced
+     to 297mm inside a shorter printable area overflows by a millimetre and
+     produces a blank second page. */
+  .invoice-sheet {
+    width: 100%;
+    min-height: auto;
+    border-radius: 0;
+  }
+
+  /* The table scrolls sideways on a narrow screen; on paper it must not clip. */
+  .invoice-sheet .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* Column headings repeat at the top of every page — a second page of figures
+     with no headings above them cannot be read. */
+  .invoice-sheet thead {
+    display: table-header-group;
+  }
+
+  /* Space above the heading bar, repeated with it, so on a continuation page it
+     does not sit against the trim. A transparent border rather than a margin,
+     because margins collapse away at a page break — and `background-clip:
+     padding-box`, or the white bar would simply grow to fill the border too. */
+  .invoice-sheet thead th {
+    border-top: 12mm solid transparent;
+    background-clip: padding-box;
+  }
+
+  /* Page one already has the billing block above the table, so it gives that
+     12mm back. */
+  .invoice-sheet .invoice-items {
+    margin-top: 0;
+  }
+
+  /* Never split a line item, or the totals, across a page boundary. */
+  .invoice-sheet tr,
+  .invoice-totals {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

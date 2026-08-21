@@ -3,134 +3,137 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthUser } from '@/lib/auth/server'
 import { motion } from 'framer-motion'
-import { CreditCard, Heart, LayoutDashboard, LogOut, Package, Settings, Sliders, User } from 'lucide-react'
+import { Heart, LayoutDashboard, LogOut, MapPin, Package, Search, Settings, Sliders, Star } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { redirect, usePathname } from 'next/navigation'
 
+/**
+ * The account shell: a rail on desktop, a row of tabs on a phone.
+ *
+ * The active item used to be `bg-sage-deep` with `text-foreground` — ink on
+ * deep sage, which measures 2.28:1. That is the exact pairing the design system
+ * exists to prevent (sage is a surface; deep sage is the interactive colour and
+ * takes a light label). Active items are now cream on sage-deep at 5.78:1.
+ */
 const navigationItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Orders', href: '/dashboard/orders', icon: Package },
   { name: 'Wishlist', href: '/dashboard/wishlist', icon: Heart },
+  { name: 'Requests', href: '/dashboard/requests', icon: Search },
+  { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
+  { name: 'Addresses', href: '/dashboard/addresses', icon: MapPin },
   { name: 'Preferences', href: '/dashboard/preferences', icon: Sliders },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
+const DashboardLayout = ({ authUser }: { authUser: AuthUser }) => {
+  const pathname = usePathname();
+  const { signOut, user, profile } = useAuth();
 
-const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
-    const pathname = usePathname();
-    const { signOut, user, profile } = useAuth();
+  if (!user || !profile) {
+    return null;
+  }
 
-    if (!user || !profile) {
-        return null;
-    }   
+  if (user?.id !== authUser.uid) {
+    redirect('/auth/login?redirect=/dashboard');
+  }
 
-    if (user?.id !== authUser.uid) {
-        redirect('/auth/login?redirect=/dashboard');
-    }
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
+  const displayName = profile?.displayName || user.email?.split('@')[0] || 'Account';
+  const initial = displayName.charAt(0).toUpperCase();
 
-    const handleSignOut = async () => {
-        await signOut();
-    };
-
-    return (
-        <>
-              {/* Mobile Navigation - Top Icons */}
-      <div className="lg:hidden fixed top-16 md:top-20 left-0 right-0 z-40 bg-card border-b border-foreground/10">
-        <div className="flex items-center justify-between px-4 py-3 overflow-x-auto">
+  return (
+    <>
+      {/* Phone: a scrolling row of tabs under the navbar. */}
+      <div className="fixed inset-x-0 top-16 z-40 border-b border-rule bg-card md:top-20 lg:hidden print:hidden">
+        <div className="flex items-center gap-1 overflow-x-auto px-3 py-2">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
-            
+
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className="relative flex flex-col items-center gap-1 min-w-[60px] group"
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex shrink-0 items-center gap-2 rounded-sm px-3 py-2 font-body text-[13px] transition-colors ${
+                  isActive
+                    ? 'bg-sage-deep text-background'
+                    : 'text-ink-muted hover:bg-wash hover:text-foreground'
+                }`}
               >
-                <motion.div
-                  className={`p-2 rounded-lg transition-all ${
-                    isActive
-                      ? 'bg-sage-deep'
-                      : 'bg-foreground/5 group-hover:bg-foreground/10'
-                  }`}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Icon className={`h-5 w-5 ${
-                    isActive ? 'text-foreground' : 'text-foreground/60'
-                  }`} />
-                </motion.div>
-                <span className={`text-[10px] font-body font-medium ${
-                  isActive ? 'text-foreground' : 'text-foreground/60'
-                }`}>
-                  {item.name}
-                </span>
-                {isActive && (
-                  <motion.div
-                    layoutId="mobileActiveTab"
-                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sage-deep"
-                  />
-                )}
+                <Icon className="h-4 w-4" />
+                {item.name}
               </Link>
             );
           })}
         </div>
       </div>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-20 bottom-0 w-72 bg-card border-r border-foreground/10 flex-col">
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* User Info */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+      {/* Desktop rail */}
+      <aside className="fixed bottom-0 left-0 top-20 hidden w-72 flex-col border-r border-rule bg-card lg:flex print:hidden">
+        <div className="flex-1 overflow-y-auto px-5 py-6">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 pb-6 border-b border-foreground/10"
+            className="mb-6 border-b border-rule pb-6"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-foreground/5 rounded-full flex items-center justify-center">
-                {profile?.photoURL ? 
-                <Image
-                  src={profile.photoURL}
-                  alt="User"
-                  width={48}
-                  height={48}
-                  className="rounded-full object-cover overflow-hidden"
-                /> 
-                : <User className="h-5 w-5 text-foreground/60" />}
-              </div>
-              <div>
-                <h3 className="font-body font-semibold text-sm">{profile?.displayName || 'User'}</h3>
-                <p className="font-body text-xs text-foreground/60">{profile?.email}</p>
-              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-wash font-body text-sm text-sage-deep">
+                {profile?.photoURL ? (
+                  <Image
+                    src={profile.photoURL}
+                    alt=""
+                    width={44}
+                    height={44}
+                    className="h-full w-full rounded-full object-cover"
+                  />
+                ) : (
+                  initial
+                )}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-body text-sm text-foreground">
+                  {displayName}
+                </span>
+                <span className="block truncate font-body text-xs text-ink-muted">
+                  {profile?.email}
+                </span>
+              </span>
             </div>
           </motion.div>
 
-          {/* Navigation */}
-          <nav className="space-y-1">
+          <h2 className="mb-3 px-3 font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+            Account
+          </h2>
+
+          <nav className="space-y-0.5">
             {navigationItems.map((item, index) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
-              
+
               return (
                 <motion.div
                   key={item.name}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
+                  transition={{ delay: index * 0.04 }}
                 >
                   <Link
                     href={item.href}
-                    className={`relative flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex items-center gap-3 rounded-sm px-3 py-2.5 font-body text-sm transition-colors ${
                       isActive
-                        ? 'bg-sage-deep'
-                        : 'text-foreground/70 hover:bg-foreground/5'
+                        ? 'bg-sage-deep text-background'
+                        : 'text-ink-muted hover:bg-wash hover:text-foreground'
                     }`}
                   >
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-foreground' : ''}`} />
-                    <span className={`font-body text-sm font-medium ${isActive ? 'text-foreground' : ''}`}>
-                      {item.name}
-                    </span>
+                    <Icon className="h-4 w-4" />
+                    {item.name}
                   </Link>
                 </motion.div>
               );
@@ -138,22 +141,18 @@ const DashboardLayout = ({ authUser } : { authUser: AuthUser }) => {
           </nav>
         </div>
 
-        {/* Logout Button - Sticky at Bottom */}
-        <div className="p-3 border-t border-foreground/10">
-          <motion.button 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+        <div className="border-t border-rule p-3">
+          <button
             onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 font-body text-sm text-ink-muted transition-colors hover:bg-wash hover:text-destructive"
           >
-            <LogOut className="h-5 w-5" />
-            <span className="font-body text-sm font-medium">Logout</span>
-          </motion.button>
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
         </div>
       </aside>
     </>
-    )
+  )
 }
 
 export default DashboardLayout

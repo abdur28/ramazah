@@ -3,13 +3,17 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboard } from "@/hooks/useDashboard";
-import { Package, Loader2, ShoppingBag, Eye, Truck, CheckCircle2, Clock, XCircle, ArrowRight } from "lucide-react";
+import { Package, Loader2, ShoppingBag, Eye, Truck, CheckCircle2, Clock, XCircle, ArrowRight, FileText } from "lucide-react";
+import Link from "next/link";
+import OrderTimeline from "@/components/dashboard/OrderTimeline";
+import ReorderButton from "@/components/dashboard/ReorderButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { Order, OrderStatus } from "@/types/types";
 import { format } from "date-fns";
 import UserOrderDetailsDialog from "@/components/dashboard/UserOrderDetailsDialog";
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 const getOrderStatusConfig = (status: OrderStatus) => {
   const configs: Record<OrderStatus, { 
@@ -64,6 +68,7 @@ const formatDate = (timestamp: any) => {
 
 export default function DashboardOrdersPage() {
   const { user } = useAuth();
+  const { formatPrice } = useCurrency();
   const { fetchUserOrders, orders, isLoadingOrders, ordersError } = useDashboard();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -116,7 +121,7 @@ export default function DashboardOrdersPage() {
                 <ShoppingBag className="h-12 w-12 text-primary" />
               </div>
             </div>
-            <h3 className="text-2xl font-bold font-heading uppercase mb-3">No Orders Yet</h3>
+            <h3 className="mb-3 font-body text-base text-foreground">No orders yet</h3>
             <p className="text-muted-foreground mb-6">
               Start shopping to see your order history here
             </p>
@@ -136,7 +141,12 @@ export default function DashboardOrdersPage() {
     <div className="container">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-5xl font-heading uppercase mb-2">My Orders</h1>
+        <p className="font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+          Your account
+        </p>
+        <h1 className="mt-3 font-heading text-4xl font-light leading-tight text-foreground md:text-5xl">
+          Orders
+        </h1>
       </div>
 
       {/* Orders Grid */}
@@ -169,7 +179,7 @@ export default function DashboardOrdersPage() {
                     <div className="text-right border-l pl-4">
                       <p className="text-xs text-muted-foreground">Total</p>
                       <p className="font-bold md:text-lg text-base">
-                        {order.currency.toUpperCase()} {order.total.toFixed(2)}
+                        {formatPrice(order.total)}
                       </p>
                     </div>
                   </div>
@@ -182,50 +192,67 @@ export default function DashboardOrdersPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
                   {order.items.slice(0, 8).map((item) => (
                     <div key={item.id} className="group/item relative">
-                      <div className="aspect-square relative rounded-xl overflow-hidden bg-muted mb-2">
-                        <Image 
-                          src={item.imageUrl} 
-                          alt={item.name} 
-                          fill 
-                          className="object-cover group-hover/item:scale-105 transition-transform duration-300"
-                        />
+                      <div className="relative mb-2 aspect-square overflow-hidden rounded-sm bg-wash">
+                        {item.imageUrl ? (
+                          <Image
+                            src={item.imageUrl}
+                            alt={item.name}
+                            fill
+                            sizes="(max-width: 768px) 50vw, 12vw"
+                            className="object-cover transition-transform duration-300 group-hover/item:scale-105"
+                          />
+                        ) : (
+                          <Package className="absolute inset-0 m-auto h-5 w-5 text-ink-faint" />
+                        )}
                         <div className="absolute top-2 right-2 bg-foreground/70 backdrop-blur text-background text-xs px-2 py-1 rounded-full">
                           ×{item.quantity}
                         </div>
                       </div>
                       <p className="text-sm font-medium truncate">{item.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {order.currency.toUpperCase()} {item.price.toFixed(2)}
+                        {formatPrice(item.price)}
                       </p>
                     </div>
                   ))}
                   
-                  {order.items.length > 4 && (
-                    <div className="aspect-square rounded-xl bg-muted flex items-center justify-center">
+                  {order.items.length > 8 && (
+                    <div className="flex aspect-square items-center justify-center rounded-sm bg-wash">
                       <div className="text-center">
-                        <p className="text-2xl font-bold">+{order.items.length - 4}</p>
+                        <p className="font-body text-2xl">+{order.items.length - 8}</p>
                         <p className="text-xs text-muted-foreground">more</p>
                       </div>
                     </div>
                   )}
                 </div>
 
+                {/* Where the order has got to, read from the status history
+                    the trigger keeps. Open orders show it inline, because that
+                    is the question being asked. */}
+                {order.status !== 'delivered' && (
+                  <div className="mb-6 rounded-sm border border-rule bg-card p-5">
+                    <OrderTimeline order={order} />
+                  </div>
+                )}
+
                 {/* Actions */}
-                <div className="flex justify-end gap-3">
-                  {order.trackingNumber && order.status === 'shipped' && (
-                    <Button variant="outline" size="lg">
-                      <Truck className="h-4 w-4 mr-2" />
-                      Track Package
-                    </Button>
-                  )}
-                  
-                  <Button 
-                    onClick={() => handleViewOrder(order)}
-                    size="lg"
+                <div className="flex flex-wrap justify-end gap-3">
+                  {order.status === 'delivered' && <ReorderButton orderId={order.id} />}
+
+                  <Link
+                    href={`/dashboard/orders/${order.id}/invoice`}
+                    className="inline-flex items-center gap-2 rounded-sm border border-rule px-5 py-2.5 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-foreground transition-colors hover:border-sage-deep hover:text-sage-deep"
                   >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Full Order
-                  </Button>
+                    <FileText className="h-3.5 w-3.5" />
+                    Invoice
+                  </Link>
+
+                  <button
+                    onClick={() => handleViewOrder(order)}
+                    className="inline-flex items-center gap-2 rounded-sm bg-sage-deep px-5 py-2.5 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-background transition-colors hover:bg-foreground"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Full order
+                  </button>
                 </div>
               </div>
             </div>

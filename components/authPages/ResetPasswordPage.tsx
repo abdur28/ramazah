@@ -8,12 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Mail, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import CrossedLink from '@/components/ui/crossed-link';
+import { authImages as backgroundImages } from '@/constants/demo';
 
-const backgroundImages = [
-  '/banner/Ramazah_банер 1 _resized.jpg',
-  '/banner/Ramazah_банер правка.jpg',
-  '/banner/Ramazah_банер 2 копия_resized.jpg',
-];
+
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('');

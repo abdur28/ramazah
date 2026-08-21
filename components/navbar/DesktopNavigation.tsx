@@ -11,8 +11,17 @@ import { navigationStructure, type NavItem } from '@/constants/navigation';
  * Every top-level item is a link to its own category page, including the ones
  * that also open a dropdown: pointing at the parent is more useful than a
  * trigger that does nothing on click.
+ *
+ * `inverse` is for the transparent bar over the home hero, which is a dark
+ * photograph. The dropdown panel stays on its light ground either way — it is
+ * a surface, not part of the photograph.
  */
-export default function DesktopNavigation() {
+export default function DesktopNavigation({
+  variant = 'default',
+}: {
+  variant?: 'default' | 'inverse';
+}) {
+  const inverse = variant === 'inverse';
   const [openItem, setOpenItem] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -28,7 +37,7 @@ export default function DesktopNavigation() {
   };
 
   return (
-    <nav className="flex items-center gap-x-5 xl:gap-x-7">
+    <nav className="flex items-center gap-x-5 xl:gap-x-8">
       {navigationStructure.map((item: NavItem) => (
         <div
           key={item.name}
@@ -41,7 +50,11 @@ export default function DesktopNavigation() {
         >
           <Link
             href={item.href}
-            className="group relative flex items-center gap-1 py-2 font-body text-[13px] text-foreground transition-colors hover:text-sage-deep"
+            className={`group relative flex items-center gap-1 py-2 font-body text-sm xl:text-[15px] transition-colors ${
+              inverse
+                ? 'text-background hover:text-sage-light'
+                : 'text-foreground hover:text-sage-deep'
+            }`}
           >
             <span className="relative">
               {item.name}
@@ -66,7 +79,7 @@ export default function DesktopNavigation() {
                   transition={{ duration: 0.18 }}
                   className="absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3"
                 >
-                  <div className="min-w-[240px] overflow-hidden rounded-md border border-rule bg-card shadow-xl">
+                  <div className="min-w-[260px] overflow-hidden rounded-md border border-rule bg-card shadow-xl">
                     <div className="p-5">
                       {item.subCategories.map((group) => (
                         <div key={group.name}>
@@ -78,7 +91,7 @@ export default function DesktopNavigation() {
                               <li key={subItem.name}>
                                 <Link
                                   href={subItem.href}
-                                  className="block py-2 font-body text-sm text-foreground transition-colors hover:text-sage-deep"
+                                  className="block py-2 font-body text-[15px] text-foreground transition-colors hover:text-sage-deep"
                                 >
                                   {subItem.name}
                                 </Link>
@@ -91,7 +104,7 @@ export default function DesktopNavigation() {
 
                     <Link
                       href={item.href}
-                      className="block border-t border-rule bg-wash px-5 py-3 font-body text-[13px] text-sage-deep transition-colors hover:text-foreground"
+                      className="block border-t border-rule bg-wash px-5 py-3 font-body text-sm text-sage-deep transition-colors hover:text-foreground"
                     >
                       View all {item.name} &rarr;
                     </Link>
