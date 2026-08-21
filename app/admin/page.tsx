@@ -116,6 +116,11 @@ export default function AdminDashboardPage() {
   const awaitingPayment = payments.filter((payment) => payment.status === "pending");
   const awaitingTotal = awaitingPayment.reduce((sum, payment) => sum + payment.amount, 0);
 
+  // `analytics.orders.revenueGrowthRate` is computed across every order whatever
+  // its payment state, so pinning it under a figure labelled "Revenue settled"
+  // would have the badge measuring one thing and the number another.
+  const settledGrowth = growthOf(settled);
+
   const queue = [
     {
       label: "Orders to fulfil",
@@ -218,7 +223,7 @@ export default function AdminDashboardPage() {
           label="Revenue settled"
           value={formatMoneyCompact(settledTotal, revenues[0]?.currency ?? "ngn")}
           hint={`across ${formatNumber(settled.length)} paid orders`}
-          trend={analytics.orders.revenueGrowthRate}
+          trend={settledGrowth}
           icon={Coins}
           href="/admin/transactions"
         />
@@ -288,8 +293,10 @@ export default function AdminDashboardPage() {
             <ul className="divide-y divide-rule">
               {recentOrders.map((order: Order) => (
                 <li key={order.id}>
+                  {/* Carries the order number through as a search term, so the
+                      row lands on that order rather than on an unfiltered list. */}
                   <Link
-                    href="/admin/orders"
+                    href={`/admin/orders?q=${encodeURIComponent(order.orderNumber)}`}
                     className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-wash"
                   >
                     <span className="min-w-0 flex-1">
@@ -357,9 +364,13 @@ export default function AdminDashboardPage() {
 }
 
 /**
- * Settled payments bucketed by calendar month, covering the last twelve months
- * with the empty ones filled in — a gap month must plot as zero, not close the
- * line and make a quiet month look like a missing one.
+ * Settled payments bucketed by calendar month, over the last twelve.
+ *
+ * A month in the middle of the series with no revenue plots as zero: that is a
+ * quiet month, and closing the line over it would hide a real dip. But months
+ * *before the first payment ever taken* are trimmed, because they are not quiet
+ * months — the shop did not exist. Padding them to zero drew ten months of flat
+ * line and made the first real month look like a spike out of a dead business.
  */
 function buildMonthlySeries(payments: Transaction[]): TrendPoint[] {
   const settled = payments.filter((payment) => payment.status === "success");
@@ -380,16 +391,42 @@ function buildMonthlySeries(payments: Transaction[]): TrendPoint[] {
     }
   });
 
-  return Array.from(buckets.entries()).map(([key, value]) => {
+  const series = Array.from(buckets.entries()).map(([key, value]) => {
     const [year, month] = key.split("-").map(Number);
     return {
       label: new Date(year, month).toLocaleDateString("en-NG", { month: "short" }),
       value,
     };
   });
+
+  const firstWithRevenue = series.findIndex((point) => point.value > 0);
+  return firstWithRevenue <= 0 ? series : series.slice(firstWithRevenue);
 }
 
 const keyOf = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
+
+/**
+ * This month against last, in percent. Returns null rather than 0 when there is
+ * no previous month to compare against — a first month of trading is not flat
+ * growth, and a `+0.0%` badge under it would be a claim nobody can make yet.
+ */
+function growthOf(payments: Transaction[]): number | null {
+  const now = new Date();
+  const thisMonth = keyOf(now);
+  const lastMonth = keyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+
+  let current = 0;
+  let previous = 0;
+
+  payments.forEach((payment) => {
+    const key = keyOf(payment.date);
+    if (key === thisMonth) current += payment.amount;
+    else if (key === lastMonth) previous += payment.amount;
+  });
+
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
 
 function DashboardSkeleton() {
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Loader2,
@@ -51,8 +52,11 @@ const STATUS_TABS: { label: string; value: OrderStatus | "all" }[] = [
 
 export default function AdminOrdersPage() {
   const { fetchOrders, orders, loading, error, resetOrders } = useAdmin();
+  const searchParams = useSearchParams();
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  // The dashboard's latest-order rows link here with the order number attached,
+  // so following one lands on that order rather than on an unfiltered list.
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);

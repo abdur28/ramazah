@@ -8,7 +8,10 @@ export interface QueueCounts {
   reviewsPending: number;
   /** Sourcing requests nobody has quoted yet. */
   requestsOpen: number;
-  /** Orders that have not started moving. */
+  /**
+   * Orders still needing work — not yet started, or being packed. `shipped` is
+   * excluded: it is with the courier and off your desk.
+   */
   ordersPending: number;
   /** Variants down to their last few units. */
   lowStock: number;
@@ -54,7 +57,14 @@ export default function useAdminQueues(pollMs = 60_000) {
         .from("product_requests")
         .select("id", { count: "exact", head: true })
         .eq("status", "asked"),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      // Counting only `pending` left the badge and the dashboard tile reading 0
+      // while an order sat in `processing` waiting to be shipped — and disagreeing
+      // with the orders page, which has always called both of these awaiting
+      // fulfilment.
+      supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["pending", "processing"]),
       supabase
         .from("product_variants")
         .select("id", { count: "exact", head: true })
