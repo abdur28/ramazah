@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createClient } from '@/lib/supabase/client';
 import { mapProduct, PRODUCT_SELECT } from '@/lib/products';
-import { Product, ProductImage, ProductVariant } from '@/types/types';
+import { Product, ProductImage, ProductOptionDef, ProductVariant } from '@/types/types';
 import { AdminProductDataStore, FetchOptions } from '@/types/admin';
 
 const supabase = () => createClient();
@@ -43,18 +43,30 @@ const toColumns = (data: Partial<Product>) => {
   if (data.metaKeywords !== undefined)     patch.meta_keywords = data.metaKeywords;
   if (data.lowStockAlert !== undefined)    patch.low_stock_alert = data.lowStockAlert;
   if (data.publishedAt !== undefined)      patch.published_at = data.publishedAt;
+  // `status` is what gates the storefront, and nothing used to write it: the
+  // form had no publish control, `createProduct` derived it from a `publishedAt`
+  // the form never set, and `updateProduct` never touched it at all. Every
+  // product created through the admin was a draft that could not be published.
+  if (data.status !== undefined)           patch.status = data.status;
   return patch;
 };
 
 /**
  * Write a product's variants, options and prices.
  *
- * The admin form still describes variants with `size` and `color`; those are
- * translated into the generic option model ("Size", "Colour"). A variant may also
- * carry `options` directly, which is how arbitrary axes (Weight, Grind, Shade)
- * arrive once the form is rebuilt.
+ * Variants carry `options` — `{ Weight: '250g', Grind: 'Ground' }` — which is the
+ * model the database has always used. `size` and `color` are still accepted for
+ * rows that predate the rebuilt form.
+ *
+ * `definitions` carries the axes as the form declared them, which is the only
+ * place a swatch colour can come from now that Colour is an ordinary axis rather
+ * than a special field. Without it a colour value would lose its hex.
  */
-async function writeVariants(productId: string, variants: ProductVariant[] = []) {
+async function writeVariants(
+  productId: string,
+  variants: ProductVariant[] = [],
+  definitions: ProductOptionDef[] = []
+) {
   const db = supabase();
 
   // Replace wholesale — simpler and safe while a product has no order history.
@@ -89,7 +101,10 @@ async function writeVariants(productId: string, variants: ProductVariant[] = [])
 
     let vPos = 0;
     for (const value of values) {
-      const hex = variants.find(v => v.color?.name === value)?.color?.hex ?? null;
+      const hex =
+        definitions.find(d => d.name === name)?.values.find(v => v.value === value)?.hex ??
+        variants.find(v => v.color?.name === value)?.color?.hex ??
+        null;
       const { data: ov, error: ovErr } = await db.from('product_option_values')
         .insert({ option_id: option.id, value, hex, position: vPos++ })
         .select('id').single();
@@ -154,6 +169,20 @@ async function writeImages(productId: string, images: ProductImage[] = []) {
 }
 
 /** Resolve a category by display path or slug, since the form sends a path. */
+/**
+ * `collectionSlug` -> `products.collection_id`.
+ *
+ * The form has always had a collection picker and the value went nowhere:
+ * `toColumns` had no mapping and neither create nor update resolved it, so
+ * choosing a collection did nothing at all.
+ */
+async function resolveCollectionId(collectionSlug?: string): Promise<string | null> {
+  if (!collectionSlug) return null;
+  const { data } = await supabase()
+    .from('collections').select('id').eq('slug', collectionSlug).maybeSingle();
+  return data?.id ?? null;
+}
+
 async function resolveCategoryId(categoryPath?: string): Promise<string | null> {
   if (!categoryPath) return null;
   const db = supabase();
@@ -232,15 +261,19 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
                     error: { ...state.error, adminAction: null } }));
     try {
       const row = toColumns({ ...data, slug: data.slug || generateSlug(data.name) } as Partial<Product>);
-      row.category_id = await resolveCategoryId(data.categoryPath);
-      row.status = data.publishedAt ? 'active' : 'draft';
+      row.category_id   = await resolveCategoryId(data.categoryPath);
+      row.collection_id = await resolveCollectionId(data.collectionSlug);
+      row.status = data.status ?? 'draft';
+      // The date a product went live is what "New in" sorts by, so it is stamped
+      // when it is published rather than when the row was first written.
+      row.published_at = row.status === 'active' ? new Date().toISOString() : null;
 
       const { data: created, error } = await supabase()
         .from('products').insert(row).select('id').single();
       if (error) throw new Error(error.message);
 
       await writeImages(created.id, data.images);
-      await writeVariants(created.id, data.variants);
+      await writeVariants(created.id, data.variants, data.options);
 
       set(state => ({ loading: { ...state.loading, adminAction: false } }));
       return created.id;
@@ -259,13 +292,23 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
       if (data.categoryPath !== undefined) {
         patch.category_id = await resolveCategoryId(data.categoryPath);
       }
+      if (data.collectionSlug !== undefined) {
+        patch.collection_id = await resolveCollectionId(data.collectionSlug);
+      }
+      // Publishing for the first time stamps the date; unpublishing keeps it, so
+      // a product taken down and put back does not jump to the top of "New in".
+      if (data.status === 'active' && data.publishedAt === undefined) {
+        const { data: current } = await supabase()
+          .from('products').select('published_at').eq('id', productId).maybeSingle();
+        if (!current?.published_at) patch.published_at = new Date().toISOString();
+      }
       if (Object.keys(patch).length > 0) {
         const { error } = await supabase().from('products').update(patch).eq('id', productId);
         if (error) throw new Error(error.message);
       }
 
       if (data.images)   await writeImages(productId, data.images);
-      if (data.variants) await writeVariants(productId, data.variants);
+      if (data.variants) await writeVariants(productId, data.variants, data.options);
 
       set(state => ({
         loading: { ...state.loading, adminAction: false },

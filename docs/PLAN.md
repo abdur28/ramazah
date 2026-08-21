@@ -96,16 +96,20 @@ checkout needs a shipping-method choice, `orders` needs to record which was take
 every product page and the cart need to state the lead time. A customer who expects
 next-day delivery and waits three weeks is a refund request.
 
-### 4. Admin product form
-The data layer writes the generic option model, but the form still only understands
-`size` and `color`. Until it is rebuilt you cannot create a
-"Weight: 250g / Grind: Ground" product through the UI — only via SQL. Also needs
-expiry-date entry for perishables. This is a UI rebuild, not a port.
+### 4. ~~Admin product form~~ — done 2026-08-22
+Rebuilt. Arbitrary axes (`OptionsEditor`), variants generated from them with price,
+stock, best-before and weight per row (`VariantManager`), and a publication control.
 
-The 2026-08-22 admin pass deliberately stopped at colour and radius here: restyling a
-form that cannot express the catalogue's own data model would only make the gap harder
-to see. Everything around it — the catalogue list, which now shows publication state and
-expiry — is finished.
+It turned out to be more than the missing axes: the form collected a product-level
+price, *required* it and discarded it — `products` has no price column, and only
+`variant.prices` was ever written — so a product saved without variants had no price at
+all. Stock and collection went the same way, and `createProduct` derived `status` from a
+`publishedAt` the form never set while `updateProduct` never wrote `status`, so nothing
+created through the admin could ever be published. See PROGRESS for the full list.
+
+Verified end to end against the live database as a real admin: a two-axis perishable
+product creates, prices, stocks, appears in `product_listing` for an anonymous shopper,
+is accepted by `create_order()`, and disappears again when switched to draft.
 
 ### 5. Product pages and filters
 Size filters and size guides do not fit coffee and spices. Filtering should move to

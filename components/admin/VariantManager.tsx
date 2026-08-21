@@ -1,530 +1,430 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo } from "react";
+import { AlertTriangle, RefreshCcw, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus, Edit, Trash2, Package, DollarSign } from "lucide-react";
-import { ProductVariant } from "@/types/admin";
-import { Color, ProductPrice, CurrencyCode } from "@/types/types";
+import { cn } from "@/lib/utils";
 import { availableCurrencies } from "@/constants";
+import { formatMoney } from "@/lib/admin/format";
+import type { ProductOptionDef, ProductPrice, ProductVariant } from "@/types/types";
 
-interface VariantManagerProps {
-  variants: ProductVariant[];
-  onChange: (variants: ProductVariant[]) => void;
-  defaultPrices: ProductPrice[];
-  availableSizes: string[];
-  availableColors: Color[];
-}
-
+/**
+ * The variants a product actually sells as, and the only place its price and
+ * stock are stored.
+ *
+ * The old version was a dialog offering a Size dropdown and a Colour dropdown,
+ * one variant at a time. Two things were wrong with it beyond the axes.
+ *
+ * **The product-level "Default Pricing" panel above it was a fiction.** Prices
+ * live on `product_prices`, keyed by `variant_id` — there is no product-level
+ * price column. The form collected prices, *required* them, and threw them away;
+ * only `variant.prices` was ever written. A product saved without variants had
+ * no price at all and could not be bought.
+ *
+ * **The same was true of stock.** `products` has no stock column either;
+ * `totalStock` and `inStock` were collected and discarded. Stock is
+ * `product_variants.stock_count`, per variant.
+ *
+ * So pricing and stock live here now, on a row per variant, generated from the
+ * axes rather than typed one dialog at a time. `expiry_date` is here too — the
+ * column has always existed and `create_order()` enforces it, but nothing in the
+ * UI could set it, which for a shop importing coffee, dates and spices is the
+ * difference between stock that sells and stock that silently cannot.
+ */
 export default function VariantManager({
+  options,
   variants,
   onChange,
-  defaultPrices,
-  availableSizes,
-  availableColors,
-}: VariantManagerProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
-  
-  // Initialize prices for all currencies
-  const initializeVariantPrices = (existingPrices?: ProductPrice[]): ProductPrice[] => {
-    return availableCurrencies.map(currency => {
-      const existing = existingPrices?.find(p => p.currency === currency.code);
-      return existing || {
-        currency: currency.code,
-        price: 0,
-        compareAtPrice: 0,
-        discountPercent: 0
-      };
-    });
-  };
+  isPerishable,
+}: {
+  options: ProductOptionDef[];
+  variants: ProductVariant[];
+  onChange: (variants: ProductVariant[]) => void;
+  isPerishable: boolean;
+}) {
+  const currencies = availableCurrencies;
+  const defaultCurrency = currencies.find((c) => c.isDefault) ?? currencies[0];
 
-  const [formData, setFormData] = useState<Partial<ProductVariant>>({
-    size: "",
-    color: undefined,
-    sku: "",
-    prices: initializeVariantPrices(),
+  /** Every combination the axes imply, in a stable order. */
+  const combinations = useMemo(() => {
+    const usable = options.filter((option) => option.name.trim() && option.values.length > 0);
+    if (usable.length === 0) return [];
+
+    return usable.reduce<Record<string, string>[]>(
+      (rows, option) =>
+        rows.flatMap((row) =>
+          option.values.map((value) => ({ ...row, [option.name.trim()]: value.value }))
+        ),
+      [{}]
+    );
+  }, [options]);
+
+  const keyOf = (opts: Record<string, string>) =>
+    Object.keys(opts)
+      .sort()
+      .map((name) => `${name}:${opts[name]}`)
+      .join("|");
+
+  const existing = new Map(variants.map((variant) => [keyOf(variant.options ?? {}), variant]));
+
+  const missing = combinations.filter((combo) => !existing.has(keyOf(combo)));
+  const orphaned = variants.filter(
+    (variant) =>
+      combinations.length > 0 && !combinations.some((combo) => keyOf(combo) === keyOf(variant.options ?? {}))
+  );
+
+  const blankPrices = (): ProductPrice[] =>
+    currencies.map((currency) => ({
+      currency: currency.code,
+      price: 0,
+      compareAtPrice: 0,
+      discountPercent: 0,
+    }));
+
+  const makeVariant = (opts: Record<string, string>, index: number): ProductVariant => ({
+    id: `new_${Date.now()}_${index}`,
+    // A readable, stable SKU beats a timestamp: it is what appears on the order
+    // line, the invoice and the packing list.
+    sku: skuFor(opts, index),
+    options: opts,
+    label: Object.values(opts).join(" / "),
+    prices: blankPrices(),
     stockCount: 0,
-    inStock: true,
+    inStock: false,
   });
 
-  const generateVariantId = () => {
-    return `variant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  };
-
-  const generateVariantSKU = (size?: string, color?: Color) => {
-    const parts = [];
-    if (size) parts.push(size.toUpperCase());
-    if (color) parts.push(color.name.toUpperCase().replace(/\s+/g, ""));
-    return parts.join("-") + "-" + Date.now().toString().slice(-4);
-  };
-
-  const openAddDialog = () => {
-    setEditingVariant(null);
-    setFormData({
-      size: "",
-      color: undefined,
-      sku: "",
-      prices: initializeVariantPrices(),
-      stockCount: 0,
-      inStock: true,
-    });
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (variant: ProductVariant) => {
-    setEditingVariant(variant);
-    setFormData({
-      size: variant.size || "",
-      color: variant.color || undefined,
-      sku: variant.sku,
-      prices: initializeVariantPrices(variant.prices),
-      stockCount: variant.stockCount,
-      inStock: variant.inStock,
-    });
-    setIsDialogOpen(true);
-  };
-
-  // Update price for a specific currency
-  const updateVariantPrice = (currencyCode: CurrencyCode, field: 'price' | 'compareAtPrice', value: number) => {
-    setFormData(prev => {
-      const updatedPrices = (prev.prices || []).map(p => {
-        if (p.currency === currencyCode) {
-          const updated = { ...p, [field]: value };
-          
-          // Calculate discount percent
-          if (updated.compareAtPrice && updated.compareAtPrice > 0 && updated.price > 0) {
-            updated.discountPercent = Math.round(
-              ((updated.compareAtPrice - updated.price) / updated.compareAtPrice) * 100
-            );
-          } else {
-            updated.discountPercent = 0;
-          }
-          
-          return updated;
-        }
-        return p;
-      });
-      
-      return { ...prev, prices: updatedPrices };
-    });
-  };
-
-  // Get price for a specific currency
-  const getVariantFormPrice = (currencyCode: CurrencyCode, field: 'price' | 'compareAtPrice'): number => {
-    const priceObj = formData.prices?.find(p => p.currency === currencyCode);
-    return priceObj?.[field] || 0;
-  };
-
-  // Get discount percent for a specific currency
-  const getVariantFormDiscountPercent = (currencyCode: CurrencyCode): number => {
-    const priceObj = formData.prices?.find(p => p.currency === currencyCode);
-    return priceObj?.discountPercent || 0;
-  };
-
-  // Get default price for a currency
-  const getDefaultPrice = (currencyCode: CurrencyCode): number => {
-    return defaultPrices.find(p => p.currency === currencyCode)?.price || 0;
-  };
-
-  // Get variant display price (uses variant price or falls back to default)
-  const getVariantDisplayPrice = (variant: ProductVariant, currencyCode: CurrencyCode): number => {
-    const variantPrice = variant.prices?.find(p => p.currency === currencyCode)?.price;
-    return variantPrice || getDefaultPrice(currencyCode);
-  };
-
-  const handleSave = () => {
-    // Validation
-    if (!formData.size && !formData.color) {
-      alert("Please select at least a size or color");
+  /** Fill in whatever the axes imply and nothing exists for yet. */
+  const generate = () => {
+    if (combinations.length === 0) {
+      onChange([makeVariant({}, 0)]);
       return;
     }
-
-    // Filter out prices that are 0 (means using default)
-    const filteredPrices = formData.prices?.filter(p => p.price > 0);
-
-    const variantData: ProductVariant = {
-      id: editingVariant?.id || generateVariantId(),
-      size: formData.size || undefined,
-      color: formData.color || undefined,
-      sku: formData.sku || generateVariantSKU(formData.size, formData.color),
-      prices: filteredPrices && filteredPrices.length > 0 ? filteredPrices : undefined,
-      stockCount: formData.stockCount || 0,
-      inStock: formData.inStock ?? true,
-    };
-
-    if (editingVariant) {
-      // Update existing variant
-      onChange(variants.map(v => v.id === editingVariant.id ? variantData : v));
-    } else {
-      // Add new variant
-      onChange([...variants, variantData]);
-    }
-
-    setIsDialogOpen(false);
+    const kept = variants.filter((variant) =>
+      combinations.some((combo) => keyOf(combo) === keyOf(variant.options ?? {}))
+    );
+    const added = missing.map((combo, index) => makeVariant(combo, kept.length + index));
+    onChange([...kept, ...added]);
   };
 
-  const handleDelete = (variantId: string) => {
-    if (confirm("Are you sure you want to delete this variant?")) {
-      onChange(variants.filter(v => v.id !== variantId));
-    }
-  };
+  const update = (id: string, next: Partial<ProductVariant>) =>
+    onChange(variants.map((variant) => (variant.id === id ? { ...variant, ...next } : variant)));
 
-  const getVariantLabel = (variant: ProductVariant) => {
-    const parts = [];
-    if (variant.size) parts.push(variant.size);
-    if (variant.color) parts.push(variant.color.name);
-    return parts.join(" / ") || "Variant";
-  };
+  const updatePrice = (
+    id: string,
+    currency: string,
+    field: "price" | "compareAtPrice",
+    value: number
+  ) =>
+    onChange(
+      variants.map((variant) => {
+        if (variant.id !== id) return variant;
+        const prices = (variant.prices ?? blankPrices()).map((price) => {
+          if (price.currency !== currency) return price;
+          const updated = { ...price, [field]: value };
+          const compare = updated.compareAtPrice ?? 0;
+          updated.discountPercent =
+            compare > 0 && updated.price > 0
+              ? Math.round(((compare - updated.price) / compare) * 100)
+              : 0;
+          return updated;
+        });
+        return { ...variant, prices };
+      })
+    );
 
-  const handleColorChange = (colorName: string) => {
-    if (colorName === "none") {
-      setFormData(prev => ({ ...prev, color: undefined }));
-    } else {
-      const selectedColor = availableColors.find(c => c.name === colorName);
-      setFormData(prev => ({ ...prev, color: selectedColor }));
-    }
-  };
+  const remove = (id: string) => onChange(variants.filter((variant) => variant.id !== id));
 
-  // Get the default currency for display
-  const defaultCurrency = availableCurrencies.find(c => c.isDefault) || availableCurrencies[0];
+  const priceOf = (variant: ProductVariant, currency: string, field: "price" | "compareAtPrice") =>
+    variant.prices?.find((price) => price.currency === currency)?.[field] ?? 0;
+
+  const totalStock = variants.reduce((sum, variant) => sum + (variant.stockCount || 0), 0);
+  const unpriced = variants.filter(
+    (variant) => priceOf(variant, defaultCurrency.code, "price") <= 0
+  ).length;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Product Variants</CardTitle>
-            <CardDescription>
-              Manage different variations of this product (size, color, etc.)
-            </CardDescription>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openAddDialog} type="button" size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Variant
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="font-body">
-                  {editingVariant ? "Edit Variant" : "Add New Variant"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingVariant 
-                    ? "Update the variant details below"
-                    : "Create a new product variant with specific attributes"
-                  }
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4 py-4">
-                {/* Size and Color Selection */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="size">Size</Label>
-                    <Select
-                      value={formData.size || "none"}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, size: value === "none" ? "" : value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {availableSizes.map(size => (
-                          <SelectItem key={size} value={size}>{size}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="color">Color</Label>
-                    <Select
-                      value={formData.color?.name || "none"}
-                      onValueChange={handleColorChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select color">
-                          {formData.color ? (
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-4 h-4 rounded-full border border-foreground/20"
-                                style={{ backgroundColor: formData.color.hex }}
-                              />
-                              <span>{formData.color.name}</span>
-                            </div>
-                          ) : (
-                            "Select color"
-                          )}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {availableColors.map(color => (
-                          <SelectItem key={color.name} value={color.name}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-4 h-4 rounded-full border border-foreground/20"
-                                style={{ backgroundColor: color.hex }}
-                              />
-                              <span>{color.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
-                  <Input
-                    id="sku"
-                    value={formData.sku}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                    placeholder="Auto-generated if empty"
-                  />
-                </div>
-
-                <Separator />
-
-                {/* Multi-Currency Pricing */}
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-base">Variant Pricing (Optional)</Label>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Leave prices at 0 to use the default product prices
-                    </p>
-                  </div>
-
-                  {availableCurrencies.map((currency, index) => {
-                    const discountPercent = getVariantFormDiscountPercent(currency.code);
-                    const price = getVariantFormPrice(currency.code, 'price');
-                    const compareAtPrice = getVariantFormPrice(currency.code, 'compareAtPrice');
-                    const defaultPrice = getDefaultPrice(currency.code);
-                    const savings = compareAtPrice - price;
-                    
-                    return (
-                      <div key={currency.code} className="space-y-3">
-                        {index > 0 && <Separator />}
-                        
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-body font-semibold">{currency.name} ({currency.symbol})</h4>
-                          {currency.isDefault && (
-                            <Badge variant="secondary" className="text-xs">Default</Badge>
-                          )}
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor={`variant-price-${currency.code}`}>
-                              Price ({currency.symbol})
-                            </Label>
-                            <Input
-                              id={`variant-price-${currency.code}`}
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={price || ''}
-                              onChange={(e) => updateVariantPrice(
-                                currency.code,
-                                'price',
-                                parseFloat(e.target.value) || 0
-                              )}
-                              placeholder={`${defaultPrice.toFixed(2)} (default)`}
-                            />
-                            {price === 0 && (
-                              <p className="text-xs text-muted-foreground">
-                                Using default: {currency.symbol}{defaultPrice.toFixed(2)}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor={`variant-compareAtPrice-${currency.code}`}>
-                              Compare at Price ({currency.symbol})
-                            </Label>
-                            <Input
-                              id={`variant-compareAtPrice-${currency.code}`}
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={compareAtPrice || ''}
-                              onChange={(e) => updateVariantPrice(
-                                currency.code,
-                                'compareAtPrice',
-                                parseFloat(e.target.value) || 0
-                              )}
-                              placeholder="0.00"
-                            />
-                          </div>
-                        </div>
-
-                        {discountPercent > 0 && price > 0 && (
-                          <div className="p-2 bg-success/10 border border-success rounded-sm">
-                            <p className="text-xs text-success">
-                              💰 <strong>{discountPercent}% off</strong> - Save {currency.symbol}{savings.toFixed(2)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <Separator />
-
-                {/* Stock Management */}
-                <div className="space-y-2">
-                  <Label htmlFor="stockCount">Stock Count</Label>
-                  <Input
-                    id="stockCount"
-                    type="number"
-                    min="0"
-                    value={formData.stockCount}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      stockCount: parseInt(e.target.value) || 0 
-                    }))}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>In Stock</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Available for purchase
-                    </p>
-                  </div>
-                  <Switch
-                    checked={formData.inStock}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, inStock: checked }))}
-                  />
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" type="button" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave}>
-                  {editingVariant ? "Update Variant" : "Add Variant"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {variants.length === 0 ? (
-          <div className="text-center py-8 border border-dashed rounded-sm">
-            <Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-sm font-medium mb-1">No variants yet</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              Add variants to offer different sizes, colors, or options
-            </p>
-            <Button type="button" onClick={openAddDialog} variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add First Variant
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {variants.map((variant) => {
-              const displayPrice = getVariantDisplayPrice(variant, defaultCurrency.code);
-              const hasCustomPrice = variant.prices && variant.prices.length > 0;
-              
-              return (
-                <div
-                  key={variant.id}
-                  className="flex items-center justify-between p-4 border rounded-sm hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      {variant.color && (
-                        <div 
-                          className="w-5 h-5 rounded-full border-2 border-foreground/20 shadow-sm flex-shrink-0"
-                          style={{ backgroundColor: variant.color.hex }}
-                          title={variant.color.name}
-                        />
-                      )}
-                      <span className="font-medium">{getVariantLabel(variant)}</span>
-                      {!variant.inStock && (
-                        <Badge variant="destructive" className="text-xs">
-                          Out of Stock
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>SKU: {variant.sku}</span>
-                      <span>•</span>
-                      <span className="font-medium text-foreground">
-                        {defaultCurrency.symbol}{displayPrice.toFixed(2)}
-                        {!hasCustomPrice && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            (default) 
-                          </span>
-                        )}
-                      </span>
-                      <span>•</span>
-                      <span>Stock: {variant.stockCount}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      type="button"
-                      onClick={() => openEditDialog(variant)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(variant.id)}
-                      type="button"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+    <div className="space-y-4">
+      {/* ------------------------------------------------------------ actions */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" variant="outline" onClick={generate}>
+          {variants.length === 0 ? (
+            <>
+              <Wand2 className="mr-2 h-4 w-4" />
+              {combinations.length > 0
+                ? `Create ${combinations.length} variant${combinations.length === 1 ? "" : "s"}`
+                : "Create the single variant"}
+            </>
+          ) : (
+            <>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Sync with the axes
+            </>
+          )}
+        </Button>
 
         {variants.length > 0 && (
-          <div className="mt-4 p-3 bg-muted/50 rounded-sm text-sm text-muted-foreground">
-            <strong>{variants.length}</strong> variant{variants.length !== 1 ? "s" : ""} •{" "}
-            <strong>{variants.reduce((sum, v) => sum + v.stockCount, 0)}</strong> total units
-          </div>
+          <p className="font-body text-xs tabular-nums text-ink-muted">
+            {variants.length} variant{variants.length === 1 ? "" : "s"} · {totalStock} units in
+            total
+          </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {(missing.length > 0 || orphaned.length > 0) && variants.length > 0 && (
+        <p className="flex items-start gap-2 rounded-sm bg-terra/[0.06] p-3 font-body text-sm text-terra-ink">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          {missing.length > 0 && (
+            <span>
+              {missing.length} combination{missing.length === 1 ? "" : "s"} from your axes
+              {orphaned.length > 0 ? ", " : " "}
+              {orphaned.length === 0 && "has no variant yet. "}
+            </span>
+          )}
+          {orphaned.length > 0 && (
+            <span>
+              {orphaned.length} variant{orphaned.length === 1 ? "" : "s"} no longer match your
+              axes.{" "}
+            </span>
+          )}
+          <span>Sync will add what is missing and drop what no longer fits.</span>
+        </p>
+      )}
+
+      {unpriced > 0 && variants.length > 0 && (
+        <p className="flex items-start gap-2 rounded-sm bg-terra/[0.06] p-3 font-body text-sm text-terra-ink">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          {unpriced} variant{unpriced === 1 ? " has" : "s have"} no {defaultCurrency.name} price.
+          The database refuses to build an order line without one, so {unpriced === 1 ? "it" : "they"}{" "}
+          cannot be bought.
+        </p>
+      )}
+
+      {/* ------------------------------------------------------------ the rows */}
+      {variants.length === 0 ? (
+        <div className="rounded-sm border border-dashed border-rule px-5 py-10 text-center">
+          <p className="font-body text-sm text-foreground">No variants yet</p>
+          <p className="mx-auto mt-1.5 max-w-[54ch] font-body text-sm text-ink-muted">
+            Price and stock live on the variant, not on the product — so until there is at
+            least one, this product has no price and cannot be bought.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {variants.map((variant) => {
+            const label =
+              variant.label ||
+              Object.values(variant.options ?? {}).join(" / ") ||
+              "Single variant";
+            const compare = priceOf(variant, defaultCurrency.code, "compareAtPrice");
+            const price = priceOf(variant, defaultCurrency.code, "price");
+            const isOrphan = orphaned.some((o) => o.id === variant.id);
+
+            return (
+              <li
+                key={variant.id}
+                className={cn(
+                  "rounded-sm border bg-card p-4",
+                  isOrphan ? "border-terra/40" : "border-rule"
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-body text-sm font-medium text-foreground">
+                    {label}
+                    {isOrphan && (
+                      <span className="ml-2 font-normal text-terra-ink">
+                        — no longer in your axes
+                      </span>
+                    )}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(variant.id)}
+                    className="text-ink-muted hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Remove {label}</span>
+                  </Button>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="SKU">
+                    <Input
+                      value={variant.sku}
+                      onChange={(event) => update(variant.id, { sku: event.target.value })}
+                      placeholder="RMZ-COF-250-GRD"
+                      className="tabular-nums"
+                    />
+                  </Field>
+
+                  <Field label={`Price (${defaultCurrency.symbol})`}>
+                    <Input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={price || ""}
+                      onChange={(event) =>
+                        updatePrice(
+                          variant.id,
+                          defaultCurrency.code,
+                          "price",
+                          Number(event.target.value) || 0
+                        )
+                      }
+                      placeholder="0"
+                      className="tabular-nums"
+                    />
+                  </Field>
+
+                  <Field label={`Was (${defaultCurrency.symbol})`} hint="for a sale price">
+                    <Input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={compare || ""}
+                      onChange={(event) =>
+                        updatePrice(
+                          variant.id,
+                          defaultCurrency.code,
+                          "compareAtPrice",
+                          Number(event.target.value) || 0
+                        )
+                      }
+                      placeholder="0"
+                      className="tabular-nums"
+                    />
+                  </Field>
+
+                  <Field label="Stock">
+                    <Input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={variant.stockCount || 0}
+                      onChange={(event) => {
+                        const stockCount = Number(event.target.value) || 0;
+                        // `in_stock` is a generated column in the database; this
+                        // keeps the local copy honest for the form's own preview.
+                        update(variant.id, { stockCount, inStock: stockCount > 0 });
+                      }}
+                      className="tabular-nums"
+                    />
+                  </Field>
+
+                  {isPerishable && (
+                    <Field
+                      label="Best before"
+                      hint="an order is refused after this date"
+                    >
+                      <Input
+                        type="date"
+                        value={variant.expiryDate?.slice(0, 10) ?? ""}
+                        onChange={(event) =>
+                          update(variant.id, { expiryDate: event.target.value || undefined })
+                        }
+                        className="tabular-nums"
+                      />
+                    </Field>
+                  )}
+
+                  <Field label="Weight (kg)" hint="for shipping">
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.001"
+                      value={variant.weight ?? ""}
+                      onChange={(event) =>
+                        update(variant.id, {
+                          weight: event.target.value ? Number(event.target.value) : undefined,
+                        })
+                      }
+                      placeholder="0.000"
+                      className="tabular-nums"
+                    />
+                  </Field>
+                </div>
+
+                {compare > 0 && price > 0 && compare > price && (
+                  <p className="mt-3 font-body text-xs text-sage-deep">
+                    {Math.round(((compare - price) / compare) * 100)}% off — saves{" "}
+                    {formatMoney(compare - price, defaultCurrency.code)}
+                  </p>
+                )}
+
+                {/* Other currencies are optional; the shop trades in Naira. */}
+                {currencies.length > 1 && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer font-body text-xs text-ink-muted hover:text-foreground">
+                      Prices in other currencies
+                    </summary>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {currencies
+                        .filter((currency) => currency.code !== defaultCurrency.code)
+                        .map((currency) => (
+                          <Field key={currency.code} label={`${currency.name} (${currency.symbol})`}>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={priceOf(variant, currency.code, "price") || ""}
+                              onChange={(event) =>
+                                updatePrice(
+                                  variant.id,
+                                  currency.code,
+                                  "price",
+                                  Number(event.target.value) || 0
+                                )
+                              }
+                              placeholder="0.00"
+                              className="tabular-nums"
+                            />
+                          </Field>
+                        ))}
+                    </div>
+                  </details>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+        {label}
+      </Label>
+      {children}
+      {hint && <p className="font-body text-[11px] text-ink-muted">{hint}</p>}
+    </div>
+  );
+}
+
+/** `250G-GROUND` — readable on an invoice, unlike a timestamp. */
+function skuFor(options: Record<string, string>, index: number): string {
+  const parts = Object.values(options)
+    .map((value) =>
+      value
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "")
+        .slice(0, 8)
+    )
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts.join("-") : `VAR-${index + 1}`;
 }

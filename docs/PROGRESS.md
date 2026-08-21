@@ -5,6 +5,85 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-22 — Product form rebuilt; admin charts made interactive
+
+### The form could not produce a sellable product
+
+Taken as plan item 4 — the axes — but the axes were the smaller half.
+
+- **Nothing created through the admin could ever go live.** `createProduct` set
+  `status` from a `publishedAt` the form never wrote, so every product saved
+  landed as `draft`, filtered out of `product_listing` and invisible to every
+  shopper. `updateProduct` never touched `status` at all, so it could not be
+  published afterwards either. There is a publication control now, and
+  `published_at` is stamped on first publish and kept on re-publish so a product
+  taken down and put back does not jump to the top of "New in".
+- **Price was collected, required, and thrown away.** There is no product-level
+  price column — `product_prices` is keyed by `variant_id` — and only
+  `variant.prices` was ever written. The "Default Pricing" panel was a fiction,
+  and a product saved without variants had no price and could not be bought.
+- **Stock the same.** `products` has no stock column either; `totalStock` and
+  `inStock` were collected and discarded. Stock is `product_variants.stock_count`.
+- **Collection the same.** The picker had no mapping in `toColumns` and neither
+  create nor update resolved the slug, so choosing a collection did nothing.
+- **`sizeGuide` the same** — no column, no mapping. Dropped.
+- **Only Size and Colour.** `product_options` has always stored arbitrary named
+  axes; the form offered a fixed size list and a colour picker. A coffee sold in
+  Weight × Grind could not be created through the UI, which is why all eight
+  catalogue products arrived by SQL.
+- **No expiry field.** `product_variants.expiry_date` exists and `create_order()`
+  enforces it — for a shop importing coffee, dates and spices, the difference
+  between stock that sells and stock that silently cannot.
+
+Now: `OptionsEditor` for the axes (Colour is an ordinary axis that happens to
+offer swatches, backed by `product_option_values.hex`), and `VariantManager`
+generating the combinations with SKU, price, stock, best-before and weight per
+row. Validation is continuous and lists everything outstanding, rather than one
+toast per save attempt.
+
+**Verified end to end against the live database** as a real signed-in admin: a
+two-axis perishable product creates as active, gets four variants from Weight ×
+Grind, carries a price and a best-before on each, appears in `product_listing`
+for an anonymous shopper at ₦9,000–₦12,000, is accepted by `create_order()`, and
+vanishes from the storefront again when switched to draft. Eight checks, all
+passing.
+
+### Every button in ImageUpload submitted the form
+
+None of them set `type`, so they defaulted to `type="submit"` inside the product
+form: removing an image, reordering one or setting a cover submitted the whole
+product. Two more there — removing any image forced `isPrimary` back onto the
+first, silently discarding a chosen cover; and the render called `images.sort()`,
+which sorts in place and so mutated the parent's state. The two popover triggers
+now set `type="button"` explicitly rather than relying on Radix to pass it down,
+since that assumption is what produced the bug.
+
+### Charts
+
+Static SVG with no hover. The legends carried every value, which is why a donut
+read fine standing still — but a twelve-month line showed the first label and the
+last value and gave no way at all to read March.
+
+TrendChart takes the pointer across the whole plot area and picks the nearest
+month, with arrow keys, Home, End and Escape doing the same and the caption
+doubling as the readout. DonutChart ties its halves together: an arc dims the
+rest and swaps the centre, and a legend row does the same. BarList responds on
+every row, with a chevron marking the ones that lead somewhere.
+
+### Dashboard, on review
+
+- The revenue trend padded ten empty months before the first payment ever taken,
+  drawing a flat line out of a business that did not exist yet. Leading empty
+  months are trimmed; interior ones still plot as zero.
+- The growth badge under "Revenue settled" used a rate computed across every
+  order whatever its payment state — measuring one thing under a number that
+  meant another. It returns null rather than 0% with no month to compare against.
+- "Orders to fulfil" counted only `pending`, reading 0 while an order sat in
+  `processing` — disagreeing with the orders page.
+- Latest-order rows now carry the order number through as `?q=`.
+
+---
+
 ## 2026-08-22 — Admin area
 
 The last part of the app that had never had a design pass, brought onto the Ramazah

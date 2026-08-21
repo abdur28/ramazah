@@ -107,6 +107,10 @@ export default function CategoryPathSelector({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          // Explicit, not inherited from Radix: an untyped button inside the
+          // product form defaults to submit, which is how removing an image used
+          // to save the whole product.
+          type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}

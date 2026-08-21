@@ -1,756 +1,669 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, Plus, Save, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, ArrowLeft, Plus, X } from "lucide-react";
-import { toast } from "sonner";
-import { Product, ProductImage, ProductVariant } from "@/types/admin";
-import useAdmin from "@/hooks/admin/useAdmin";
+import PageHeader from "@/components/admin/ui/PageHeader";
+import SectionCard from "@/components/admin/ui/SectionCard";
+import StatusPill, { PRODUCT_STATUS } from "@/components/admin/ui/StatusPill";
 import CategoryPathSelector from "./CategoryPathSelector";
 import CollectionSelector from "./CollectionSelector";
 import ImageUpload from "./ImageUpload";
+import OptionsEditor from "./OptionsEditor";
 import VariantManager from "./VariantManager";
-import ColorPicker from "./ColorPicker";
-import { Color, ProductPrice, CurrencyCode } from "@/types/types";
+import useAdmin from "@/hooks/admin/useAdmin";
 import { availableCurrencies } from "@/constants";
+import { cn } from "@/lib/utils";
+import type { Product } from "@/types/admin";
+import type { ProductImage, ProductOptionDef, ProductVariant } from "@/types/types";
 
-interface ProductFormProps {
+/**
+ * Create and edit a product.
+ *
+ * Rebuilt rather than restyled, because most of what the old form collected was
+ * never written anywhere.
+ *
+ * **Nothing created here could ever go live.** `createProduct` derived
+ * `products.status` from a `publishedAt` the form never set, so every product
+ * saved through the admin landed as `draft` — filtered out of `product_listing`,
+ * invisible to every shopper — and `updateProduct` never touched `status` at
+ * all, so there was no way to publish it afterwards either. There is a
+ * publication control now, and the data layer writes it.
+ *
+ * **Price, stock and collection were discarded.** `products` has no price,
+ * stock or size-guide column — prices are `product_prices` keyed by variant,
+ * stock is `product_variants.stock_count` — and `toColumns` had no mapping for
+ * the collection either. The form nonetheless *required* a product-level price
+ * and threw it away. Pricing and stock now live on the variant rows where the
+ * database keeps them, and the collection is resolved and saved.
+ *
+ * **Size and Colour were the only axes it knew.** See `OptionsEditor`.
+ *
+ * What is left here is what `products` actually stores.
+ */
+export default function ProductForm({
+  product,
+  mode,
+}: {
   product?: Product | null;
   mode: "create" | "edit";
-}
-
-export default function ProductForm({ product, mode }: ProductFormProps) {
+}) {
   const router = useRouter();
-  const { 
-    createProduct, 
-    updateProduct, 
-    categories, 
+  const {
+    createProduct,
+    updateProduct,
+    categories,
     collections,
-    fetchCategories, 
+    fetchCategories,
     fetchCollections,
-    loading 
   } = useAdmin();
-  
-  // Initialize prices for all currencies
-  const initializePrices = (existingPrices?: ProductPrice[]): ProductPrice[] => {
-    return availableCurrencies.map(currency => {
-      const existing = existingPrices?.find(p => p.currency === currency.code);
-      return existing || {
-        currency: currency.code,
-        price: 0,
-        compareAtPrice: 0,
-        discountPercent: 0
-      };
-    });
-  };
+
+  const defaultCurrency = availableCurrencies.find((c) => c.isDefault) ?? availableCurrencies[0];
 
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    name: product?.name || "",
-    slug: product?.slug || "",
-    description: product?.description || "",
-    shortDescription: product?.shortDescription || "",
-    prices: initializePrices(product?.prices),
-    categoryPath: product?.categoryPath || "",
-    collectionSlug: product?.collectionSlug || "",
-    sku: product?.sku || "",
-    inStock: product?.inStock ?? true,
-    totalStock: product?.totalStock || 0,
-    lowStockAlert: product?.lowStockAlert || 10,
-    tags: product?.tags || [],
-    colors: product?.colors || [] as Color[],
-    sizes: product?.sizes || [],
-    materials: product?.materials || [],
-    isNew: product?.isNew || false,
-    isFeatured: product?.isFeatured || false,
-    isBestseller: product?.isBestseller || false,
-    isLimitedEdition: product?.isLimitedEdition || false,
-    metaTitle: product?.metaTitle || "",
-    metaDescription: product?.metaDescription || "",
-    careInstructions: product?.careInstructions || "",
-    sizeGuide: product?.sizeGuide || "",
-  });
-  
-  const [images, setImages] = useState<ProductImage[]>(product?.images || []);
-  const [variants, setVariants] = useState<ProductVariant[]>(product?.variants || []);
+  const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [tagInput, setTagInput] = useState("");
-  const [sizeInput, setSizeInput] = useState("");
   const [materialInput, setMaterialInput] = useState("");
 
-  // Load categories and collections
+  const [form, setForm] = useState({
+    name: product?.name ?? "",
+    slug: product?.slug ?? "",
+    sku: product?.sku ?? "",
+    shortDescription: product?.shortDescription ?? "",
+    description: product?.description ?? "",
+    categoryPath: product?.categoryPath ?? "",
+    collectionSlug: product?.collectionSlug ?? "",
+    status: (product?.status ?? "draft") as "draft" | "active" | "archived",
+    tags: product?.tags ?? [],
+    materials: product?.materials ?? [],
+    careInstructions: product?.careInstructions ?? "",
+    metaTitle: product?.metaTitle ?? "",
+    metaDescription: product?.metaDescription ?? "",
+    lowStockAlert: product?.lowStockAlert ?? 5,
+    isPerishable: product?.isPerishable ?? false,
+    isNew: product?.isNew ?? false,
+    isFeatured: product?.isFeatured ?? false,
+    isBestseller: product?.isBestseller ?? false,
+    isLimitedEdition: product?.isLimitedEdition ?? false,
+  });
+
+  const [images, setImages] = useState<ProductImage[]>(product?.images ?? []);
+  const [options, setOptions] = useState<ProductOptionDef[]>(product?.options ?? []);
+  const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
+
   useEffect(() => {
     if (categories.length === 0) {
-      fetchCategories({ limit: 100, orderByField: 'name', orderDirection: 'asc' });
+      fetchCategories({ limit: 100, orderByField: "name", orderDirection: "asc" });
     }
     if (collections.length === 0) {
-      fetchCollections({ limit: 100, orderByField: 'name', orderDirection: 'asc' });
+      fetchCollections({ limit: 100, orderByField: "name", orderDirection: "asc" });
     }
   }, []);
 
-  // Auto-generate slug from name
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
+
+  // The slug follows the name until it is edited by hand, then it stops moving:
+  // changing a live product's name should not silently break its URL.
   useEffect(() => {
-    if (mode === "create" && formData.name && !formData.slug) {
-      const slug = formData.name
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, "")
-        .replace(/[\s_-]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      setFormData(prev => ({ ...prev, slug }));
-    }
-  }, [formData.name, mode]);
+    if (slugTouched || !form.name) return;
+    set("slug", slugify(form.name));
+  }, [form.name, slugTouched]);
 
-  // Auto-generate SKU from name
-  useEffect(() => {
-    if (mode === "create" && formData.name && !formData.sku) {
-      const sku = formData.name
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, "")
-        .substring(0, 10) + "-" + Date.now().toString().slice(-4);
-      setFormData(prev => ({ ...prev, sku }));
-    }
-  }, [formData.name, mode]);
+  const problems = useMemo(() => validate(form, images, variants, defaultCurrency.code), [
+    form,
+    images,
+    variants,
+    defaultCurrency.code,
+  ]);
 
-  // Update price for a specific currency
-  const updatePrice = (currencyCode: CurrencyCode, field: 'price' | 'compareAtPrice', value: number) => {
-    setFormData(prev => {
-      const updatedPrices = prev.prices.map(p => {
-        if (p.currency === currencyCode) {
-          const updated = { ...p, [field]: value };
-          
-          // Calculate discount percent
-          if (updated.compareAtPrice && updated.compareAtPrice > 0 && updated.price > 0) {
-            updated.discountPercent = Math.round(
-              ((updated.compareAtPrice - updated.price) / updated.compareAtPrice) * 100
-            );
-          } else {
-            updated.discountPercent = 0;
-          }
-          
-          return updated;
-        }
-        return p;
-      });
-      
-      return { ...prev, prices: updatedPrices };
-    });
-  };
+  const save = async (publish?: boolean) => {
+    const status = publish ? "active" : form.status;
+    const blocking = validate({ ...form, status }, images, variants, defaultCurrency.code);
 
-  // Get price for a specific currency
-  const getPrice = (currencyCode: CurrencyCode, field: 'price' | 'compareAtPrice'): number => {
-    const priceObj = formData.prices.find(p => p.currency === currencyCode);
-    return priceObj?.[field] || 0;
-  };
-
-  // Get discount percent for a specific currency
-  const getDiscountPercent = (currencyCode: CurrencyCode): number => {
-    const priceObj = formData.prices.find(p => p.currency === currencyCode);
-    return priceObj?.discountPercent || 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validation
-    if (!formData.name.trim()) {
-      toast.error("Product name is required");
+    if (blocking.length > 0) {
+      toast.error(blocking[0]);
       return;
-    }
-    if (!formData.categoryPath) {
-      toast.error("Please select a category");
-      return;
-    }
-    if (images.length === 0) {
-      toast.error("Please upload at least one product image");
-      return;
-    }
-    
-    // Validate that at least one currency has a price
-    const hasValidPrice = formData.prices.some(p => p.price > 0);
-    if (!hasValidPrice) {
-      toast.error("At least one currency must have a price greater than 0");
-      return;
-    }
-    
-    // Validate price vs compareAtPrice for each currency
-    for (const priceObj of formData.prices) {
-      if (priceObj.compareAtPrice && priceObj.compareAtPrice > 0 && priceObj.price > priceObj.compareAtPrice) {
-        const currency = availableCurrencies.find(c => c.code === priceObj.currency);
-        toast.error(`${currency?.name || priceObj.currency}: Price cannot be greater than compare at price`);
-        return;
-      }
     }
 
     setIsSaving(true);
     try {
-      const productData = {
-        ...formData,
+      const payload = {
+        ...form,
+        status,
         images,
-        variants: variants.length > 0 ? variants : [],
-      };
+        options: options.filter((option) => option.name.trim() && option.values.length > 0),
+        variants,
+        // Kept so the legacy shape still type-checks; the generic axes above are
+        // what actually get written.
+        colors: [],
+        sizes: [],
+      } as any;
 
       if (mode === "create") {
-        await createProduct(productData);
-        toast.success("Product created successfully!");
-        router.push("/admin/products");
+        await createProduct(payload);
+        toast.success(
+          status === "active" ? `${form.name} is live on the shop.` : `${form.name} saved as a draft.`
+        );
       } else if (product) {
-        await updateProduct(product.id, productData);
-        toast.success("Product updated successfully!");
-        router.push("/admin/products");
+        await updateProduct(product.id, payload);
+        toast.success(
+          status === "active" ? `${form.name} is live on the shop.` : `${form.name} saved.`
+        );
       }
+      router.push("/admin/products");
     } catch (error: any) {
       console.error("Error saving product:", error);
-      toast.error(error.message || "Failed to save product");
+      toast.error(error?.message || "Could not save the product.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const addTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData(prev => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }));
-      setTagInput("");
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
-  };
-
-  const addSize = () => {
-    if (sizeInput.trim() && !formData.sizes.includes(sizeInput.trim())) {
-      setFormData(prev => ({ ...prev, sizes: [...prev.sizes, sizeInput.trim()] }));
-      setSizeInput("");
-    }
-  };
-
-  const removeSize = (size: string) => {
-    setFormData(prev => ({ ...prev, sizes: prev.sizes.filter(s => s !== size) }));
-  };
-
-  const addMaterial = () => {
-    if (materialInput.trim() && !formData.materials.includes(materialInput.trim())) {
-      setFormData(prev => ({ ...prev, materials: [...prev.materials, materialInput.trim()] }));
-      setMaterialInput("");
-    }
-  };
-
-  const removeMaterial = (material: string) => {
-    setFormData(prev => ({ ...prev, materials: prev.materials.filter(m => m !== material) }));
+  const addTo = (key: "tags" | "materials", value: string, reset: () => void) => {
+    const trimmed = value.trim();
+    if (!trimmed || form[key].includes(trimmed)) return;
+    set(key, [...form[key], trimmed]);
+    reset();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        save();
+      }}
+      className="space-y-8"
+    >
+      <PageHeader
+        eyebrow={
+          <Link
+            href="/admin/products"
+            className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-medium font-heading uppercase">
-              {mode === "create" ? "Create New Product" : "Edit Product"}
-            </h1>
-            <p className="text-muted-foreground">
-              {mode === "create" 
-                ? "Add a new product to your catalog"
-                : "Update product information"
-              }
-            </p>
-          </div>
-        </div>
-        <Button type="submit" disabled={isSaving}>
-          {isSaving ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              {mode === "create" ? "Create Product" : "Save Changes"}
-            </>
-          )}
-        </Button>
-      </div>
+            <ArrowLeft className="h-3 w-3" />
+            Catalogue
+          </Link>
+        }
+        title={mode === "create" ? "New product" : form.name || "Edit product"}
+        description={
+          mode === "create"
+            ? "Drafts are saved but stay off the shop until you publish them."
+            : undefined
+        }
+        actions={
+          <>
+            {mode === "edit" && product?.status === "active" && (
+              <Button variant="outline" asChild>
+                <a href={`/product/${form.slug}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View
+                </a>
+              </Button>
+            )}
+            <Button type="submit" variant="outline" disabled={isSaving}>
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save
+            </Button>
+            {form.status !== "active" && (
+              <Button type="button" onClick={() => save(true)} disabled={isSaving}>
+                Save &amp; publish
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Basic Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-              <CardDescription>Essential product details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Product Name *</Label>
+      {problems.length > 0 && (
+        <div className="rounded-sm border border-terra/30 bg-terra/[0.04] p-4">
+          <p className="flex items-center gap-2 font-body text-sm font-medium text-terra-ink">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {problems.length === 1
+              ? "One thing to finish before this can go live"
+              : `${problems.length} things to finish before this can go live`}
+          </p>
+          <ul className="mt-2 space-y-1 pl-6 font-body text-sm text-terra-ink">
+            {problems.map((problem) => (
+              <li key={problem} className="list-disc">
+                {problem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        {/* ------------------------------------------------------------ main */}
+        <div className="space-y-6">
+          <SectionCard title="Basics">
+            <div className="space-y-4">
+              <Field label="Name" required>
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Oversized Hoodie - Black"
+                  value={form.name}
+                  onChange={(event) => set("name", event.target.value)}
+                  placeholder="Egyptian Ground Coffee"
                   required
                 />
-              </div>
+              </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="slug">Slug *</Label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Slug"
+                  required
+                  hint={form.slug ? `ramazah.ng/product/${form.slug}` : "The product's web address"}
+                >
                   <Input
-                    id="slug"
-                    value={formData.slug}
-                    onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                    placeholder="oversized-hoodie-black"
+                    value={form.slug}
+                    onChange={(event) => {
+                      setSlugTouched(true);
+                      set("slug", event.target.value);
+                    }}
+                    placeholder="egyptian-ground-coffee"
                     required
                   />
-                </div>
+                </Field>
 
-                <div className="space-y-2">
-                  <Label htmlFor="sku">SKU *</Label>
+                <Field label="Product code" hint="Yours, for stocktaking. Variants get their own.">
                   <Input
-                    id="sku"
-                    value={formData.sku}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                    placeholder="HOOD-001"
-                    required
+                    value={form.sku}
+                    onChange={(event) => set("sku", event.target.value)}
+                    placeholder="RMZ-COFFEE"
+                    className="tabular-nums"
                   />
-                </div>
+                </Field>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="shortDescription">Short Description</Label>
+              <Field label="One-line summary" hint="Shown on cards and in search results">
                 <Textarea
-                  id="shortDescription"
-                  value={formData.shortDescription}
-                  onChange={(e) => setFormData(prev => ({ ...prev, shortDescription: e.target.value }))}
-                  placeholder="Brief one-line description"
+                  value={form.shortDescription}
+                  onChange={(event) => set("shortDescription", event.target.value)}
+                  placeholder="Finely ground, cardamom-scented, roasted in Alexandria."
                   rows={2}
                 />
-              </div>
+              </Field>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Full Description *</Label>
+              <Field label="Description" required>
                 <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Detailed product description..."
-                  rows={6}
+                  value={form.description}
+                  onChange={(event) => set("description", event.target.value)}
+                  placeholder="What it is, where it comes from, how it is used."
+                  rows={7}
                   required
                 />
-              </div>
-            </CardContent>
-          </Card>
+              </Field>
+            </div>
+          </SectionCard>
 
-          {/* Product Images */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Images *</CardTitle>
-              <CardDescription>Upload and manage product images</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ImageUpload images={images} onChange={setImages} maxImages={10} />
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="Photographs"
+            description="The first one is the cover, on cards and in the cart."
+          >
+            <ImageUpload images={images} onChange={setImages} maxImages={10} />
+          </SectionCard>
 
-          {/* Pricing - Multi-Currency */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Default Pricing</CardTitle>
-              <CardDescription>Set default product pricing for each currency (can be overridden by variants)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {availableCurrencies.map((currency, index) => {
-                const discountPercent = getDiscountPercent(currency.code);
-                const price = getPrice(currency.code, 'price');
-                const compareAtPrice = getPrice(currency.code, 'compareAtPrice');
-                const savings = compareAtPrice - price;
-                
-                return (
-                  <div key={currency.code} className="space-y-4">
-                    {index > 0 && <Separator />}
-                    
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-body font-semibold">{currency.name} ({currency.symbol})</h3>
-                      {currency.isDefault && (
-                        <Badge variant="secondary" className="text-xs">Default</Badge>
-                      )}
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor={`price-${currency.code}`}>
-                          Price ({currency.symbol}) *
-                        </Label>
-                        <Input
-                          id={`price-${currency.code}`}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={price || ''}
-                          onChange={(e) => updatePrice(
-                            currency.code,
-                            'price',
-                            parseFloat(e.target.value) || 0
-                          )}
-                          placeholder="0.00"
-                          required
-                        />
-                      </div>
+          <SectionCard
+            title="How it varies"
+            description="The axes this product is sold along — weight, grind, colour, shade."
+          >
+            <OptionsEditor options={options} onChange={setOptions} />
+          </SectionCard>
 
-                      <div className="space-y-2">
-                        <Label htmlFor={`compareAtPrice-${currency.code}`}>
-                          Compare at Price ({currency.symbol})
-                        </Label>
-                        <Input
-                          id={`compareAtPrice-${currency.code}`}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={compareAtPrice || ''}
-                          onChange={(e) => updatePrice(
-                            currency.code,
-                            'compareAtPrice',
-                            parseFloat(e.target.value) || 0
-                          )}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
+          <SectionCard
+            title="Variants, price and stock"
+            description={`Price and stock live here, on the variant — ${defaultCurrency.name} is what the shop sells in.`}
+          >
+            <VariantManager
+              options={options}
+              variants={variants}
+              onChange={setVariants}
+              isPerishable={form.isPerishable}
+            />
+          </SectionCard>
 
-                    {discountPercent > 0 && (
-                      <div className="p-3 bg-success/10 border border-success rounded-sm">
-                        <p className="text-sm text-success">
-                          💰 <strong>{discountPercent}% off</strong> - Customers save {currency.symbol}{savings.toFixed(2)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          {/* Product Variants */}
-          <VariantManager
-            variants={variants}
-            onChange={setVariants}
-            defaultPrices={formData.prices}
-            availableSizes={formData.sizes}
-            availableColors={formData.colors}
-          />
-
-          {/* Inventory */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Inventory</CardTitle>
-              <CardDescription>Stock management</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>In Stock</Label>
-                  <p className="text-sm text-muted-foreground">Product is available for purchase</p>
-                </div>
-                <Switch
-                  checked={formData.inStock}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, inStock: checked }))}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="totalStock">Total Stock</Label>
-                  <Input
-                    id="totalStock"
-                    type="number"
-                    min="0"
-                    value={formData.totalStock}
-                    onChange={(e) => setFormData(prev => ({ ...prev, totalStock: parseInt(e.target.value) || 0 }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="lowStockAlert">Low Stock Alert</Label>
-                  <Input
-                    id="lowStockAlert"
-                    type="number"
-                    min="0"
-                    value={formData.lowStockAlert}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lowStockAlert: parseInt(e.target.value) || 10 }))}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Product Attributes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Attributes</CardTitle>
-              <CardDescription>Tags, colors, sizes, and materials</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Tags */}
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                    placeholder="Add tag..."
-                  />
-                  <Button type="button" onClick={addTag} variant="outline">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.tags.map(tag => (
-                    <Badge key={tag} variant="secondary" className="gap-1">
-                      {tag}
-                      <Button
-                        type="button"
-                        variant={'ghost'}
-                        onClick={() => removeTag(tag)}
-                      >
-                      <X 
-                        className="h-3 w-3 cursor-pointer text-destructive hover:text-destructive" 
-                        onClick={() => removeTag(tag)}
-                      />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Colors */}
-              <ColorPicker
-                colors={formData.colors}
-                onChange={(colors) => setFormData(prev => ({ ...prev, colors }))}
+          <SectionCard title="Details">
+            <div className="space-y-5">
+              <ChipField
+                label="Tags"
+                hint="Used by search and, in time, by filters."
+                values={form.tags}
+                input={tagInput}
+                onInput={setTagInput}
+                onAdd={() => addTo("tags", tagInput, () => setTagInput(""))}
+                onRemove={(tag) => set("tags", form.tags.filter((t) => t !== tag))}
+                placeholder="ramadan, gift, arabica…"
               />
 
-              <Separator />
+              <ChipField
+                label="Made from"
+                values={form.materials}
+                input={materialInput}
+                onInput={setMaterialInput}
+                onAdd={() => addTo("materials", materialInput, () => setMaterialInput(""))}
+                onRemove={(material) =>
+                  set("materials", form.materials.filter((m) => m !== material))
+                }
+                placeholder="brass, chiffon, 100% arabica…"
+              />
 
-              {/* Sizes */}
-              <div className="space-y-2">
-                <Label>Sizes (for variants)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={sizeInput}
-                    onChange={(e) => setSizeInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSize())}
-                    placeholder="Add size..."
-                  />
-                  <Button type="button" onClick={addSize} variant="outline">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.sizes.map(size => (
-                    <Badge key={size} variant="secondary" className="gap-1">
-                      {size}
-                      <Button
-                        type="button"
-                        variant={'ghost'}
-                        onClick={() => removeSize(size)}
-                      >
-                      <X 
-                        className="h-3 w-3 cursor-pointer text-destructive hover:text-destructive" 
-                        onClick={() => removeSize(size)}
-                      />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Materials */}
-              <div className="space-y-2">
-                <Label>Materials</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={materialInput}
-                    onChange={(e) => setMaterialInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMaterial())}
-                    placeholder="Add material..."
-                  />
-                  <Button type="button" onClick={addMaterial} variant="outline">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.materials.map(material => (
-                    <Badge key={material} variant="secondary" className="gap-1">
-                      {material}
-                      <Button
-                        type="button"
-                        variant={'ghost'}
-                        onClick={() => removeMaterial(material)}
-                      >
-                      <X 
-                        className="h-3 w-3 cursor-pointer text-destructive hover:text-destructive" 
-                        onClick={() => removeMaterial(material)}
-                      />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* SEO */}
-          <Card>
-            <CardHeader>
-              <CardTitle>SEO & Meta</CardTitle>
-              <CardDescription>Search engine optimization</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="metaTitle">Meta Title</Label>
-                <Input
-                  id="metaTitle"
-                  value={formData.metaTitle}
-                  onChange={(e) => setFormData(prev => ({ ...prev, metaTitle: e.target.value }))}
-                  placeholder="SEO title for search engines"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="metaDescription">Meta Description</Label>
+              <Field label="Care and storage">
                 <Textarea
-                  id="metaDescription"
-                  value={formData.metaDescription}
-                  onChange={(e) => setFormData(prev => ({ ...prev, metaDescription: e.target.value }))}
-                  placeholder="SEO description for search engines"
+                  value={form.careInstructions}
+                  onChange={(event) => set("careInstructions", event.target.value)}
+                  placeholder="Keep sealed, away from light. Hand wash only."
                   rows={3}
                 />
-              </div>
-            </CardContent>
-          </Card>
+              </Field>
+            </div>
+          </SectionCard>
 
-          {/* Additional Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Information</CardTitle>
-              <CardDescription>Care instructions and guides</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="careInstructions">Care Instructions</Label>
+          <SectionCard
+            title="Search engines"
+            description="Left blank, the name and summary above are used."
+          >
+            <div className="space-y-4">
+              <Field label="Title">
+                <Input
+                  value={form.metaTitle}
+                  onChange={(event) => set("metaTitle", event.target.value)}
+                  placeholder={form.name || "Egyptian Ground Coffee | Ramazah"}
+                />
+              </Field>
+              <Field label="Description">
                 <Textarea
-                  id="careInstructions"
-                  value={formData.careInstructions}
-                  onChange={(e) => setFormData(prev => ({ ...prev, careInstructions: e.target.value }))}
-                  placeholder="How to care for this product..."
+                  value={form.metaDescription}
+                  onChange={(event) => set("metaDescription", event.target.value)}
+                  placeholder={form.shortDescription || "A short line for Google."}
                   rows={3}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sizeGuide">Size Guide URL</Label>
-                <Input
-                  id="sizeGuide"
-                  value={formData.sizeGuide}
-                  onChange={(e) => setFormData(prev => ({ ...prev, sizeGuide: e.target.value }))}
-                  placeholder="https://..."
-                />
-              </div>
-            </CardContent>
-          </Card>
+              </Field>
+            </div>
+          </SectionCard>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Organization */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Organization</CardTitle>
-              <CardDescription>Category and collection</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Category *</Label>
+        {/* --------------------------------------------------------- sidebar */}
+        <div className="space-y-6 xl:sticky xl:top-28 xl:self-start">
+          <SectionCard title="Publication">
+            <div className="space-y-3">
+              {(["draft", "active", "archived"] as const).map((value) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-sm border p-3 transition-colors",
+                    form.status === value
+                      ? "border-sage-deep bg-wash/50"
+                      : "border-rule hover:border-sage"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="status"
+                    value={value}
+                    checked={form.status === value}
+                    onChange={() => set("status", value)}
+                    className="mt-1 accent-[var(--sage-deep)]"
+                  />
+                  <span className="min-w-0">
+                    <StatusPill status={value} map={PRODUCT_STATUS} />
+                    <span className="mt-1.5 block font-body text-xs text-ink-muted">
+                      {STATUS_HELP[value]}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Where it lives">
+            <div className="space-y-4">
+              <Field label="Category" required>
                 <CategoryPathSelector
                   categories={categories}
-                  value={formData.categoryPath}
-                  onChange={(path) => setFormData(prev => ({ ...prev, categoryPath: path }))}
+                  value={form.categoryPath}
+                  onChange={(path) => set("categoryPath", path)}
                 />
-              </div>
+              </Field>
 
-              <div className="space-y-2">
-                <Label>Collection</Label>
+              <Field label="Collection" hint="Optional — a seasonal or gifting edit.">
                 <CollectionSelector
                   collections={collections}
-                  value={formData.collectionSlug}
-                  onChange={(slug) => setFormData(prev => ({ ...prev, collectionSlug: slug }))}
+                  value={form.collectionSlug}
+                  onChange={(slug) => set("collectionSlug", slug)}
                 />
-              </div>
-            </CardContent>
-          </Card>
+              </Field>
+            </div>
+          </SectionCard>
 
-          {/* Product Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Status</CardTitle>
-              <CardDescription>Feature flags and badges</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>New Arrival</Label>
-                <Switch
-                  checked={formData.isNew}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isNew: checked }))}
-                />
-              </div>
+          <SectionCard title="Stock handling">
+            <div className="space-y-4">
+              <Toggle
+                label="Perishable"
+                hint="Adds a best-before date to each variant. An order is refused after it passes."
+                checked={form.isPerishable}
+                onChange={(checked) => set("isPerishable", checked)}
+              />
 
-              <div className="flex items-center justify-between">
-                <Label>Featured</Label>
-                <Switch
-                  checked={formData.isFeatured}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isFeatured: checked }))}
+              <Field label="Warn me below" hint="units left, per variant">
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.lowStockAlert}
+                  onChange={(event) => set("lowStockAlert", Number(event.target.value) || 0)}
+                  className="tabular-nums"
                 />
-              </div>
+              </Field>
+            </div>
+          </SectionCard>
 
-              <div className="flex items-center justify-between">
-                <Label>Bestseller</Label>
-                <Switch
-                  checked={formData.isBestseller}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isBestseller: checked }))}
-                />
-              </div>
+          <SectionCard title="Badges" description="How it is flagged on the shop.">
+            <div className="space-y-4">
+              <Toggle
+                label="New in"
+                checked={form.isNew}
+                onChange={(checked) => set("isNew", checked)}
+              />
+              <Toggle
+                label="Featured"
+                checked={form.isFeatured}
+                onChange={(checked) => set("isFeatured", checked)}
+              />
+              <Toggle
+                label="Bestseller"
+                checked={form.isBestseller}
+                onChange={(checked) => set("isBestseller", checked)}
+              />
+              <Toggle
+                label="Limited edition"
+                checked={form.isLimitedEdition}
+                onChange={(checked) => set("isLimitedEdition", checked)}
+              />
+            </div>
+          </SectionCard>
 
-              <div className="flex items-center justify-between">
-                <Label>Limited Edition</Label>
-                <Switch
-                  checked={formData.isLimitedEdition}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isLimitedEdition: checked }))}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <Button variant="ghost" asChild className="w-full">
+            <Link href="/admin/products">Cancel</Link>
+          </Button>
         </div>
       </div>
     </form>
+  );
+}
+
+const STATUS_HELP: Record<string, string> = {
+  draft: "Saved, and invisible to shoppers. Where everything starts.",
+  active: "On the shop and buyable, provided it has a price and stock.",
+  archived: "Taken off the shop. Past orders keep their record of it.",
+};
+
+/**
+ * Everything that would stop this product being sellable, in the order someone
+ * would fix it. Shown continuously rather than one toast at a time on submit —
+ * the old form validated only on save and reported a single failure per attempt.
+ */
+function validate(
+  form: { name: string; slug: string; description: string; categoryPath: string; status: string },
+  images: ProductImage[],
+  variants: ProductVariant[],
+  currency: string
+): string[] {
+  const problems: string[] = [];
+
+  if (!form.name.trim()) problems.push("Give it a name.");
+  if (!form.slug.trim()) problems.push("Give it a web address.");
+  if (!form.description.trim()) problems.push("Write a description.");
+  if (!form.categoryPath) problems.push("Choose a category.");
+  if (images.length === 0) problems.push("Add at least one photograph.");
+
+  if (variants.length === 0) {
+    problems.push("Add at least one variant — price and stock live there, not on the product.");
+  } else {
+    const unpriced = variants.filter(
+      (variant) =>
+        (variant.prices?.find((price) => price.currency === currency)?.price ?? 0) <= 0
+    );
+    if (unpriced.length > 0) {
+      problems.push(
+        `Set a price for ${unpriced.length === variants.length ? "every variant" : `${unpriced.length} variant${unpriced.length === 1 ? "" : "s"}`}.`
+      );
+    }
+
+    const skus = variants.map((variant) => variant.sku.trim()).filter(Boolean);
+    if (skus.length !== variants.length) problems.push("Every variant needs a SKU.");
+    else if (new Set(skus).size !== skus.length) problems.push("Two variants share a SKU.");
+  }
+
+  return problems;
+}
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+function Field({
+  label,
+  hint,
+  required,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+        {label}
+        {required && <span className="ml-1 text-terra-ink">*</span>}
+      </Label>
+      {children}
+      {hint && <p className="font-body text-[11px] text-ink-muted">{hint}</p>}
+    </div>
+  );
+}
+
+function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="min-w-0">
+        <span className="block font-body text-sm text-foreground">{label}</span>
+        {hint && <span className="mt-0.5 block font-body text-xs text-ink-muted">{hint}</span>}
+      </span>
+      <Switch checked={checked} onCheckedChange={onChange} className="mt-0.5 shrink-0" />
+    </div>
+  );
+}
+
+function ChipField({
+  label,
+  hint,
+  values,
+  input,
+  onInput,
+  onAdd,
+  onRemove,
+  placeholder,
+}: {
+  label: string;
+  hint?: string;
+  values: string[];
+  input: string;
+  onInput: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+        {label}
+      </Label>
+
+      <div className="flex gap-2">
+        <Input
+          value={input}
+          onChange={(event) => onInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              // Without this, Enter submits the whole product form.
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          placeholder={placeholder}
+        />
+        <Button type="button" variant="outline" onClick={onAdd}>
+          <Plus className="h-4 w-4" />
+          <span className="sr-only">Add</span>
+        </Button>
+      </div>
+
+      {values.length > 0 && (
+        <ul className="flex flex-wrap gap-2 pt-1">
+          {values.map((value) => (
+            <li
+              key={value}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-rule bg-wash/50 py-1 pl-2.5 pr-1 font-body text-sm text-foreground"
+            >
+              {value}
+              <button
+                type="button"
+                onClick={() => onRemove(value)}
+                aria-label={`Remove ${value}`}
+                className="rounded-sm p-0.5 text-ink-muted transition-colors hover:bg-card hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {hint && <p className="font-body text-[11px] text-ink-muted">{hint}</p>}
+    </div>
   );
 }

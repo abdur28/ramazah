@@ -18,7 +18,7 @@ export default function PageHeader({
   actions,
   className,
 }: {
-  eyebrow?: string;
+  eyebrow?: React.ReactNode;
   title: string;
   description?: string;
   actions?: React.ReactNode;
@@ -32,9 +32,11 @@ export default function PageHeader({
       )}
     >
       <div className="min-w-0">
-        <p className="font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+        {/* A node rather than a string, so a page can make its eyebrow the way
+            back — the product form uses it as a breadcrumb to the catalogue. */}
+        <div className="font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
           {eyebrow}
-        </p>
+        </div>
         {/* Cormorant at 32/36px — the display face is legal here, not at 24. */}
         <h1 className="mt-1.5 font-heading text-[32px] font-light leading-none tracking-[0.02em] text-foreground md:text-4xl">
           {title}
