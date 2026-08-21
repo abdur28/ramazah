@@ -111,6 +111,11 @@ Verified end to end against the live database as a real admin: a two-axis perish
 product creates, prices, stocks, appears in `product_listing` for an anonymous shopper,
 is accepted by `create_order()`, and disappears again when switched to draft.
 
+**Still not exposed: `variant_images`.** The table exists and nothing anywhere reads or
+writes it. It is what would let a veil in three colours show the right photograph when a
+shopper picks one, rather than the same cover for every variant. Worth doing when the
+catalogue has a product that needs it.
+
 ### 5. Product pages and filters
 Size filters and size guides do not fit coffee and spices. Filtering should move to
 the generic options plus tags, using `product_listing` and `search_product_ids()`.

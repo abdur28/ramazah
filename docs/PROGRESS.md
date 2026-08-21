@@ -48,6 +48,31 @@ for an anonymous shopper at ₦9,000–₦12,000, is accepted by `create_order()
 vanishes from the storefront again when switched to draft. Eight checks, all
 passing.
 
+### Second pass on the form
+
+- **The best-before field was hidden.** It only appeared once `isPerishable` was
+  switched on, and that switch was in the sidebar, three cards away from the
+  variant rows it affects. Perishability now sits directly above the variants,
+  where its only visible consequence is — and a product filed under Food or
+  Beauty with it switched off says so, since half this catalogue is food and a
+  coffee with no dates entered would otherwise look finished.
+- **`products.details` was `{}` on every product in the shop.** The product page
+  has always rendered it as a specification table under Details; nothing could
+  write it, so that table was empty catalogue-wide. There is a key/value editor
+  now. jsonb does not preserve insertion order — Postgres returns keys by length,
+  then bytewise, which put "Roast" above "Origin" for no visible reason — so the
+  product page sorts them and the form says it does.
+- **`item_type` and `meta_keywords`** were both read by the app (`lib/products`
+  filters on the first, the product page's metadata uses the second) and neither
+  had a control.
+- **Bulk apply.** One row's price, stock or date can be pushed to the rest, which
+  is the difference between a variant editor and a chore at twelve rows.
+- **Unsaved-changes guard.** Filling this in is twenty minutes of photographs,
+  axes and per-variant dates; a stray back gesture lost all of it.
+
+Every editable column on `products` is now reachable from the form — audited
+column by column against `information_schema`.
+
 ### Every button in ImageUpload submitted the form
 
 None of them set `type`, so they defaulted to `type="submit"` inside the product

@@ -5,6 +5,7 @@ import { AlertTriangle, RefreshCcw, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { availableCurrencies } from "@/constants";
 import { formatMoney } from "@/lib/admin/format";
@@ -38,11 +39,15 @@ export default function VariantManager({
   variants,
   onChange,
   isPerishable,
+  onPerishableChange,
+  categoryPath,
 }: {
   options: ProductOptionDef[];
   variants: ProductVariant[];
   onChange: (variants: ProductVariant[]) => void;
   isPerishable: boolean;
+  onPerishableChange: (value: boolean) => void;
+  categoryPath?: string;
 }) {
   const currencies = availableCurrencies;
   const defaultCurrency = currencies.find((c) => c.isDefault) ?? currencies[0];
@@ -139,6 +144,41 @@ export default function VariantManager({
   const priceOf = (variant: ProductVariant, currency: string, field: "price" | "compareAtPrice") =>
     variant.prices?.find((price) => price.currency === currency)?.[field] ?? 0;
 
+  /**
+   * Filling in the same price and stock across a dozen rows by hand is where a
+   * variant editor becomes a chore, so one row can be pushed to the rest.
+   */
+  const applyToAll = (field: "price" | "stockCount" | "expiryDate") => {
+    const source = variants[0];
+    if (!source) return;
+
+    if (field === "price") {
+      const value = priceOf(source, defaultCurrency.code, "price");
+      onChange(
+        variants.map((variant) => ({
+          ...variant,
+          prices: (variant.prices ?? blankPrices()).map((price) =>
+            price.currency === defaultCurrency.code ? { ...price, price: value } : price
+          ),
+        }))
+      );
+      return;
+    }
+
+    if (field === "stockCount") {
+      const value = source.stockCount || 0;
+      onChange(variants.map((v) => ({ ...v, stockCount: value, inStock: value > 0 })));
+      return;
+    }
+
+    onChange(variants.map((v) => ({ ...v, expiryDate: source.expiryDate })));
+  };
+
+  // Half this catalogue is food, and the best-before column only appears once
+  // this is on — so a coffee whose dates were never entered would look finished.
+  const looksPerishable =
+    !isPerishable && /food|pantry|coffee|tea|spice|dry|beauty/i.test(categoryPath ?? "");
+
   const totalStock = variants.reduce((sum, variant) => sum + (variant.stockCount || 0), 0);
   const unpriced = variants.filter(
     (variant) => priceOf(variant, defaultCurrency.code, "price") <= 0
@@ -146,6 +186,34 @@ export default function VariantManager({
 
   return (
     <div className="space-y-4">
+      {/* Perishability lives here rather than in the sidebar, because this is
+          where its only consequence shows up: a best-before column on each row. */}
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-sm border border-rule bg-wash/40 p-4">
+        <span className="min-w-0">
+          <span className="block font-body text-sm text-foreground">
+            This is perishable
+          </span>
+          <span className="mt-0.5 block max-w-[60ch] font-body text-xs text-ink-muted">
+            Adds a best-before date to every variant below. The database refuses an order
+            for stock that has passed it, and the date shows on the product page.
+          </span>
+        </span>
+        <Switch
+          checked={isPerishable}
+          onCheckedChange={onPerishableChange}
+          aria-label="This product is perishable"
+          className="mt-0.5 shrink-0"
+        />
+      </div>
+
+      {looksPerishable && (
+        <p className="flex items-start gap-2 rounded-sm bg-terra/[0.06] p-3 font-body text-sm text-terra-ink">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          This is filed under {categoryPath}. If it has a best-before date, turn on
+          perishable — otherwise it will sell with no expiry recorded.
+        </p>
+      )}
+
       {/* ------------------------------------------------------------ actions */}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" variant="outline" onClick={generate}>
@@ -169,6 +237,20 @@ export default function VariantManager({
             {variants.length} variant{variants.length === 1 ? "" : "s"} · {totalStock} units in
             total
           </p>
+        )}
+
+        {variants.length > 1 && (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-body text-xs text-ink-muted">
+              Copy the first row&rsquo;s
+            </span>
+            <ApplyButton onClick={() => applyToAll("price")}>price</ApplyButton>
+            <ApplyButton onClick={() => applyToAll("stockCount")}>stock</ApplyButton>
+            {isPerishable && (
+              <ApplyButton onClick={() => applyToAll("expiryDate")}>date</ApplyButton>
+            )}
+            <span className="font-body text-xs text-ink-muted">to all</span>
+          </span>
         )}
       </div>
 
@@ -392,6 +474,24 @@ export default function VariantManager({
         </ul>
       )}
     </div>
+  );
+}
+
+function ApplyButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm border border-rule bg-card px-2 py-0.5 font-body text-xs text-ink-muted transition-colors hover:border-sage hover:text-foreground"
+    >
+      {children}
+    </button>
   );
 }
 

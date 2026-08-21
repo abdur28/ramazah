@@ -70,7 +70,11 @@ export default function ProductForm({
   const [isSaving, setIsSaving] = useState(false);
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [tagInput, setTagInput] = useState("");
+  const [keywordInput, setKeywordInput] = useState("");
   const [materialInput, setMaterialInput] = useState("");
+  const [details, setDetails] = useState<[string, string][]>(
+    Object.entries(product?.details ?? {}).map(([key, value]) => [key, String(value)])
+  );
 
   const [form, setForm] = useState({
     name: product?.name ?? "",
@@ -81,7 +85,9 @@ export default function ProductForm({
     categoryPath: product?.categoryPath ?? "",
     collectionSlug: product?.collectionSlug ?? "",
     status: (product?.status ?? "draft") as "draft" | "active" | "archived",
+    itemType: product?.itemType ?? "",
     tags: product?.tags ?? [],
+    metaKeywords: product?.metaKeywords ?? [],
     materials: product?.materials ?? [],
     careInstructions: product?.careInstructions ?? "",
     metaTitle: product?.metaTitle ?? "",
@@ -97,6 +103,7 @@ export default function ProductForm({
   const [images, setImages] = useState<ProductImage[]>(product?.images ?? []);
   const [options, setOptions] = useState<ProductOptionDef[]>(product?.options ?? []);
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -107,8 +114,24 @@ export default function ProductForm({
     }
   }, []);
 
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
+    setIsDirty(true);
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  /**
+   * Filling this in is twenty minutes of work — photographs, axes, a price and a
+   * date per variant. Losing it to a stray back gesture is not recoverable, so
+   * the browser asks first. Cleared on save, so a successful submit navigates
+   * away silently.
+   */
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isDirty]);
 
   // The slug follows the name until it is edited by hand, then it stops moving:
   // changing a live product's name should not silently break its URL.
@@ -138,6 +161,12 @@ export default function ProductForm({
       const payload = {
         ...form,
         status,
+        // `products.details` is a jsonb bag the product page renders as a
+        // specification table. It has been `{}` on every product in the shop,
+        // because nothing could write it.
+        details: Object.fromEntries(
+          details.filter(([key, value]) => key.trim() && value.trim())
+        ),
         images,
         options: options.filter((option) => option.name.trim() && option.values.length > 0),
         variants,
@@ -158,6 +187,7 @@ export default function ProductForm({
           status === "active" ? `${form.name} is live on the shop.` : `${form.name} saved.`
         );
       }
+      setIsDirty(false);
       router.push("/admin/products");
     } catch (error: any) {
       console.error("Error saving product:", error);
@@ -167,7 +197,11 @@ export default function ProductForm({
     }
   };
 
-  const addTo = (key: "tags" | "materials", value: string, reset: () => void) => {
+  const addTo = (
+    key: "tags" | "materials" | "metaKeywords",
+    value: string,
+    reset: () => void
+  ) => {
     const trimmed = value.trim();
     if (!trimmed || form[key].includes(trimmed)) return;
     set(key, [...form[key], trimmed]);
@@ -309,14 +343,27 @@ export default function ProductForm({
             title="Photographs"
             description="The first one is the cover, on cards and in the cart."
           >
-            <ImageUpload images={images} onChange={setImages} maxImages={10} />
+            <ImageUpload
+              images={images}
+              onChange={(next) => {
+                setIsDirty(true);
+                setImages(next);
+              }}
+              maxImages={10}
+            />
           </SectionCard>
 
           <SectionCard
             title="How it varies"
             description="The axes this product is sold along — weight, grind, colour, shade."
           >
-            <OptionsEditor options={options} onChange={setOptions} />
+            <OptionsEditor
+              options={options}
+              onChange={(next) => {
+                setIsDirty(true);
+                setOptions(next);
+              }}
+            />
           </SectionCard>
 
           <SectionCard
@@ -326,8 +373,13 @@ export default function ProductForm({
             <VariantManager
               options={options}
               variants={variants}
-              onChange={setVariants}
+              onChange={(next) => {
+                setIsDirty(true);
+                setVariants(next);
+              }}
               isPerishable={form.isPerishable}
+              onPerishableChange={(value) => set("isPerishable", value)}
+              categoryPath={form.categoryPath}
             />
           </SectionCard>
 
@@ -356,6 +408,17 @@ export default function ProductForm({
                 placeholder="brass, chiffon, 100% arabica…"
               />
 
+              <Field
+                label="Kind of thing"
+                hint="A coarse type used for filtering — coffee, veil, lantern."
+              >
+                <Input
+                  value={form.itemType}
+                  onChange={(event) => set("itemType", event.target.value)}
+                  placeholder="coffee"
+                />
+              </Field>
+
               <Field label="Care and storage">
                 <Textarea
                   value={form.careInstructions}
@@ -365,6 +428,19 @@ export default function ProductForm({
                 />
               </Field>
             </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Specification"
+            description="Rendered under Details on the product page, in alphabetical order — the database does not keep the order you type them in."
+          >
+            <SpecEditor
+              rows={details}
+              onChange={(next) => {
+                setIsDirty(true);
+                setDetails(next);
+              }}
+            />
           </SectionCard>
 
           <SectionCard
@@ -387,6 +463,18 @@ export default function ProductForm({
                   rows={3}
                 />
               </Field>
+
+              <ChipField
+                label="Keywords"
+                values={form.metaKeywords}
+                input={keywordInput}
+                onInput={setKeywordInput}
+                onAdd={() => addTo("metaKeywords", keywordInput, () => setKeywordInput(""))}
+                onRemove={(word) =>
+                  set("metaKeywords", form.metaKeywords.filter((k) => k !== word))
+                }
+                placeholder="egyptian coffee, ground coffee lagos…"
+              />
             </div>
           </SectionCard>
         </div>
@@ -446,13 +534,8 @@ export default function ProductForm({
 
           <SectionCard title="Stock handling">
             <div className="space-y-4">
-              <Toggle
-                label="Perishable"
-                hint="Adds a best-before date to each variant. An order is refused after it passes."
-                checked={form.isPerishable}
-                onChange={(checked) => set("isPerishable", checked)}
-              />
-
+              {/* Perishability moved next to the variants, where its only effect
+                  — the best-before column — actually appears. */}
               <Field label="Warn me below" hint="units left, per variant">
                 <Input
                   type="number"
@@ -572,6 +655,76 @@ function Field({
       </Label>
       {children}
       {hint && <p className="font-body text-[11px] text-ink-muted">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * The specification table, as ordered key/value pairs.
+ *
+ * `products.details` is jsonb and the product page already renders it under
+ * Details — but every product in the catalogue has `{}` there, because the old
+ * form had no way to write it. Pairs rather than free JSON: this is filled in by
+ * whoever is unpacking the boxes, not by someone who wants to type braces.
+ */
+function SpecEditor({
+  rows,
+  onChange,
+}: {
+  rows: [string, string][];
+  onChange: (rows: [string, string][]) => void;
+}) {
+  const update = (index: number, position: 0 | 1, value: string) =>
+    onChange(
+      rows.map((row, i) => {
+        if (i !== index) return row;
+        const next: [string, string] = [...row] as [string, string];
+        next[position] = value;
+        return next;
+      })
+    );
+
+  return (
+    <div className="space-y-2">
+      {rows.map(([key, value], index) => (
+        <div key={index} className="flex gap-2">
+          <Input
+            value={key}
+            onChange={(event) => update(index, 0, event.target.value)}
+            placeholder="Origin"
+            aria-label={`Specification ${index + 1} name`}
+            className="max-w-[38%]"
+          />
+          <Input
+            value={value}
+            onChange={(event) => update(index, 1, event.target.value)}
+            placeholder="Alexandria, Egypt"
+            aria-label={`Specification ${index + 1} value`}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onChange(rows.filter((_, i) => i !== index))}
+            className="shrink-0 text-ink-muted hover:text-destructive"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Remove {key || `row ${index + 1}`}</span>
+          </Button>
+        </div>
+      ))}
+
+      <Button type="button" variant="outline" onClick={() => onChange([...rows, ["", ""]])}>
+        <Plus className="mr-2 h-4 w-4" />
+        Add a line
+      </Button>
+
+      {rows.length === 0 && (
+        <p className="pt-1 font-body text-xs text-ink-muted">
+          Roast, origin, net weight, thread count — whatever a buyer would want in a
+          table.
+        </p>
+      )}
     </div>
   );
 }

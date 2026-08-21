@@ -57,8 +57,15 @@ export default function ProductDetails({ product, selectedVariant }: ProductDeta
       title: "Details",
       content: (
         <dl className="grid grid-cols-2 gap-4">
+          {/* Sorted, because `details` is jsonb and Postgres does not preserve
+              insertion order — it returns keys by length, then bytewise, so an
+              unsorted render puts "Roast" above "Origin" for no visible reason.
+              Alphabetical is arbitrary too, but it is at least predictable, and
+              the admin form says so where the rows are entered. */}
           {product.details &&
-            Object.entries(product.details).map(([key, value]) => (
+            Object.entries(product.details)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => (
               <div key={key} className="space-y-1">
                 <dt className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
                   {key.replace(/([A-Z])/g, " $1").trim()}
