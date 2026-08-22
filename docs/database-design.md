@@ -55,9 +55,16 @@ scale. A future Expo (React Native) app is a first-class client.
 
 **Identity** — `profiles` (extends `auth.users`, populated by trigger), `addresses`
 
-**Catalog** — `categories`, `collections`, `products`, `product_images`,
-`product_variants`, `product_options`, `product_option_values`,
+**Catalog** — `categories`, `collections`, `product_collections`, `products`,
+`product_images`, `product_variants`, `product_options`, `product_option_values`,
 `variant_option_values`, `variant_images`, `product_prices`
+
+A product sits in exactly one category and in any number of collections. The tree
+is where a thing belongs; a collection is a curated edit — a buying run, an
+occasion — and those overlap, so membership is the `product_collections` join
+table rather than a column. At most one collection may set `is_featured`: that is
+the one the home page shows, enforced by a partial unique index and moved by
+`set_home_collection()`.
 
 Every product has at least one variant; products without options get a single default
 variant, so price and stock always live in exactly one place.

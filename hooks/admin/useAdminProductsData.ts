@@ -219,17 +219,40 @@ async function writeImages(productId: string, images: ProductImage[] = []) {
 
 /** Resolve a category by display path or slug, since the form sends a path. */
 /**
- * `collectionSlug` -> `products.collection_id`.
+ * Collection membership -> `product_collections`.
  *
  * The form has always had a collection picker and the value went nowhere:
  * `toColumns` had no mapping and neither create nor update resolved it, so
- * choosing a collection did nothing at all.
+ * choosing a collection did nothing at all. It then went to a single
+ * `collection_id`, which meant a product could sit in a buying run or an
+ * occasion but never both. It is a join table now.
+ *
+ * Written as delete-then-insert rather than a diff: the set is a handful of
+ * rows, the table is nothing but the pair, and a diff would be more code for no
+ * fewer round trips.
  */
-async function resolveCollectionId(collectionSlug?: string): Promise<string | null> {
-  if (!collectionSlug) return null;
-  const { data } = await supabase()
-    .from('collections').select('id').eq('slug', collectionSlug).maybeSingle();
-  return data?.id ?? null;
+async function writeCollections(productId: string, slugs?: string[]): Promise<void> {
+  if (!slugs) return;
+  const db = supabase();
+
+  const { error: clearError } = await db
+    .from('product_collections').delete().eq('product_id', productId);
+  if (clearError) throw new Error(clearError.message);
+
+  if (slugs.length === 0) return;
+
+  const { data: rows, error: lookupError } = await db
+    .from('collections').select('id, slug').in('slug', slugs);
+  if (lookupError) throw new Error(lookupError.message);
+
+  const links = (rows ?? []).map((row: any) => ({
+    product_id: productId,
+    collection_id: row.id,
+  }));
+  if (links.length === 0) return;
+
+  const { error } = await db.from('product_collections').insert(links);
+  if (error) throw new Error(error.message);
 }
 
 async function resolveCategoryId(categoryPath?: string): Promise<string | null> {
@@ -310,8 +333,7 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
                     error: { ...state.error, adminAction: null } }));
     try {
       const row = toColumns({ ...data, slug: data.slug || generateSlug(data.name) } as Partial<Product>);
-      row.category_id   = await resolveCategoryId(data.categoryPath);
-      row.collection_id = await resolveCollectionId(data.collectionSlug);
+      row.category_id = await resolveCategoryId(data.categoryPath);
       row.status = data.status ?? 'draft';
       // The date a product went live is what "New in" sorts by, so it is stamped
       // when it is published rather than when the row was first written.
@@ -321,6 +343,7 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
         .from('products').insert(row).select('id').single();
       if (error) throw new Error(error.message);
 
+      await writeCollections(created.id, data.collections?.map((c) => c.slug));
       await writeImages(created.id, data.images);
       const resolveImage = await buildImageResolver(created.id, data.images);
       await writeVariants(created.id, data.variants, data.options, resolveImage);
@@ -342,9 +365,6 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
       if (data.categoryPath !== undefined) {
         patch.category_id = await resolveCategoryId(data.categoryPath);
       }
-      if (data.collectionSlug !== undefined) {
-        patch.collection_id = await resolveCollectionId(data.collectionSlug);
-      }
       // Publishing for the first time stamps the date; unpublishing keeps it, so
       // a product taken down and put back does not jump to the top of "New in".
       if (data.status === 'active' && data.publishedAt === undefined) {
@@ -357,6 +377,9 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
         if (error) throw new Error(error.message);
       }
 
+      if (data.collections !== undefined) {
+        await writeCollections(productId, data.collections.map((c) => c.slug));
+      }
       if (data.images) await writeImages(productId, data.images);
       if (data.variants) {
         const resolveImage = await buildImageResolver(productId, data.images);

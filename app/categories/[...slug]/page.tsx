@@ -3,8 +3,12 @@ import CategoryPage from "@/components/category/CategoryPage"
 import {
   getCategoryByPath,
   getProductsByCategoryPath,
+  getFilteredCategoryProducts,
+  getCategoryFacets,
   getAllCategories,
   getCategoryHierarchy,
+  CATEGORY_PAGE_SIZE,
+  type CategoryFilters,
 } from "@/lib/products"
 import { categoryHref } from "@/lib/categories"
 import type { Category } from "@/types/types"
@@ -23,8 +27,9 @@ import type { Category } from "@/types/types"
  * "Food & Pantry" showed one item while four sat beneath it, with no way to
  * reach Coffee & Tea from the page above it.
  */
-export default async function CategoryDynamicPage({ params }: any) {
+export default async function CategoryDynamicPage({ params, searchParams }: any) {
   const { slug } = await params
+  const query = (await searchParams) ?? {}
   const path = slug.join('/')
 
   const { category, error: categoryError } = await getCategoryByPath(path)
@@ -36,7 +41,25 @@ export default async function CategoryDynamicPage({ params }: any) {
   // The real hierarchy, rather than one inferred from the path string.
   const { ancestors, children } = await getCategoryHierarchy(category.path)
 
-  const { products } = await getProductsByCategoryPath(category.path)
+  /**
+   * Filters live in the URL, and the narrowing happens in the database.
+   *
+   * They used to be React state, with every product in the category shipped to
+   * the browser and filtered there — fine at a dozen items, wasteful at a few
+   * hundred, and the counts beside each value described the page rather than
+   * the shelf. In the URL they are also shareable and survive the back button.
+   */
+  const filters = filtersFromQuery(query)
+  const sort = String(firstOf(query.sort) ?? 'featured')
+  const page = Math.max(Number(firstOf(query.page) ?? 1) || 1, 1)
+
+  const [{ products, total }, { facets }] = await Promise.all([
+    getFilteredCategoryProducts(category.path, filters, { sort, page }),
+    getCategoryFacets(category.path),
+  ])
+
+  // What the shelf holds before any filter, so the toolbar can say "4 of 8".
+  const { products: allOnShelf } = await getProductsByCategoryPath(category.path)
 
   // Every level from the root down, so a breadcrumb is correct at any depth
   // rather than only for a child of a root.
@@ -46,12 +69,20 @@ export default async function CategoryDynamicPage({ params }: any) {
     href: categoryHref(trail.slice(0, index + 1).map((c) => c.slug)),
   }))
 
-  // Where a shopper can go next. Empty for a leaf.
-  const shelves = children.map((child) => ({
-    name: child.name,
-    href: categoryHref([...trail.map((c) => c.slug), child.slug]),
-    image: child.bannerImage?.secureUrl,
-  }))
+  // Where a shopper can go next, with what is on each. Counted the same way the
+  // page itself counts — including anything nested beneath the shelf — so a
+  // chip reading 4 and a page listing 4 agree.
+  const shelves = await Promise.all(
+    children.map(async (child) => {
+      const { products: onShelf } = await getProductsByCategoryPath(child.path)
+      return {
+        name: child.name,
+        href: categoryHref([...trail.map((c) => c.slug), child.slug]),
+        image: child.bannerImage?.secureUrl,
+        count: onShelf.length,
+      }
+    })
+  )
 
   return (
     <CategoryPage
@@ -63,6 +94,13 @@ export default async function CategoryDynamicPage({ params }: any) {
       breadcrumbsAsString={JSON.stringify(breadcrumbs)}
       productsAsString={JSON.stringify(products)}
       shelvesAsString={JSON.stringify(shelves)}
+      facetsAsString={JSON.stringify(facets)}
+      filtersAsString={JSON.stringify(filters)}
+      totalOnShelf={allOnShelf.length}
+      totalMatching={total}
+      page={page}
+      pageSize={CATEGORY_PAGE_SIZE}
+      sort={sort}
       isLoading={false}
     />
   )
@@ -89,4 +127,44 @@ export async function generateStaticParams() {
 
   walk(categories as Category[], [])
   return params
+}
+
+/**
+ * `?Weight=250g,1kg&tags=gift&max=12000&stock=1` -> the filter the database takes.
+ *
+ * Axes are their own query keys so a URL reads as what it filters. The reserved
+ * names below cannot be axis names, which is why they are spelled unlike any
+ * category axis would be.
+ */
+const RESERVED = new Set(["tags", "min", "max", "stock", "sort", "page"])
+
+const firstOf = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value
+
+function filtersFromQuery(query: Record<string, string | string[] | undefined>): CategoryFilters {
+  const first = firstOf
+
+  const list = (value: string | string[] | undefined) =>
+    (first(value) ?? "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+
+  const options: Record<string, string[]> = {}
+  for (const [key, value] of Object.entries(query)) {
+    if (RESERVED.has(key)) continue
+    const values = list(value)
+    if (values.length > 0) options[key] = values
+  }
+
+  const min = Number(first(query.min))
+  const max = Number(first(query.max))
+
+  return {
+    options: Object.keys(options).length > 0 ? options : undefined,
+    tags: list(query.tags).length > 0 ? list(query.tags) : undefined,
+    minPrice: Number.isFinite(min) && first(query.min) ? min : undefined,
+    maxPrice: Number.isFinite(max) && first(query.max) ? max : undefined,
+    inStockOnly: first(query.stock) === "1" || undefined,
+  }
 }

@@ -114,18 +114,19 @@ is accepted by `create_order()`, and disappears again when switched to draft.
 ~~**Still not exposed: `variant_images`.**~~ Done 2026-08-22 — picker in the admin,
 gallery follows the selection on the product page. See PROGRESS.
 
-### 5. Product pages and filters
-**This is now the most visible storefront gap.** The category filter sidebar offers
-Size, Colour, Tags and Materials — and the catalogue's actual axes are Weight, Grind
-and Flavour, so on every food page it computes empty arrays and renders a panel with
-nothing in it. Filtering should read the generic option axes off the products, the way
-`VariantSelector` and the rebuilt product form already do, using `product_listing` and
-`search_product_ids()`.
+### 5. ~~Product pages and filters~~ — done 2026-08-22
+**The category filter is done** (2026-08-22) — it reads the generic option axes off the
+products, so a coffee shelf offers Weight and Grind and a veil shelf offers Colour, with
+a count on every value. Shelf chips carry counts and an empty shelf says so. See
+PROGRESS.
 
-Two smaller things belong with it: the Browse chips on a category page carry no product
-counts, so an empty shelf looks the same as a full one until you click; and a category
-with no products falls through to "Try adjusting your filters" when no filter is set —
-it should say the shelf is empty and point up a level.
+~~`ProductCard`'s quick-add dialog~~, ~~server-side filtering~~, ~~server-side sorting~~
+and ~~pagination~~ all done 2026-08-22 — see PROGRESS. Shelves page at twenty, with
+filters, sort and page all in the URL.
+
+~~A search results page~~ done 2026-08-22 — `/search`, on the same rails.
+
+**Item 5 is complete.**
 
 `ProductCard`'s quick-add dialog is part of this: it only speaks Size and Colour, so a
 product on the generic option model routes to the product page instead of choosing in
@@ -134,11 +135,13 @@ place. Deliberate, but it is the same rebuild.
 **A search results page** would also belong here. Search currently lives entirely in
 the dialog, which shows the top six matches and asks you to refine.
 
-**Collections have no storefront route at all.** `app/` has `/categories/[...slug]` and
-`/product/[slug]` and nothing for collections, so `/admin/collections` manages data that
-no shopper can reach — banner image, description and all. Either build
-`/collections/[slug]` or drop the concept; leaving it half-present is the worst of the
-three. The admin screen says so on its face in the meantime.
+~~**Collections have no storefront route.**~~ Built 2026-08-22 — `/collections`, a page
+per collection on the same rails as a category, a home-page band, and a link from every
+product in one. See PROGRESS.
+
+~~**A product can only be in one collection.**~~ Built 2026-08-22 — `product_collections`
+replaces `products.collection_id`, so a buying run and an occasion can both claim the same
+product. Which collection the home page shows is now an explicit choice in the admin.
 
 ### 6. Notifications and admin — deferred by the client (2026-08-21)
 Working, but nobody is told anything by email:

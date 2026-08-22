@@ -31,6 +31,8 @@ const mapCollection = (row: any): Collection => ({
     ? { id: row.id, publicId: row.banner_public_id, url: row.banner_url ?? '',
         secureUrl: row.banner_url ?? '', altText: row.banner_alt ?? '' }
     : undefined,
+  isFeatured: Boolean(row.is_featured),
+  sortOrder: row.sort_order ?? 0,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -40,6 +42,10 @@ const toColumns = (data: Partial<Collection>) => {
   if (data.name !== undefined)        patch.name = data.name;
   if (data.slug !== undefined)        patch.slug = data.slug;
   if (data.description !== undefined) patch.description = data.description;
+  if (data.sortOrder !== undefined)   patch.sort_order = data.sortOrder;
+  // `isFeatured` is deliberately absent: at most one row may carry it, so it
+  // moves through set_home_collection() rather than a plain update. Writing it
+  // here would hit the unique index instead of clearing the previous one.
   if (data.bannerImage !== undefined) {
     patch.banner_public_id = data.bannerImage?.publicId ?? null;
     patch.banner_url = data.bannerImage?.secureUrl ?? null;
@@ -147,11 +153,39 @@ const useAdminCollectionsData = create<AdminCollectionDataStore>((set, get) => (
     }
   },
 
+  /**
+   * Choose the collection on the home page.
+   *
+   * An RPC rather than two updates from here: only one row may be featured, so
+   * the old one has to be cleared and the new one set without the pair ever
+   * both being true. Doing that over the wire would leave the home page empty
+   * if the second call failed.
+   */
+  setHomeCollection: async (collectionId: string | null) => {
+    set(state => ({ loading: { ...state.loading, adminAction: true },
+                    error: { ...state.error, adminAction: null } }));
+    try {
+      const { error } = await supabase()
+        .rpc('set_home_collection', { p_collection: collectionId });
+      if (error) throw new Error(error.message);
+
+      set(state => ({
+        loading: { ...state.loading, adminAction: false },
+        collections: state.collections.map(c => ({ ...c, isFeatured: c.id === collectionId })),
+      }));
+    } catch (error) {
+      set(state => ({ loading: { ...state.loading, adminAction: false },
+                      error: { ...state.error, adminAction: createErrorMessage(error) } }));
+      throw error;
+    }
+  },
+
   deleteCollection: async (collectionId: string) => {
     set(state => ({ loading: { ...state.loading, adminAction: true },
                     error: { ...state.error, adminAction: null } }));
     try {
-      // products.collection_id is ON DELETE SET NULL, so this always succeeds.
+      // product_collections cascades, so the products stay and only the
+      // grouping goes.
       const { error } = await supabase().from('collections').delete().eq('id', collectionId);
       if (error) throw new Error(error.message);
       set(state => ({

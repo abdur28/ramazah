@@ -130,7 +130,8 @@ export interface Product {
   
   itemType?: string;
   categoryPath: string; // Category path e.g. "Clothing > Tops"
-  collectionSlug?: string;
+  /** Every collection this is in. Many-to-many since 20260824000020. */
+  collections?: { slug: string; name: string }[];
   
   images: ProductImage[];
   variants?: ProductVariant[];
@@ -207,6 +208,9 @@ export interface Collection {
   slug: string;
   description?: string;
   bannerImage?: BannerImage;
+  /** Shown on the home page. At most one collection carries this. */
+  isFeatured?: boolean;
+  sortOrder?: number;
   createdAt: any;
   updatedAt: any;
 }

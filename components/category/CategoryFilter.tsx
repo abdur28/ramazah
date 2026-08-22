@@ -7,344 +7,279 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
-import type { Color } from "@/types/types"
+import { cn } from "@/lib/utils"
+import { useCurrency } from "@/contexts/CurrencyContext"
+
+/**
+ * The filter rail.
+ *
+ * It used to offer Size, Colour, Tags and Materials — the axes of the streetwear
+ * shop this codebase came from. Ramazah sells coffee by Weight and Grind, tea by
+ * Flavour, veils by Colour and trays by nothing at all, so on every food page the
+ * page computed empty arrays for Size and Colour and rendered a panel with
+ * nothing in it. A filter that shows no filters reads as a broken page.
+ *
+ * The axes come from the products now, the same generic option model the variant
+ * picker and the product form already use. A veil category still shows Colour,
+ * because Colour is one of the axes those products happen to have — it is no
+ * longer a special case in the code.
+ *
+ * Each value carries the number of products behind it, so a shopper can see
+ * before clicking that a filter would empty the grid.
+ */
+export interface FilterAxis {
+  name: string
+  values: { value: string; hex?: string; count: number }[]
+}
 
 export interface FilterOptions {
-  sizes?: string[]
-  colors?: Color[]
+  /** Axis name -> the values ticked under it. */
+  options?: Record<string, string[]>
   priceRange?: [number, number]
   inStockOnly?: boolean
   tags?: string[]
-  materials?: string[]
 }
 
 interface CategoryFilterProps {
-  availableSizes?: string[]
-  availableColors?: Color[]
-  availableTags?: string[]
-  availableMaterials?: string[]
+  axes?: FilterAxis[]
+  availableTags?: { value: string; count: number }[]
   maxPrice?: number
   filters: FilterOptions
   onFilterChange: (filters: FilterOptions) => void
   onClearFilters: () => void
 }
 
+const isColourAxis = (name: string) => /^colou?r$/i.test(name.trim())
+
 export default function CategoryFilter({
-  availableSizes = [],
-  availableColors = [],
+  axes = [],
   availableTags = [],
-  availableMaterials = [],
   maxPrice = 10000,
   filters,
   onFilterChange,
   onClearFilters,
 }: CategoryFilterProps) {
+  const { formatPrice } = useCurrency()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [expanded, setExpanded] = useState<string[]>(["sizes", "colors", "price"])
 
-  const toggleSection = (section: string) => {
-    setExpanded(prev => prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section])
+  // The first two axes open, the rest folded: a page with four axes is a wall
+  // of checkboxes otherwise.
+  const [collapsed, setCollapsed] = useState<string[]>(() =>
+    axes.slice(2).map((axis) => axis.name)
+  )
+
+  const toggleSection = (section: string) =>
+    setCollapsed((current) =>
+      current.includes(section) ? current.filter((s) => s !== section) : [...current, section]
+    )
+
+  const selectedFor = (axis: string) => filters.options?.[axis] ?? []
+
+  const toggleValue = (axis: string, value: string) => {
+    const current = selectedFor(axis)
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value]
+
+    const options = { ...(filters.options ?? {}) }
+    if (next.length > 0) options[axis] = next
+    else delete options[axis]
+
+    onFilterChange({ ...filters, options })
   }
 
-  const handleSizeToggle = (size: string) => {
-    const current = filters.sizes || []
-    const updated = current.includes(size) ? current.filter(s => s !== size) : [...current, size]
-    onFilterChange({ ...filters, sizes: updated })
-  }
-
-  const handleColorToggle = (color: Color) => {
-    const current = filters.colors || []
-    const updated = current.some(c => c.name === color.name)
-      ? current.filter(c => c.name !== color.name)
-      : [...current, color]
-    onFilterChange({ ...filters, colors: updated })
-  }
-
-  const handleTagToggle = (tag: string) => {
-    const current = filters.tags || []
-    const updated = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag]
-    onFilterChange({ ...filters, tags: updated })
-  }
-
-  const handleMaterialToggle = (material: string) => {
-    const current = filters.materials || []
-    const updated = current.includes(material) ? current.filter(m => m !== material) : [...current, material]
-    onFilterChange({ ...filters, materials: updated })
+  const toggleTag = (tag: string) => {
+    const current = filters.tags ?? []
+    const next = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]
+    onFilterChange({ ...filters, tags: next.length > 0 ? next : undefined })
   }
 
   const activeCount =
-    (filters.sizes?.length || 0) +
-    (filters.colors?.length || 0) +
-    (filters.tags?.length || 0) +
-    (filters.materials?.length || 0) +
-    (filters.inStockOnly ? 1 : 0) +
-    (filters.priceRange ? 1 : 0)
+    Object.values(filters.options ?? {}).reduce((sum, values) => sum + values.length, 0) +
+    (filters.tags?.length ?? 0) +
+    (filters.priceRange ? 1 : 0) +
+    (filters.inStockOnly ? 1 : 0)
 
   const FilterContent = () => (
     <div className="space-y-6">
       {activeCount > 0 && (
-        <div className="flex items-center justify-between pb-4 border-b border-foreground/10">
-          <span className="text-xs font-body text-foreground/60 uppercase tracking-wider">
-            {activeCount} Active
-          </span>
-          <Button variant="ghost" size="sm" onClick={onClearFilters} className="text-xs hover:text-sage-light h-auto p-0">
-            Clear All
-          </Button>
-        </div>
-      )}
-
-      {/* In Stock */}
-      <div className="flex items-center space-x-2">
-        <Checkbox 
-          id="inStock" 
-          checked={filters.inStockOnly} 
-          onCheckedChange={() => onFilterChange({ ...filters, inStockOnly: !filters.inStockOnly })} 
-        />
-        <Label htmlFor="inStock" className="text-sm font-body cursor-pointer uppercase tracking-wider">
-          In Stock Only
-        </Label>
-      </div>
-
-      {/* Sizes */}
-      {availableSizes.length > 0 && (
-        <div className="space-y-3">
-          <button
-            onClick={() => toggleSection("sizes")}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h3 className="font-body text-sm font-medium uppercase tracking-wider">Size</h3>
-            <ChevronDown className={`h-4 w-4 transition-transform ${expanded.includes("sizes") ? "rotate-180" : ""}`} />
-          </button>
-
-          <AnimatePresence>
-            {expanded.includes("sizes") && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {availableSizes.map(size => {
-                    const isSelected = filters.sizes?.includes(size)
-                    return (
-                      <button
-                        key={size}
-                        onClick={() => handleSizeToggle(size)}
-                        className={`min-w-[50px] px-4 py-2 font-body text-xs font-medium transition-all ${
-                          isSelected
-                            ? "bg-foreground text-background ring-2 ring-sage-deep"
-                            : "bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20"
-                        }`}
-                      >
-                        {size}
-                      </button>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Colors */}
-      {availableColors.length > 0 && (
-        <div className="space-y-3">
-          <button
-            onClick={() => toggleSection("colors")}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h3 className="font-body text-sm font-medium uppercase tracking-wider">Color</h3>
-            <ChevronDown className={`h-4 w-4 transition-transform ${expanded.includes("colors") ? "rotate-180" : ""}`} />
-          </button>
-
-          <AnimatePresence>
-            {expanded.includes("colors") && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="flex flex-wrap gap-3 pt-2">
-                  {availableColors.map(color => {
-                    const isSelected = filters.colors?.some(c => c.name === color.name)
-                    return (
-                      <button
-                        key={color.name}
-                        onClick={() => handleColorToggle(color)}
-                        className={`relative w-10 h-10 rounded-full transition-all ${
-                          isSelected
-                            ? "ring-2 ring-sage-deep ring-offset-2"
-                            : "ring-1 ring-foreground/20 hover:ring-2 hover:ring-foreground/40"
-                        }`}
-                        style={{ backgroundColor: color.hex }}
-                        title={color.name}
-                      >
-                        {isSelected && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-2 h-2 bg-card rounded-full" />
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Materials */}
-      {availableMaterials.length > 0 && (
-        <div className="space-y-3">
-          <button
-            onClick={() => toggleSection("materials")}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h3 className="font-body text-sm font-medium uppercase tracking-wider">Material</h3>
-            <ChevronDown className={`h-4 w-4 transition-transform ${expanded.includes("materials") ? "rotate-180" : ""}`} />
-          </button>
-
-          <AnimatePresence>
-            {expanded.includes("materials") && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {availableMaterials.map(material => {
-                    const isSelected = filters.materials?.includes(material)
-                    return (
-                      <button
-                        key={material}
-                        onClick={() => handleMaterialToggle(material)}
-                        className={`px-4 py-2 font-body text-xs transition-all rounded-full ${
-                          isSelected
-                            ? "bg-sage-deep text-background"
-                            : "bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20"
-                        }`}
-                      >
-                        {material}
-                      </button>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Price Range */}
-      <div className="space-y-3">
         <button
-          onClick={() => toggleSection("price")}
-          className="flex items-center justify-between w-full text-left"
+          type="button"
+          onClick={onClearFilters}
+          className="flex w-full items-center justify-between rounded-sm border border-rule px-3 py-2 font-body text-sm text-ink-muted transition-colors hover:border-sage hover:text-foreground"
         >
-          <h3 className="font-body text-sm font-medium uppercase tracking-wider">Price</h3>
-          <ChevronDown className={`h-4 w-4 transition-transform ${expanded.includes("price") ? "rotate-180" : ""}`} />
+          Clear {activeCount} filter{activeCount === 1 ? "" : "s"}
+          <X className="h-3.5 w-3.5" />
         </button>
+      )}
 
-        <AnimatePresence>
-          {expanded.includes("price") && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden space-y-4"
+      {axes.map((axis) => {
+        const isOpen = !collapsed.includes(axis.name)
+        const selected = selectedFor(axis.name)
+
+        return (
+          <section key={axis.name}>
+            <button
+              type="button"
+              onClick={() => toggleSection(axis.name)}
+              aria-expanded={isOpen}
+              className="flex w-full items-center justify-between py-1 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted transition-colors hover:text-foreground"
             >
-              <Slider
-                min={0}
-                max={maxPrice}
-                step={100}
-                value={filters.priceRange || [0, maxPrice]}
-                onValueChange={(value) => onFilterChange({ ...filters, priceRange: [value[0], value[1]] })}
-                className="pt-2"
+              <span>
+                {axis.name}
+                {selected.length > 0 && (
+                  <span className="ml-2 normal-case tracking-normal text-sage-deep">
+                    {selected.length}
+                  </span>
+                )}
+              </span>
+              <ChevronDown
+                className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "-rotate-90")}
               />
-              <div className="flex items-center justify-between text-sm font-body text-foreground/60">
-                <span>${filters.priceRange?.[0] || 0}</span>
-                <span>${filters.priceRange?.[1] || maxPrice}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+            </button>
 
-      {/* Tags */}
-      {availableTags.length > 0 && (
-        <div className="space-y-3">
-          <button
-            onClick={() => toggleSection("tags")}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h3 className="font-body text-sm font-medium uppercase tracking-wider">Tags</h3>
-            <ChevronDown className={`h-4 w-4 transition-transform ${expanded.includes("tags") ? "rotate-180" : ""}`} />
-          </button>
+            <AnimatePresence initial={false}>
+              {isOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="overflow-hidden"
+                >
+                  <div
+                    className={cn(
+                      "pt-3",
+                      isColourAxis(axis.name) ? "flex flex-wrap gap-2" : "space-y-2"
+                    )}
+                  >
+                    {axis.values.map((option) =>
+                      isColourAxis(axis.name) && option.hex ? (
+                        // A swatch says more than the word for a colour, but the
+                        // name stays as the label — colour alone never carries
+                        // meaning here.
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => toggleValue(axis.name, option.value)}
+                          aria-pressed={selected.includes(option.value)}
+                          title={`${option.value} · ${option.count} product${option.count === 1 ? "" : "s"}`}
+                          className={cn(
+                            "flex items-center gap-2 rounded-sm border px-2 py-1.5 font-body text-sm transition-colors",
+                            selected.includes(option.value)
+                              ? "border-sage-deep bg-wash/60 text-foreground"
+                              : "border-rule text-ink-muted hover:border-sage hover:text-foreground"
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className="h-4 w-4 shrink-0 rounded-[2px] border border-rule"
+                            style={{ backgroundColor: option.hex }}
+                          />
+                          {option.value}
+                        </button>
+                      ) : (
+                        <label
+                          key={option.value}
+                          className="flex cursor-pointer items-center gap-3 font-body text-sm"
+                        >
+                          <Checkbox
+                            checked={selected.includes(option.value)}
+                            onCheckedChange={() => toggleValue(axis.name, option.value)}
+                          />
+                          <span className="flex-1 text-foreground">{option.value}</span>
+                          <span className="font-body text-xs tabular-nums text-ink-muted">
+                            {option.count}
+                          </span>
+                        </label>
+                      )
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </section>
+        )
+      })}
 
-          <AnimatePresence>
-            {expanded.includes("tags") && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="space-y-2 pt-2">
-                  {availableTags.map(tag => {
-                    const isSelected = filters.tags?.includes(tag)
-                    return (
-                      <div key={tag} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`tag-${tag}`}
-                          checked={isSelected}
-                          onCheckedChange={() => handleTagToggle(tag)}
-                        />
-                        <Label htmlFor={`tag-${tag}`} className="text-sm font-body cursor-pointer capitalize">
-                          {tag}
-                        </Label>
-                      </div>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {/* Price */}
+      <section>
+        <h3 className="py-1 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Price
+        </h3>
+        <div className="pt-4">
+          <Slider
+            min={0}
+            max={maxPrice}
+            step={Math.max(Math.round(maxPrice / 100), 1)}
+            value={filters.priceRange ?? [0, maxPrice]}
+            onValueChange={(value) =>
+              onFilterChange({ ...filters, priceRange: value as [number, number] })
+            }
+          />
+          <div className="mt-2 flex items-center justify-between font-body text-xs tabular-nums text-ink-muted">
+            <span>{formatPrice((filters.priceRange ?? [0, maxPrice])[0])}</span>
+            <span>{formatPrice((filters.priceRange ?? [0, maxPrice])[1])}</span>
+          </div>
         </div>
+      </section>
+
+      {/* Availability */}
+      <section>
+        <label className="flex cursor-pointer items-center gap-3 font-body text-sm">
+          <Checkbox
+            checked={filters.inStockOnly ?? false}
+            onCheckedChange={(checked) =>
+              onFilterChange({ ...filters, inStockOnly: checked === true })
+            }
+          />
+          <span className="text-foreground">In stock only</span>
+        </label>
+      </section>
+
+      {availableTags.length > 0 && (
+        <section>
+          <h3 className="py-1 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+            Tags
+          </h3>
+          <div className="flex flex-wrap gap-2 pt-3">
+            {availableTags.map((tag) => (
+              <button
+                key={tag.value}
+                type="button"
+                onClick={() => toggleTag(tag.value)}
+                aria-pressed={filters.tags?.includes(tag.value) ?? false}
+                className={cn(
+                  "rounded-sm border px-2.5 py-1 font-body text-xs transition-colors",
+                  filters.tags?.includes(tag.value)
+                    ? "border-sage-deep bg-wash/60 text-foreground"
+                    : "border-rule text-ink-muted hover:border-sage hover:text-foreground"
+                )}
+              >
+                {tag.value}
+                <span className="ml-1.5 tabular-nums text-ink-muted">{tag.count}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )
 
   return (
     <>
-      {/* Desktop Sidebar */}
+      {/* Desktop */}
       <div className="hidden lg:block">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-heading text-xl tracking-wider">FILTERS</h2>
-          {activeCount > 0 && (
-            <span className="px-2 py-1 bg-sage-deep text-background text-xs font-body font-semibold rounded-full">
-              {activeCount}
-            </span>
-          )}
-        </div>
         <FilterContent />
       </div>
 
-      {/* Mobile Button */}
+      {/* Phone: the same content in a sheet. */}
       <div className="lg:hidden">
-        <Button
-          variant="outline"
-          onClick={() => setIsMobileOpen(true)}
-          className="w-full sm:w-auto rounded-none border-foreground/20"
-        >
-          <SlidersHorizontal className="h-4 w-4 mr-2" />
-          Filters
+        <Button variant="outline" onClick={() => setIsMobileOpen(true)} className="w-full">
+          <SlidersHorizontal className="mr-2 h-4 w-4" />
+          Filter
           {activeCount > 0 && (
-            <span className="ml-2 px-2 py-0.5 bg-sage-deep text-background text-xs font-semibold rounded-full">
+            <span className="ml-2 rounded-sm bg-sage-deep px-1.5 py-0.5 font-body text-[11px] tabular-nums text-background">
               {activeCount}
             </span>
           )}
@@ -358,34 +293,30 @@ export default function CategoryFilter({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsMobileOpen(false)}
-                className="fixed inset-0 bg-foreground/50 z-50"
+                className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm"
               />
-
               <motion.div
-                initial={{ x: "100%" }}
+                initial={{ x: "-100%" }}
                 animate={{ x: 0 }}
-                exit={{ x: "100%" }}
+                exit={{ x: "-100%" }}
                 transition={{ type: "tween", duration: 0.3 }}
-                className="fixed inset-y-0 right-0 w-full sm:max-w-md bg-background z-50 shadow-2xl flex flex-col"
+                className="fixed inset-y-0 left-0 z-50 flex w-[min(22rem,90vw)] flex-col bg-card shadow-2xl"
               >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-foreground/10">
-                  <h2 className="font-heading text-lg tracking-wider">FILTERS</h2>
-                  <button onClick={() => setIsMobileOpen(false)} className="p-2 hover:bg-foreground/5 rounded-md">
+                <div className="flex items-center justify-between border-b border-rule px-6 py-4">
+                  <h2 className="font-body text-sm font-medium uppercase tracking-[0.18em] text-ink-muted">
+                    Filter
+                  </h2>
+                  <button
+                    onClick={() => setIsMobileOpen(false)}
+                    aria-label="Close filters"
+                    className="-mr-2 rounded-md p-2 text-ink-muted transition-colors hover:bg-wash hover:text-foreground"
+                  >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
 
                 <div data-lenis-prevent className="flex-1 overflow-y-auto px-6 py-6">
                   <FilterContent />
-                </div>
-
-                <div className="px-6 py-4 border-t border-foreground/10">
-                  <Button
-                    onClick={() => setIsMobileOpen(false)}
-                    className="w-full bg-sage-deep text-background hover:bg-sage-deep/90 font-body font-semibold tracking-wider rounded-none"
-                  >
-                    APPLY FILTERS
-                  </Button>
                 </div>
               </motion.div>
             </>

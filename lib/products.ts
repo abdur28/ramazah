@@ -11,7 +11,7 @@ const supabase = () => createClient();
 export const PRODUCT_SELECT = `
   *,
   categories ( path, slug, name ),
-  collections ( slug, name ),
+  product_collections ( collections ( slug, name, sort_order ) ),
   product_images ( id, public_id, url, secure_url, alt_text, position, is_primary ),
   product_variants (
     id, sku, stock_count, in_stock, weight, expiry_date, position,
@@ -25,6 +25,30 @@ export const PRODUCT_SELECT = `
     )
   )
 `;
+
+/**
+ * Which collections a product is in.
+ *
+ * Two shapes reach here: the nested rows from `PRODUCT_SELECT`, and the flat
+ * `collection_slugs` / `collection_names` arrays from `product_listing`. A
+ * product used to have at most one collection, so this was a single field —
+ * see the 20260824000020 migration.
+ */
+function mapCollectionRefs(row: any): { slug: string; name: string }[] {
+  const nested = row.product_collections;
+  if (Array.isArray(nested)) {
+    return nested
+      .map((link: any) => link.collections)
+      .filter(Boolean)
+      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+                                 || String(a.name).localeCompare(String(b.name)))
+      .map((c: any) => ({ slug: c.slug, name: c.name }));
+  }
+
+  const slugs: string[] = row.collection_slugs ?? [];
+  const names: string[] = row.collection_names ?? [];
+  return slugs.map((slug, i) => ({ slug, name: names[i] ?? slug }));
+}
 
 function mapPrices(rows: any[] = []): ProductPrice[] {
   return rows.map((r) => {
@@ -120,7 +144,7 @@ export function mapProduct(row: any): Product {
     prices: [...byCurrency.values()],
     itemType: row.item_type ?? undefined,
     categoryPath: row.categories?.path ?? row.category_path ?? '',
-    collectionSlug: row.collections?.slug ?? row.collection_slug ?? undefined,
+    collections: mapCollectionRefs(row),
     images,
     variants,
     options: [...optionMap.entries()].map(([name, values]) => ({
@@ -350,7 +374,8 @@ export async function getProducts(
       }
     }
     if (filters?.itemType)     q = q.eq('item_type', filters.itemType);
-    if (filters?.collection)   q = q.eq('collection_slug', filters.collection);
+    // An array column now, so containment rather than equality.
+    if (filters?.collection)   q = q.contains('collection_slugs', [filters.collection]);
     if (filters?.inStock !== undefined) q = q.eq('in_stock', filters.inStock);
     if (filters?.isNew)        q = q.eq('is_new', true);
     if (filters?.isFeatured)   q = q.eq('is_featured', true);
@@ -543,4 +568,269 @@ export async function getWishlist(userId: string) {
     .from('wishlist_items').select('product_id').eq('user_id', userId);
   if (error) return { products: [], error: error.message };
   return hydrate((data ?? []).map((r: any) => r.product_id));
+}
+
+
+// ------------------------------------------------------- category filtering
+
+export interface CategoryFacet {
+  name: string;
+  values: { value: string; hex?: string; count: number }[];
+}
+
+export interface CategoryFilters {
+  /** Axis name -> the values ticked under it. */
+  options?: Record<string, string[]>;
+  tags?: string[];
+  minPrice?: number;
+  maxPrice?: number;
+  inStockOnly?: boolean;
+}
+
+/** One shelf page. Twenty is the page size the storefront asks for. */
+export const CATEGORY_PAGE_SIZE = 20;
+
+/**
+ * The filter axes for a shelf and everything beneath it, with counts.
+ *
+ * Read from the database rather than from whatever products happen to be on the
+ * page, so the counts describe the shelf. The rail used to derive these in the
+ * browser, which meant the whole category had to be shipped before anything
+ * could be narrowed.
+ */
+export async function getCategoryFacets(categoryPath: string) {
+  let path = categoryPath;
+  if (isSlugPath(categoryPath)) {
+    const { category } = await getCategoryByPath(categoryPath);
+    if (!category) return { facets: [] as CategoryFacet[], error: 'Category not found' };
+    path = category.path;
+  }
+
+  const { data, error } = await supabase()
+    .rpc('product_facets', { p_path: path, p_search: null });
+  if (error) return { facets: [] as CategoryFacet[], error: error.message };
+
+  const byAxis = new Map<string, CategoryFacet>();
+  for (const row of (data ?? []) as any[]) {
+    if (!byAxis.has(row.axis)) byAxis.set(row.axis, { name: row.axis, values: [] });
+    byAxis.get(row.axis)!.values.push({
+      value: row.value,
+      hex: row.hex ?? undefined,
+      count: Number(row.product_count),
+    });
+  }
+
+  // An axis with one value cannot narrow anything.
+  const facets = [...byAxis.values()].filter((facet) => facet.values.length > 1);
+  return { facets, error: null };
+}
+
+/**
+ * One page of a shelf, narrowed and sorted in the database.
+ *
+ * `total` is the size of the whole filtered set, not of this page — it rides
+ * back on every row from the same query, so a "showing 20 of 137" can never
+ * disagree with what the page actually contains.
+ *
+ * `hydrate` restores the order the database chose, so sorting survives the
+ * second query that fetches the full products.
+ */
+export async function getFilteredCategoryProducts(
+  categoryPath: string,
+  filters: CategoryFilters = {},
+  options: { sort?: string; page?: number; pageSize?: number; currency?: string } = {}
+) {
+  const { sort = 'featured', page = 1, pageSize = CATEGORY_PAGE_SIZE, currency = 'NGN' } = options;
+
+  let path = categoryPath;
+  if (isSlugPath(categoryPath)) {
+    const { category } = await getCategoryByPath(categoryPath);
+    if (!category) return { products: [] as Product[], total: 0, error: 'Category not found' };
+    path = category.path;
+  }
+
+  const { data, error } = await supabase().rpc('filter_products', {
+    p_path: path,
+    p_search: null,
+    p_options: filters.options ?? {},
+    p_tags: filters.tags?.length ? filters.tags : null,
+    p_min_price: filters.minPrice ?? null,
+    p_max_price: filters.maxPrice ?? null,
+    p_currency: currency.toUpperCase(),
+    p_in_stock: filters.inStockOnly ?? null,
+    p_sort: sort,
+    p_limit: pageSize,
+    p_offset: Math.max(page - 1, 0) * pageSize,
+  });
+
+  if (error) return { products: [] as Product[], total: 0, error: error.message };
+
+  const rows = (data ?? []) as { id: string; total_count: number }[];
+  const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+  if (rows.length === 0) return { products: [], total, error: null };
+
+  const { products, error: hydrateError } = await hydrate(rows.map((row) => row.id));
+  return { products, total, error: hydrateError };
+}
+
+
+/**
+ * Search results, on the same rails as a shelf.
+ *
+ * Search used to live entirely in the navbar dialog: six ranked matches and the
+ * line "refine to narrow", with nowhere to go. It shares the category functions
+ * now, so a results page gets the same axes, counts, sorting and paging — the
+ * only difference is which scope the query is given.
+ */
+export async function getSearchFacets(query: string) {
+  const { data, error } = await supabase()
+    .rpc('product_facets', { p_path: null, p_search: query });
+  if (error) return { facets: [] as CategoryFacet[], error: error.message };
+
+  const byAxis = new Map<string, CategoryFacet>();
+  for (const row of (data ?? []) as any[]) {
+    if (!byAxis.has(row.axis)) byAxis.set(row.axis, { name: row.axis, values: [] });
+    byAxis.get(row.axis)!.values.push({
+      value: row.value,
+      hex: row.hex ?? undefined,
+      count: Number(row.product_count),
+    });
+  }
+
+  return { facets: [...byAxis.values()].filter((f) => f.values.length > 1), error: null };
+}
+
+export async function searchProducts(
+  query: string,
+  filters: CategoryFilters = {},
+  options: { sort?: string; page?: number; pageSize?: number; currency?: string } = {}
+) {
+  const { sort = 'relevance', page = 1, pageSize = CATEGORY_PAGE_SIZE, currency = 'NGN' } = options;
+
+  if (!query.trim()) return { products: [] as Product[], total: 0, error: null };
+
+  const { data, error } = await supabase().rpc('filter_products', {
+    p_path: null,
+    p_search: query,
+    p_options: filters.options ?? {},
+    p_tags: filters.tags?.length ? filters.tags : null,
+    p_min_price: filters.minPrice ?? null,
+    p_max_price: filters.maxPrice ?? null,
+    p_currency: currency.toUpperCase(),
+    p_in_stock: filters.inStockOnly ?? null,
+    p_sort: sort,
+    p_limit: pageSize,
+    p_offset: Math.max(page - 1, 0) * pageSize,
+  });
+
+  if (error) return { products: [] as Product[], total: 0, error: error.message };
+
+  const rows = (data ?? []) as { id: string; total_count: number }[];
+  const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+  if (rows.length === 0) return { products: [], total, error: null };
+
+  const { products, error: hydrateError } = await hydrate(rows.map((row) => row.id));
+  return { products, total, error: hydrateError };
+}
+
+
+// ----------------------------------------------------------- collections
+
+export interface CollectionSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  bannerUrl?: string;
+  bannerAlt?: string;
+  isFeatured: boolean;
+  productCount: number;
+}
+
+/**
+ * Every collection with what is in it.
+ *
+ * The count matters on the index: a collection with nothing in it renders an
+ * empty page, and until now there was no way to see that without opening it.
+ */
+export async function getCollectionSummaries() {
+  const { data, error } = await supabase().rpc('collection_summaries');
+  if (error) return { collections: [] as CollectionSummary[], error: error.message };
+
+  const collections: CollectionSummary[] = (data ?? []).map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? undefined,
+    bannerUrl: row.banner_url ?? undefined,
+    bannerAlt: row.banner_alt ?? undefined,
+    isFeatured: Boolean(row.is_featured),
+    productCount: Number(row.product_count),
+  }));
+
+  return { collections, error: null };
+}
+
+/**
+ * The collection on the home page, chosen in the admin.
+ *
+ * At most one row can carry `is_featured` — the database enforces it, and
+ * `set_home_collection()` is what moves it. An empty one is skipped rather than
+ * rendering a band that leads to an empty page.
+ */
+export async function getHomeCollection() {
+  const { collections, error } = await getCollectionSummaries();
+  const collection = collections.find((c) => c.isFeatured && c.productCount > 0) ?? null;
+  return { collection, error };
+}
+
+export async function getCollectionFacets(slug: string) {
+  const { data, error } = await supabase()
+    .rpc('product_facets', { p_path: null, p_search: null, p_collection: slug });
+  if (error) return { facets: [] as CategoryFacet[], error: error.message };
+
+  const byAxis = new Map<string, CategoryFacet>();
+  for (const row of (data ?? []) as any[]) {
+    if (!byAxis.has(row.axis)) byAxis.set(row.axis, { name: row.axis, values: [] });
+    byAxis.get(row.axis)!.values.push({
+      value: row.value,
+      hex: row.hex ?? undefined,
+      count: Number(row.product_count),
+    });
+  }
+
+  return { facets: [...byAxis.values()].filter((f) => f.values.length > 1), error: null };
+}
+
+/** One page of a collection — the same rails as a shelf or a search. */
+export async function getCollectionProducts(
+  slug: string,
+  filters: CategoryFilters = {},
+  options: { sort?: string; page?: number; pageSize?: number; currency?: string } = {}
+) {
+  const { sort = 'featured', page = 1, pageSize = CATEGORY_PAGE_SIZE, currency = 'NGN' } = options;
+
+  const { data, error } = await supabase().rpc('filter_products', {
+    p_path: null,
+    p_search: null,
+    p_collection: slug,
+    p_options: filters.options ?? {},
+    p_tags: filters.tags?.length ? filters.tags : null,
+    p_min_price: filters.minPrice ?? null,
+    p_max_price: filters.maxPrice ?? null,
+    p_currency: currency.toUpperCase(),
+    p_in_stock: filters.inStockOnly ?? null,
+    p_sort: sort,
+    p_limit: pageSize,
+    p_offset: Math.max(page - 1, 0) * pageSize,
+  });
+
+  if (error) return { products: [] as Product[], total: 0, error: error.message };
+
+  const rows = (data ?? []) as { id: string; total_count: number }[];
+  const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+  if (rows.length === 0) return { products: [], total, error: null };
+
+  const { products, error: hydrateError } = await hydrate(rows.map((row) => row.id));
+  return { products, total, error: hydrateError };
 }

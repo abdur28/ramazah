@@ -5,6 +5,307 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-22 — A product belongs to several collections, and one goes on the home page
+
+`products.collection_id` was a single column, so collection membership was
+last-write-wins: seeding a Cairo run and then a Ramadan table silently moved the
+dates and the coffee out of the run. Nothing was lost by accident — the model
+only had room for one answer.
+
+That is the wrong shape for how this shop groups things. A collection here is
+either a **buying run** ("everything from the March trip") or an **occasion**
+("Ramadan table"), and those overlap by their nature: the same tin of coffee came
+back on the March run *and* belongs on the Ramadan table. Categories are a tree
+and stay single-valued; collections are curation and have to be many.
+
+`product_collections (product_id, collection_id)` replaces the column, which is
+**dropped** rather than kept alongside — two places recording the same fact is
+how they drift. Everything that read it moved: `product_listing` now exposes
+`collection_slugs` / `collection_names` as arrays (PostgREST filters them with
+`cs`), and `filter_products`, `product_facets` and `collection_summaries` take an
+existence check against the join table instead of a left join.
+
+The admin's collection picker became multi-select — chips under the trigger, each
+removable — and the product page writes "Part of A · B" rather than picking one.
+`writeCollections()` in the products store is delete-then-insert: the set is a
+handful of rows on a table that is nothing but the pair, so a diff would be more
+code for no fewer round trips.
+
+**The home page picks one, explicitly.** `is_featured` arrived meaning "one of
+the two or three worth the front page", and then the design settled on a single
+full-bleed band. A flag that permits three while the page renders one leaves the
+other two set and invisible — the shopkeeper ticks a box and nothing happens. So
+the flag now means what the page does: a partial unique index on a constant
+(`on collections ((true)) where is_featured`) allows exactly one row to carry it,
+and `set_home_collection(uuid)` moves it, clearing the previous one in the same
+transaction so the index never sees two. Passing null shows no band at all.
+
+Admin > Collections gained a summary card naming the current one, a badge on its
+banner, and a "Show on the home page" control on every card that behaves as a
+radio rather than a switch. Empty collections cannot be chosen: the band renders
+nothing without products, which would read as the setting having failed.
+
+Two things only running it caught. Table privileges are **explicit** in this
+project rather than inherited from default privileges, so a new table starts with
+none — the policies were right and every admin write still failed with
+"permission denied for table product_collections" until the grants were added.
+And `set_home_collection()` guards on `is_admin()`, which reads `auth.uid()`; the
+seed script runs on the service key with no signed-in user, so it sets the flag
+with two plain updates and says why in a comment.
+
+`getFeaturedCollections(limit)` became `getHomeCollection()`, and
+`admin_collection_counts()` replaced tallying every product's `collection_id` in
+JavaScript — with a join table that would mean fetching the whole table to group
+it.
+
+**Verified**: 14 checks as an anonymous visitor (overlap kept on both sides, the
+dropped column really gone, `contains()` and `filter_products` agreeing at 4 and
+3, no duplicate rows for a product in two collections, exactly one featured row,
+the unique index and both guards refusing) and 11 as a signed-in admin (setting,
+clearing and restoring the home pick, an unknown id refused, one product into two
+collections and back out, cascade on collection delete leaving the product).
+
+---
+
+## 2026-08-22 — Collections became somewhere to go
+
+The table, `products.collection_id` and four admin files — 904 lines — have
+existed since the first migration, and **nothing on the storefront ever rendered
+one**: no route, no link, no mention. Zero collections existed and zero products
+were in one, while all thirteen carried tags. A collection was strictly worse
+than a tag: the same grouping, plus the admin work, minus any way to reach it.
+
+Kept rather than deleted, because of what a collection is *for* in this shop
+specifically. It buys in **runs** — a trip to Cairo comes back with veils, coffee
+and brassware together — and that cuts across every category, so no category can
+represent it. A tag cannot either, because a tag has no page. A collection is a
+link you can send, which for a business that sells over WhatsApp is the point.
+
+`filter_products` already scoped by category path and by search, so a collection
+joined them as a third scope rather than getting its own query — the page then
+reuses the same rail, sort, grid and pagination.
+
+New: `/collections`, `/collections/[slug]`, a rail on the home page (which
+renders nothing when nothing is featured), a "Part of …" line on every product
+that belongs to one, and Collections in the menu. `collections` gained
+`sort_order` and `is_featured`; `collection_summaries()` carries product counts
+so an empty collection is visible on the index rather than after opening it. The
+admin's warning banner is gone and its "View on shop" link is real.
+
+A mistake worth recording: adding `p_collection` to `filter_products` and
+`product_facets` created an **overload** rather than replacing them. Both
+signatures then existed with defaults on every argument, so Postgres could not
+choose — `filter_products()` failed with "is not unique" and PostgREST resolved
+unpredictably. Caught it because the category and search checks, which had been
+passing all session, suddenly failed. The old signatures are dropped explicitly
+now.
+
+`npm run seed-collections` (`--clean`) adds The Cairo Run and The Ramadan Table.
+At this point a product belonged to one collection at a time, so the overlap
+between the two resolved to whichever was written last — see the entry above for
+the join table that fixed it.
+
+**Verified**: 14 checks as an anonymous visitor — collection scoping, combining
+with search and with facets, paging, `total_count`, no draft leaking — plus
+explicit checks that category pages, search and category facets all return
+exactly what they did before.
+
+---
+
+## 2026-08-22 — Search matches the way people type
+
+`q=co` returned nothing. `websearch_to_tsquery('english','co')` looks for the
+lexeme "co" and no product contains that word, so someone typing the first two
+letters of "coffee" got an empty page — in a dialog that searches as you type,
+which means it was empty for most of the typing.
+
+**Every word is a prefix match now**, through `search_query(text)`: input is
+split on non-alphanumerics, each term becomes `'term':*`, and all are required —
+"ground co" means ground AND co*, which is what narrowing a search should do.
+Terms are quoted before they reach `to_tsquery`, which otherwise reads `&`, `|`,
+`!` and `:` in user input as operators and raises a syntax error on anything
+with punctuation in it.
+
+**Tags, SKU and item type are indexed.** The vector covered name, summary and
+description only, so the tags the admin collects — 'ramadan', 'gift', 'spice' —
+were invisible to search. Tags now sit at weight B beside the summary, and SKU
+and item type at D, so someone who knows the code can type it.
+
+Rebuilding a generated column meant dropping it and its index, and
+`array_to_string` is declared STABLE rather than IMMUTABLE — true in general,
+false for `text[]` — so a `text_array_to_string` wrapper asserts what is actually
+the case. Without it the tags could not be part of a stored vector at all.
+
+A bug found while testing awkward input: `q=!!!` returned the **whole
+catalogue**. The guard treated "no search asked for" and "searched, but nothing
+searchable in it" as the same thing. A blank query is a category page with no
+term and everything passes; "!!!" parses to no terms and is a miss.
+
+```
+q=c  8 · q=co 4 · q=cof 2 · q=coff 2 · q=coffee 2
+```
+
+**Verified**: prefixes at every length, tags and tag prefixes, SKUs, two-word
+AND, misses, punctuation-only, empty, quotes and tsquery operators, search
+combined with a facet and with a category, paging without repeats, facets
+following the search, and no draft ever surfacing.
+
+**Not searchable: variant option values.** "250g" finds nothing. A generated
+column cannot read another table, so that needs a trigger-maintained vector —
+real write amplification for something the filter rail already does precisely.
+Left deliberately.
+
+---
+
+## 2026-08-22 — Search has somewhere to go
+
+The navbar dialog showed six ranked matches and then the line "refine to
+narrow" — a dead end, on a catalogue that will not stay small.
+`search_product_ids()` had always ranked the whole thing; nothing rendered past
+the sixth row, and there was no `/search` route to render into.
+
+**`/search` reuses the category rails.** Rather than a second filtering
+implementation, `20260823000017_product_search.sql` generalises the two category
+functions so both `p_path` and `p_search` are optional and a caller supplies
+whichever scope it has:
+
+- `product_facets(path, search)` — axes and counts for a shelf, a search, or both
+- `filter_products(path, search, options, tags, min, max, currency, in_stock, sort, limit, offset)`
+
+So a search result set gets the same axes, the same counts, the same paging and
+the same sorts as a shelf, because it *is* the same query. `relevance` joins the
+sorts and is the default when there is a term — someone who typed "coffee" wants
+the best match first, not the newest. `category_facets` stays as a thin wrapper
+so nothing broke while the app moved across.
+
+The results page uses the same `CategoryFilter`, `CategorySort`, `CategoryGrid`
+and `CategoryPagination` components, not lookalikes — one place to fix either,
+and a shopper who has filtered a shelf already knows how to filter a search.
+
+Empty states differ though, because they mean different things: an empty shelf is
+something not stocked yet, an empty search is usually a spelling or a word the
+catalogue does not use. The search one says so and offers somewhere to go.
+
+**The dialog** now sends you there — a footer link, Enter when nothing is
+highlighted, and Cmd/Ctrl+Enter to skip past the first result. It also no longer
+swallows Enter when there are no matches at all.
+
+**Verified** against the live catalogue as an anonymous visitor: search alone,
+search narrowed by a facet, a category and a search together, paging without
+repeats, a miss returning nothing rather than erroring, an empty query being the
+whole catalogue rather than a crash, and no draft ever surfacing.
+
+---
+
+## 2026-08-22 — Quick-add for every product; filtering moved to the database
+
+### The card's quick-add dialog
+
+It understood Size and Colour and nothing else, so a product on the generic
+option model — which is most of this catalogue — was pushed to the product page
+instead of being added from the grid.
+
+It now renders `VariantSelector`, the same component the product page uses,
+rather than a second implementation of the same idea. A card and a product page
+can no longer disagree about which combinations are buyable, and the price in
+the dialog follows the variant being chosen. `ProductCard` lost 122 lines.
+
+### Filtering happens in the database
+
+`20260823000015_category_filtering.sql` adds two functions that share one
+filter, so the rail and the grid agree by construction:
+
+- `category_facets(path)` — the axes and their product counts, for the shelf and
+  everything beneath it. Counted per product, not per variant: "products you can
+  buy in 250g", not "variants that are 250g".
+- `filter_category_products(path, options, tags, min, max, currency, in_stock)` —
+  ids, narrowed. Within an axis any chosen value matches; across axes all must.
+
+A bug found while testing: grouping the facets by option *position* as well as
+value split "250g" into two rows whenever two products listed it at different
+positions in their own option sets, each carrying part of the count. Grouped on
+axis and value alone now, with the positions kept only to order by.
+
+**Filters live in the URL.** `?Weight=250g,1kg&Grind=Ground&max=6000` — so the
+route reads them, the database narrows, and the page renders the answer. They
+are shareable and the back button works, neither of which was true of React
+state. The toolbar's "n of m" now counts the shelf rather than the page.
+
+**Verified** against the live catalogue, through the URL and through the RPCs as
+an anonymous visitor: 8 unfiltered, 2 for Weight=250g, 3 for 250g or 1kg, 1 for
+250g and Ground, 4 under ₦6,000, 0 for an impossible pair — and the filter and
+`product_listing` agree on what is public, so nothing draft leaks through.
+
+### Paged, twenty to a page
+
+`20260823000016_category_pagination.sql` takes `p_sort`, `p_limit` and
+`p_offset`, and returns `total_count` on every row through a window function
+rather than a second query — so the count and the page can never disagree about
+the filter.
+
+**Sorting had to move with it.** It ran in the browser over whatever was on the
+page, and sorting twenty rows client-side would show the cheapest of page one
+rather than the cheapest on the shelf. It is `order by` in the same query now,
+with a null price sorting last either way — a product with no price in the
+currency being shown cannot be bought, so it does not deserve the top of a
+cheapest-first list — and a tiebreak on `created_at, id` so paging never repeats
+or skips a row.
+
+Page and sort join the filters in the URL, and changing a filter resets to page
+one: staying on page 4 of a result set that now has two shows nothing. The
+control is links rather than buttons, so the back button walks the pages and a
+crawler can reach every product on a long shelf. It windows to
+`1 … 4 5 6 … 20`, keeping a steady width whether a shelf has three pages or
+ninety, and renders nothing at all below two.
+
+**Verified** by temporarily setting the page size to three against the eight
+products in Food & Pantry: pages of 3, 3, 2 in alphabetical order across the
+whole shelf, a fourth page empty rather than erroring, and the control absent
+again at twenty per page.
+
+---
+
+## 2026-08-22 — The category filter reads the catalogue
+
+The filter rail offered Size, Colour, Tags and Materials — the axes of the
+streetwear shop this codebase came from. The catalogue's actual axes are Weight,
+Grind, Flavour and Colour, so on every food page it gathered `product.sizes` and
+`product.colors`, got empty arrays, and rendered a filter panel with no filters
+in it. A rail with nothing in it reads as a broken page.
+
+It derives from `product.options` now — the generic model `mapProduct` builds
+from the variants, the same one the variant picker and the rebuilt product form
+use. A coffee shelf offers **Weight** and **Grind**, a veil shelf offers
+**Colour**; neither is a special case in the code any more. Colour values still
+render as swatches when they carry a hex, with the name beside them, because
+colour alone never carries meaning here.
+
+Three details worth keeping:
+
+- **Every value carries a count**, so a shopper can see a filter would empty the
+  grid before clicking it.
+- **Axes with a single value are dropped** — they cannot narrow anything.
+- **Values keep the order they were entered in**, following
+  `product_option_values.position`. Sorting puts 1kg before 250g alphabetically
+  *and* numerically, and neither is how anyone lists weights.
+
+Within an axis any ticked value matches; across axes all must. "250g or 1kg" and
+"250g and Ground" are both what they look like.
+
+Two bugs found alongside: the rail's price slider, the price sort and the max
+price all read `prices[0]` — whichever currency row the database returned first —
+rather than the one being displayed. They go through `useCurrency` now.
+
+Also from the plan: shelf chips on a category page carry product counts, counted
+the same way the page counts so a chip reading 4 and a page listing 4 agree; and
+an empty shelf no longer says "Try adjusting your filters" when no filter is set.
+
+**Verified** against the live catalogue: the food rail offers Weight (6 values),
+Grind and Flavour; the veil rail offers Colour; neither offers Size. Filtering
+Weight=250g narrows 8 products to 2, and adding Grind=Ground narrows it to 1.
+
+---
+
 ## 2026-08-22 — Demo data now in the catalogue
 
 Three seeds exist and all of them are placeholders to remove before launch:

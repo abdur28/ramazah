@@ -20,12 +20,17 @@ interface Breadcrumb {
 export default function ProductInfo({
   productAsString,
   breadcrumbsAsString,
+  collectionsAsString,
 }: {
   productAsString: string;
   breadcrumbsAsString: string;
+  collectionsAsString?: string;
 }) {
   const product: Product = JSON.parse(productAsString);
   const breadcrumbs: Breadcrumb[] = JSON.parse(breadcrumbsAsString);
+  const collections: { name: string; slug: string }[] = collectionsAsString
+    ? JSON.parse(collectionsAsString)
+    : [];
   const { formatPrice, getPriceWithCompare } = useCurrency();
   
   // Shared with the gallery, which needs the selection to know which
@@ -69,6 +74,37 @@ export default function ProductInfo({
         <ChevronRight className="h-3 w-3 text-ink-faint" />
         <span className="text-foreground">{product.name}</span>
       </motion.nav>
+
+      {/*
+        The collections this is part of. Sits above the badges rather than among
+        them: a badge says what a product *is*, this says where it came from,
+        and it is a link out rather than a label.
+
+        More than one is normal — a buying run and an occasion overlap — so
+        "Part of" is written once and the links follow it as a list.
+      */}
+      {collections.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.08 }}
+          className="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-body text-xs text-ink-muted"
+        >
+          <span>Part of</span>
+          {collections.map((collection, index) => (
+            <span key={collection.slug} className="inline-flex items-center gap-1.5">
+              {index > 0 && <span aria-hidden>·</span>}
+              <Link
+                href={`/collections/${collection.slug}`}
+                className="group inline-flex items-center gap-1 text-sage-deep underline decoration-rule underline-offset-4 transition-colors hover:decoration-sage-deep"
+              >
+                {collection.name}
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            </span>
+          ))}
+        </motion.div>
+      )}
 
       {/* Badges */}
       <motion.div

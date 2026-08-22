@@ -17,7 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { CartItem, Product, Color } from "@/types/types";
+import type { CartItem, Product, ProductVariant } from "@/types/types";
+import VariantSelector from "@/components/product/VariantSelector";
 import { Skeleton } from "./ui/skeleton";
 import { toast } from "sonner";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -37,15 +38,16 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const [showVariantDialog, setShowVariantDialog] = useState(false);
   
   // Variant selection state
-  const [selectedSize, setSelectedSize] = useState<string | undefined>();
-  const [selectedColor, setSelectedColor] = useState<Color | undefined>();
+  // One resolved variant, whatever axes the product has, rather than a Size and
+  // a Colour. `VariantSelector` decides which; this only holds the answer.
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   
   useScrollLock(showVariantDialog);
 
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
-  const { getPriceWithCompare, formatPrice } = useCurrency();
+  const { getPriceWithCompare, formatPrice, getPrice } = useCurrency();
   const addItem = useCart(state => state.addItem);
   const isInCart = useIsInCart(product.id);
   
@@ -55,8 +57,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
   // Check if product has variants
   const hasVariants = product.variants && product.variants.length > 0;
-  const hasSizes = product.sizes && product.sizes.length > 0;
-  const hasColors = product.colors && product.colors.length > 0;
 
   // The cart keys on variant_id, and every product has at least one variant —
   // option-less ones get a default. A quick add must therefore resolve a
@@ -94,16 +94,12 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     if (!product.inStock || isAdding) return;
 
     if (variants.length > 1) {
-      // The card's dialog only speaks Size and Colour. Anything on the generic
-      // option model — Weight, Grind, Volume — has to be chosen on the product
-      // page, which renders whatever axes the product actually has.
-      if (hasSizes || hasColors) {
-        setShowVariantDialog(true);
-        setSelectedSize(undefined);
-        setSelectedColor(undefined);
-      } else {
-        router.push(`/product/${product.slug}`);
-      }
+      // Every multi-variant product can now be configured here. The dialog used
+      // to understand only Size and Colour, so anything on the generic option
+      // model — Weight, Grind, Shade — was pushed to the product page instead,
+      // which is most of this catalogue.
+      setSelectedVariant(null);
+      setShowVariantDialog(true);
       return;
     }
 
@@ -153,50 +149,31 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   };
 
   const handleAddWithVariant = async () => {
-    // Check if at least one option is selected when required
-    if (hasSizes && !selectedSize) return;
-    if (hasColors && !selectedColor) return;
+    if (!selectedVariant) return;
 
     setIsAdding(true);
 
     try {
       const primaryImage = product.images.find(img => img.isPrimary) || product.images[0];
-      
-      // Find matching variant
-      const matchingVariant = product.variants?.find(v => 
-        (!hasSizes || v.size === selectedSize) &&
-        (!hasColors || v.color?.name === selectedColor?.name)
-      );
-
-      if (!matchingVariant) {
-        toast.error('That combination is not available.');
-        setIsAdding(false);
-        return;
-      }
-
-      // Use variant prices if available, otherwise product prices
-      const prices = matchingVariant?.prices || product.prices;
 
       const cartItem: Omit<CartItem, 'id'> = {
         productId: product.id,
+        variantId: selectedVariant.id,
         name: product.name,
         slug: product.slug,
-        prices: prices || [],
+        prices: selectedVariant.prices?.length ? selectedVariant.prices : product.prices || [],
         quantity: 1,
         image: primaryImage?.secureUrl || '/placeholder-product.jpg',
-        sku: matchingVariant?.sku || product.sku,
-        inStock: matchingVariant?.inStock ?? product.inStock,
-        maxQuantity: matchingVariant?.stockCount || product.totalStock,
+        // The label is the axes rendered — '250g / Ground'. Size and colour are
+        // still sent when the product happens to have those axes, because the
+        // order line and the invoice read them.
+        variantLabel: selectedVariant.label,
+        size: selectedVariant.size,
+        color: selectedVariant.color,
+        sku: selectedVariant.sku || product.sku,
+        inStock: selectedVariant.inStock,
+        maxQuantity: selectedVariant.stockCount || product.totalStock,
       };
-
-      cartItem.variantId = matchingVariant.id;
-      cartItem.variantLabel = matchingVariant.label;
-      if (selectedSize) {
-        cartItem.size = selectedSize;
-      }
-      if (selectedColor) {
-        cartItem.color = selectedColor;
-      }
 
       const { error } = await addItem(cartItem, user?.id);
       if (error) {
@@ -205,11 +182,8 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         return;
       }
 
-      // Close dialog and reset
       setShowVariantDialog(false);
-      setSelectedSize(undefined);
-      setSelectedColor(undefined);
-      
+      setSelectedVariant(null);
       setTimeout(() => setIsAdding(false), 1000);
     } catch (error) {
       console.error('Failed to add to cart:', error);
@@ -217,38 +191,14 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     }
   };
 
-  // Check if a size is available
-  const isSizeAvailable = (size: string) => {
-    if (!hasVariants) return true;
-    if (!selectedColor) {
-      return product.variants!.some(v => v.size === size && v.inStock);
-    }
-    return product.variants!.some(
-      v => v.size === size && v.color?.name === selectedColor.name && v.inStock
-    );
-  };
 
-  // Check if a color is available
-  const isColorAvailable = (color: Color) => {
-    if (!hasVariants) return true;
-    if (!selectedSize) {
-      return product.variants!.some(v => v.color?.name === color.name && v.inStock);
-    }
-    return product.variants!.some(
-      v => v.color?.name === color.name && v.size === selectedSize && v.inStock
-    );
-  };
 
   const primaryImage = product.images.find(img => img.isPrimary) || product.images[0];
   const hoverImage = product.images[1];
 
-  // Check if add to cart button should be enabled
-  const canAddToCart = () => {
-    if (!showVariantDialog) return true;
-    if (hasSizes && !selectedSize) return false;
-    if (hasColors && !selectedColor) return false;
-    return true;
-  };
+  // The dialog can only add once every axis has an answer, which is exactly
+  // when `VariantSelector` has reported a variant.
+  const canAddToCart = () => !showVariantDialog || Boolean(selectedVariant);
 
   const addToCartButton = (
     <button
@@ -466,103 +416,31 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
               <div className="flex-1 min-w-0">
                 <h3 className="font-body font-medium text-sm truncate">{product.name}</h3>
                 <p className="font-body text-base font-semibold text-foreground">
-                  {formatPrice(priceData.price)}
+                  {formatPrice(
+                    selectedVariant
+                      ? getPrice(selectedVariant.prices, priceData.price)
+                      : priceData.price
+                  )}
                 </p>
+                {selectedVariant?.label && (
+                  <p className="font-body text-xs text-ink-muted">{selectedVariant.label}</p>
+                )}
               </div>
             </div>
 
-            {/* Size Selection */}
-            {hasSizes && (
-              <div>
-                <label className="font-body text-sm font-medium text-foreground uppercase tracking-wider mb-3 block">
-                  Size {selectedSize && <span className="text-foreground/60">- {selectedSize}</span>}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {product.sizes?.map((size) => {
-                    const available = isSizeAvailable(size);
-                    const selected = selectedSize === size;
-
-                    return (
-                      <button
-                        key={size}
-                        onClick={() => available && setSelectedSize(size)}
-                        disabled={!available}
-                        className={`
-                          min-w-[50px] px-4 py-3 font-body text-xs font-medium transition-all
-                          ${
-                            selected
-                              ? 'bg-foreground text-background ring-2 ring-sage-deep'
-                              : available
-                              ? 'bg-foreground/5 text-foreground hover:bg-foreground/10 border border-foreground/20'
-                              : 'bg-foreground/5 text-foreground/30 cursor-not-allowed border border-foreground/10'
-                          }
-                          ${!available && 'relative overflow-hidden'}
-                        `}
-                      >
-                        {size}
-                        {!available && (
-                          <span className="absolute inset-0 flex items-center justify-center">
-                            <span className="w-full h-px bg-foreground/30 rotate-45" />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Color Selection */}
-            {hasColors && (
-              <div>
-                <label className="font-body text-sm font-medium text-foreground uppercase tracking-wider mb-3 block">
-                  Color {selectedColor && <span className="text-foreground/60 capitalize">- {selectedColor.name}</span>}
-                </label>
-                <div className="flex flex-wrap gap-3">
-                  {product.colors?.map((color) => {
-                    const available = isColorAvailable(color);
-                    const selected = selectedColor?.name === color.name;
-
-                    return (
-                      <button
-                        key={color.name}
-                        onClick={() => available && setSelectedColor(color)}
-                        disabled={!available}
-                        className={`
-                          group relative w-10 h-10 rounded-full transition-all
-                          ${selected ? 'ring-2 ring-sage-deep ring-offset-2' : 'ring-1 ring-foreground/20'}
-                          ${!available && 'opacity-30 cursor-not-allowed'}
-                          ${available && !selected && 'hover:ring-2 hover:ring-foreground/40'}
-                        `}
-                        style={{ backgroundColor: color.hex }}
-                        title={color.name}
-                      >
-                        {/* Checkmark for selected */}
-                        {selected && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="absolute inset-0 flex items-center justify-center"
-                          >
-                            <Check
-                              className="w-5 h-5 [stroke-width:3]"
-                              stroke={color.hex === '#FFFFFF' || color.hex?.toLowerCase() === '#ffffff' ? '#000000' : '#FFFFFF'}
-                            />
-                          </motion.div>
-                        )}
-
-                        {/* Strike-through for unavailable */}
-                        {!available && (
-                          <span className="absolute inset-0 flex items-center justify-center">
-                            <span className="w-full h-px bg-foreground/60 rotate-45" />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/*
+              The same picker the product page uses, rather than a second
+              implementation that only knew Size and Colour. It renders whatever
+              axes the product has and greys out combinations that cannot be
+              bought, so a card and a product page never disagree about what is
+              available.
+            */}
+            <VariantSelector
+              options={product.options ?? []}
+              variants={variants}
+              selectedVariant={selectedVariant}
+              onVariantChange={setSelectedVariant}
+            />
           </div>
 
           {/* Action Buttons */}

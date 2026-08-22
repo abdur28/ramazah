@@ -3,6 +3,7 @@ import TrustStrip from "@/components/home/TrustStrip";
 import CategoryBand from "@/components/home/CategoryBand";
 import ProductRail from "@/components/home/ProductRail";
 import CategoryTable from "@/components/home/CategoryTable";
+import CollectionRail from "@/components/home/CollectionRail";
 import Story from "@/components/home/Story";
 import Newsletter from "@/components/home/Newsletter";
 import { bandImages } from "@/constants/demo";
@@ -47,6 +48,9 @@ export default function Home() {
             aisle at all. */}
         <CategoryTable />
         <ProductRail />
+        {/* After the rail: a shopper who did not want a single product may still
+            want a whole run. Renders nothing when nothing is featured. */}
+        <CollectionRail />
         <Story />
         <Newsletter />
       </div>

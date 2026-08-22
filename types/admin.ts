@@ -267,6 +267,8 @@ export interface AdminCollectionDataStore {
   createCollection: (data: Omit<Collection, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateCollection: (collectionId: string, data: Partial<Collection>) => Promise<void>;
   deleteCollection: (collectionId: string) => Promise<void>;
+  /** Choose the collection on the home page, or pass null to show none. */
+  setHomeCollection: (collectionId: string | null) => Promise<void>;
   uploadBannerImage: (file: File) => Promise<BannerImage>;
   deleteBannerImage: (publicId: string) => Promise<void>;
   resetCollections: () => void;

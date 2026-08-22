@@ -13,6 +13,7 @@ import ProductReviews from "@/components/product/ProductReviews";
 import { categoryHref } from "@/lib/categories";
 
 
+
 export default async function ProductPage({ 
   params 
 }: any) {
@@ -37,6 +38,14 @@ export default async function ProductPage({
     name: step.name,
     href: categoryHref(trail.slice(0, index + 1).map((c) => c.slug)),
   }));
+
+  // The collections this belongs to. A product from a buying run should lead
+  // back to the rest of the run — that link is most of what a collection is
+  // worth, and until now nothing on the storefront mentioned collections at all.
+  //
+  // Plural: the same tin of coffee can be both March's run and the Ramadan
+  // table, and it used to have to pick one.
+  const collections = product.collections ?? [];
 
   // The same shelf first. A category with nothing else in it falls back to the
   // newest arrivals, so the section is never a lonely single card — with a
@@ -75,6 +84,7 @@ export default async function ProductPage({
             <ProductInfo
               productAsString={JSON.stringify(product)}
               breadcrumbsAsString={JSON.stringify(breadcrumbs)}
+              collectionsAsString={JSON.stringify(collections)}
             />
 
             <ProductReviews

@@ -135,12 +135,33 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
     [onClose, router, trimmed]
   );
 
+  /**
+   * Everything the dialog cannot show.
+   *
+   * It used to stop at six matches and say "refine to narrow", which is a dead
+   * end — there was no results page to go to. There is one now, and it carries
+   * the same filters, sorting and paging a category shelf has.
+   */
+  const seeAllResults = useCallback(() => {
+    if (!trimmed) return;
+    rememberSearch(trimmed);
+    onClose();
+    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+  }, [onClose, router, trimmed]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
       return;
     }
-    if (!results.length) return;
+    if (!results.length) {
+      // Nothing to arrow through, but Enter should still be able to search.
+      if (e.key === 'Enter' && trimmed) {
+        e.preventDefault();
+        seeAllResults();
+      }
+      return;
+    }
 
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
@@ -152,7 +173,10 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      openProduct(results[highlight]);
+      // Cmd/Ctrl+Enter, or Enter with nothing picked out, means "show me all of
+      // them" rather than "open the first one".
+      if (e.metaKey || e.ctrlKey) seeAllResults();
+      else openProduct(results[highlight]);
     }
   };
 

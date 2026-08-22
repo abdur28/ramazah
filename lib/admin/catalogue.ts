@@ -28,18 +28,22 @@ export async function getCategoryProductCounts(): Promise<Map<string, number>> {
   return counts;
 }
 
+/**
+ * How many products sit in each collection.
+ *
+ * This used to pull every product's `collection_id` and tally them in
+ * JavaScript. That column is gone — membership is a join table now — and one
+ * product can appear under several collections, so counting client-side would
+ * mean fetching the whole join table to group it. The database groups it.
+ */
 export async function getCollectionProductCounts(): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
 
-  const { data, error } = await createClient()
-    .from('products')
-    .select('collection_id')
-    .not('collection_id', 'is', null);
-
+  const { data, error } = await createClient().rpc('admin_collection_counts');
   if (error) return counts;
 
   (data ?? []).forEach((row: any) => {
-    counts.set(row.collection_id, (counts.get(row.collection_id) ?? 0) + 1);
+    counts.set(row.collection_id, Number(row.product_count));
   });
 
   return counts;

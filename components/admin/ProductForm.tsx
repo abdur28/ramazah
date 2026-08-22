@@ -84,7 +84,7 @@ export default function ProductForm({
     shortDescription: product?.shortDescription ?? "",
     description: product?.description ?? "",
     categoryPath: product?.categoryPath ?? "",
-    collectionSlug: product?.collectionSlug ?? "",
+    collectionSlugs: product?.collections?.map((c) => c.slug) ?? [],
     status: (product?.status ?? "draft") as "draft" | "active" | "archived",
     itemType: product?.itemType ?? "",
     tags: product?.tags ?? [],
@@ -162,6 +162,13 @@ export default function ProductForm({
       const payload = {
         ...form,
         status,
+        // The picker holds slugs; the store writes join rows and only needs the
+        // slug of each. The name is carried so the shape matches what a product
+        // reads back as.
+        collections: form.collectionSlugs.map((slug) => ({
+          slug,
+          name: collections.find((c) => c.slug === slug)?.name ?? slug,
+        })),
         // `products.details` is a jsonb bag the product page renders as a
         // specification table. It has been `{}` on every product in the shop,
         // because nothing could write it.
@@ -533,11 +540,14 @@ export default function ProductForm({
                 />
               </Field>
 
-              <Field label="Collection" hint="Optional — a seasonal or gifting edit.">
+              <Field
+                label="Collections"
+                hint="Optional, and more than one is fine — a buying run and an occasion often claim the same product."
+              >
                 <CollectionSelector
                   collections={collections}
-                  value={form.collectionSlug}
-                  onChange={(slug) => set("collectionSlug", slug)}
+                  value={form.collectionSlugs}
+                  onChange={(slugs) => set("collectionSlugs", slugs)}
                 />
               </Field>
             </div>

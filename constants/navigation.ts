@@ -60,6 +60,9 @@ export const MAX_DESKTOP_NAV_ITEMS = 6;
  * outside the six-item cap, which counts shelves.
  */
 export const staticNavItems: NavLink[] = [
+  // Not a shelf, so it cannot come from `categories` — but it is a place to
+  // shop, so it belongs beside them rather than in the footer.
+  { name: 'Collections', href: '/collections' },
   { name: 'Contact', href: '/contact' },
 ];
 

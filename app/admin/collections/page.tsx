@@ -5,6 +5,8 @@ import Image from "next/image";
 import {
   AlertTriangle,
   Edit,
+  ExternalLink,
+  Home,
   Layers,
   Loader2,
   MoreHorizontal,
@@ -47,18 +49,19 @@ import { describeError } from "@/lib/admin/errors";
 /**
  * Collections — the curated groupings that cut across categories.
  *
- * Each one now carries how many products it holds, which the list never showed.
+ * These now have a storefront: `/collections`, `/collections/[slug]`, a rail on
+ * the home page, and a line on every product that belongs to one. Until that
+ * existed a collection was strictly worse than a tag — the same grouping, plus
+ * the admin work, minus any way for a shopper to reach it — and this screen
+ * carried a warning saying so.
  *
- * Worth knowing while editing here: **the storefront has no collection route.**
- * `app/` has `/categories/[...slug]` and `/product/[slug]` and nothing for
- * collections, so a collection is currently data with no page — it can be built
- * and filled, and no shopper can reach it. The banner image and description are
- * being collected for a page that does not exist yet. Said plainly on the screen
- * rather than left for someone to discover after curating one.
+ * The banner and description are worth filling in: they are the page, not
+ * decoration. A collection answers "why are these together", which is the one
+ * thing a category cannot.
  */
 export default function AdminCollectionsPage() {
-  const { fetchCollections, deleteCollection, collections, loading, error, resetCollections } =
-    useAdmin();
+  const { fetchCollections, deleteCollection, setHomeCollection, collections, loading, error,
+          resetCollections } = useAdmin();
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,6 +71,7 @@ export default function AdminCollectionsPage() {
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
   const [collectionToDelete, setCollectionToDelete] = useState<Collection | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [pickingHome, setPickingHome] = useState<string | null>(null);
 
   useEffect(() => {
     loadCollections();
@@ -103,6 +107,32 @@ export default function AdminCollectionsPage() {
   const emptyCount = collections.filter(
     (collection) => (counts.get(collection.id) ?? 0) === 0
   ).length;
+
+  const homeCollection = collections.find((collection) => collection.isFeatured) ?? null;
+
+  /**
+   * Only one collection can be on the home page, so this is a choice between
+   * them rather than a switch on each — turning one on turns the previous one
+   * off, in the database, in one call.
+   */
+  const chooseHome = async (collection: Collection) => {
+    const next = collection.isFeatured ? null : collection.id;
+    setPickingHome(collection.id);
+    try {
+      await setHomeCollection(next);
+      toast.success(
+        next
+          ? `${collection.name} is on the home page.`
+          : "The home page no longer shows a collection."
+      );
+      const fetchedCounts = await getCollectionProductCounts();
+      setCounts(fetchedCounts);
+    } catch (err: any) {
+      toast.error(describeError(err, "Could not change the home page collection."));
+    } finally {
+      setPickingHome(null);
+    }
+  };
 
   const handleDelete = async () => {
     if (!collectionToDelete) return;
@@ -151,20 +181,23 @@ export default function AdminCollectionsPage() {
         }
       />
 
-      {/* Better said here than discovered after building one. */}
-      <p className="flex items-start gap-2 rounded-sm border border-terra/30 bg-terra/[0.04] p-3 font-body text-sm text-terra-ink">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        The shop has no collection page yet. You can build collections here and assign products to
-        them, but shoppers cannot browse one until that route exists.
-      </p>
-
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Collections" value={formatNumber(collections.length)} icon={Layers} />
         <StatCard
           label="Empty"
           value={formatNumber(emptyCount)}
           hint="nothing assigned to them"
           tone={emptyCount > 0 ? "attention" : "default"}
+        />
+        <StatCard
+          label="On the home page"
+          value={homeCollection?.name ?? "None"}
+          hint={
+            homeCollection
+              ? `${formatNumber(counts.get(homeCollection.id) ?? 0)} products`
+              : "the band is hidden until one is chosen"
+          }
+          icon={Home}
         />
       </div>
 
@@ -256,6 +289,15 @@ export default function AdminCollectionsPage() {
                       <Layers className="h-6 w-6 text-ink-faint" />
                     </span>
                   )}
+
+                  {/* Named, not just coloured — which one is on the home page is
+                      the whole point of the control below it. */}
+                  {collection.isFeatured && (
+                    <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-sm bg-sage-deep px-2 py-1 font-body text-[11px] text-background">
+                      <Home className="h-3 w-3" />
+                      On the home page
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-4">
@@ -287,6 +329,26 @@ export default function AdminCollectionsPage() {
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => chooseHome(collection)}
+                          disabled={pickingHome !== null}
+                        >
+                          <Home className="mr-2 h-4 w-4" />
+                          {collection.isFeatured
+                            ? "Take off the home page"
+                            : "Show on the home page"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <a
+                            href={`/collections/${collection.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            View on shop
+                          </a>
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => setCollectionToDelete(collection)}
@@ -305,13 +367,44 @@ export default function AdminCollectionsPage() {
                     </p>
                   )}
 
-                  <p
-                    className={`mt-3 inline-block rounded-sm px-2 py-0.5 font-body text-[11px] tabular-nums ${
-                      count === 0 ? "bg-terra/10 text-terra-ink" : "bg-wash/60 text-ink-muted"
-                    }`}
-                  >
-                    {count === 0 ? "empty" : `${count} products`}
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <p
+                      className={`inline-block rounded-sm px-2 py-0.5 font-body text-[11px] tabular-nums ${
+                        count === 0 ? "bg-terra/10 text-terra-ink" : "bg-wash/60 text-ink-muted"
+                      }`}
+                    >
+                      {count === 0 ? "empty" : `${count} products`}
+                    </p>
+
+                    {/*
+                      A radio in behaviour, not a switch: choosing this one
+                      releases whichever held it. An empty collection is barred
+                      because the band renders nothing without products, which
+                      would read as the setting having failed.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() => chooseHome(collection)}
+                      disabled={pickingHome !== null || (count === 0 && !collection.isFeatured)}
+                      title={
+                        count === 0 && !collection.isFeatured
+                          ? "Add products before putting this on the home page"
+                          : undefined
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-1 font-body text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        collection.isFeatured
+                          ? "text-sage-deep hover:bg-wash/60"
+                          : "text-ink-muted hover:bg-wash/60 hover:text-foreground"
+                      }`}
+                    >
+                      {pickingHome === collection.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Home className="h-3 w-3" />
+                      )}
+                      {collection.isFeatured ? "On the home page" : "Show on the home page"}
+                    </button>
+                  </div>
                 </div>
               </li>
             );

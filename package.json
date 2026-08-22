@@ -10,7 +10,8 @@
     "make-admin": "node --env-file=.env.local scripts/make-admin.js",
     "seed-variant-images": "node scripts/seed-variant-images.js",
     "check-cloudinary": "node scripts/check-cloudinary.js",
-    "seed-deep-categories": "node scripts/seed-deep-categories.js"
+    "seed-deep-categories": "node scripts/seed-deep-categories.js",
+    "seed-collections": "node scripts/seed-collections.js"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
