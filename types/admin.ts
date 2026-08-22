@@ -60,7 +60,6 @@ export type TransactionStatus = 'success' | 'pending' | 'failed' | 'refunded';
  * shop uses; orders here settle by bank transfer, Paystack or on delivery. The
  * union only ever type-checked because the values were being invented locally.
  */
-export type PaymentMethodType = string;
 
 export interface Transaction {
   id: string;
@@ -69,10 +68,14 @@ export interface Transaction {
   orderNumber: string;
   customer: string;
   email: string;
+  phone?: string;
+  /** The order's own status, so a settled order can be told from a shipped one. */
+  orderStatus?: string;
+  /** When the order was raised — what an unpaid one has been waiting since. */
+  placedAt?: Date;
   amount: number;
   currency: string;
   status: TransactionStatus;
-  paymentMethod: PaymentMethodType;
   date: Date;
   description: string;
 }
@@ -171,14 +174,6 @@ export interface TransactionAnalytics {
   transactionsToday: number;
   transactionsThisWeek: number;
   transactionsThisMonth: number;
-  paymentMethodDistribution: Array<{
-    method: PaymentMethodType;
-    count: number;
-    revenues: Array<{
-      currency: string;
-      amount: number;
-    }>;
-  }>;
 }
 
 export interface AdminAnalytics {
@@ -224,8 +219,10 @@ export interface AdminOrderDataStore {
   // Methods
   fetchOrders: (options?: FetchOptions) => Promise<void>;
   getOrderById: (orderId: string) => Promise<Order | null>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
-  updatePaymentStatus: (orderId: string, status: PaymentStatus) => Promise<void>;
+  /** `note` is kept on the order's history against this transition. */
+  updateOrderStatus: (orderId: string, status: OrderStatus, note?: string) => Promise<void>;
+  /** `reason` is required by the database when undoing a settled payment. */
+  updatePaymentStatus: (orderId: string, status: PaymentStatus, reason?: string) => Promise<void>;
   updateOrder: (orderId: string, data: Partial<Order>) => Promise<void>;
   resetOrders: () => void;
 }

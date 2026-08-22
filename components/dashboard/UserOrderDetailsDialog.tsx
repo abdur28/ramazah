@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Package, User, MapPin, CreditCard, Truck, CheckCircle2, Clock, XCircle, Calendar, Phone, Mail } from "lucide-react";
+import PaymentInstructions from "@/components/checkout/PaymentInstructions";
 import Image from "next/image";
 import { Order, OrderStatus } from "@/types/types";
 import { format } from "date-fns";
@@ -290,6 +291,20 @@ export default function UserOrderDetailsDialog({
               </div>
             </div>
           </div>
+
+          {/*
+            Where to pay, for an order that has not been paid.
+
+            This screen used to print "Payment Status: pending" and stop there.
+            The shop takes no card payment, so a customer who closed the
+            confirmation had nowhere left to find the account details — the only
+            way back was to ask on WhatsApp. Renders nothing once it is settled.
+          */}
+          <PaymentInstructions
+            orderNumber={order.orderNumber}
+            total={order.total}
+            paymentStatus={order.paymentStatus}
+          />
 
           <Separator />
 

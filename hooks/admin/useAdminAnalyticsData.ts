@@ -7,7 +7,6 @@ import {
   ProductAnalytics,
   OrderAnalytics,
   TransactionAnalytics,
-  PaymentMethodType,
   CurrencyRevenue
 } from '@/types/admin';
 import { UserProfile, Order, Product } from '@/types/types';
@@ -512,29 +511,10 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         });
       });
 
-      const methodMap = new Map<PaymentMethodType, { count: number; revenues: Map<string, number> }>();
-      payments.forEach(t => {
-        if (!methodMap.has(t.paymentMethod)) {
-          methodMap.set(t.paymentMethod, { count: 0, revenues: new Map() });
-        }
-        const stats = methodMap.get(t.paymentMethod)!;
-        stats.count += 1;
-
-        if (t.status === 'success') {
-          stats.revenues.set(t.currency, (stats.revenues.get(t.currency) || 0) + t.amount);
-        }
-      });
-
-      const paymentMethodDistribution = Array.from(methodMap.entries())
-        .map(([method, stats]) => ({
-          method,
-          count: stats.count,
-          revenues: Array.from(stats.revenues.entries()).map(([currency, amount]) => ({
-            currency,
-            amount,
-          })),
-        }))
-        .sort((a, b) => b.count - a.count);
+      // Payment method used to be grouped here. Every order settles by transfer
+      // against the invoice, so the breakdown had one bar — and cash on
+      // delivery, the only other value it could take, is not something the shop
+      // reconciles from a screen.
 
       return {
         totalTransactions: payments.length,
@@ -546,7 +526,6 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         transactionsToday: payments.filter(t => t.date >= today).length,
         transactionsThisWeek: payments.filter(t => t.date >= weekAgo).length,
         transactionsThisMonth: payments.filter(t => t.date >= monthAgo).length,
-        paymentMethodDistribution,
       };
     } catch (error) {
       console.error('Error fetching payment analytics:', error);

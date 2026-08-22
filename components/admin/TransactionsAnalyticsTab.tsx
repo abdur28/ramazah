@@ -4,7 +4,6 @@ import { AlertTriangle, Check, Coins, Hourglass } from "lucide-react";
 import StatCard from "@/components/admin/ui/StatCard";
 import SectionCard from "@/components/admin/ui/SectionCard";
 import DonutChart from "@/components/admin/charts/DonutChart";
-import BarList from "@/components/admin/charts/BarList";
 import { formatMoney, formatMoneyByCurrency, formatNumber } from "@/lib/admin/format";
 import type { TransactionAnalytics } from "@/types/admin";
 
@@ -57,32 +56,20 @@ export default function TransactionsAnalyticsTab({ data }: { data: TransactionAn
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Payment outcomes">
-          <DonutChart
-            data={[
-              { name: "Settled", value: data.successfulTransactions },
-              { name: "Awaiting", value: data.pendingTransactions },
-              { name: "Failed", value: data.failedTransactions },
-              { name: "Refunded", value: data.refundedTransactions },
-            ]}
-            total={data.totalTransactions}
-            totalLabel="Payments"
-          />
-        </SectionCard>
-
-        <SectionCard title="How customers pay">
-          <BarList
-            data={data.paymentMethodDistribution.map((row) => ({
-              name: row.method,
-              value: row.count,
-              display: `${formatNumber(row.count)}`,
-              meta: formatMoneyByCurrency(row.revenues, true),
-            }))}
-            emptyMessage="No payments recorded yet."
-          />
-        </SectionCard>
-      </div>
+      {/* This used to sit beside a "How customers pay" breakdown. Every order
+          settles by transfer against the invoice, so that chart had one bar. */}
+      <SectionCard title="Payment outcomes">
+        <DonutChart
+          data={[
+            { name: "Settled", value: data.successfulTransactions },
+            { name: "Awaiting", value: data.pendingTransactions },
+            { name: "Failed", value: data.failedTransactions },
+            { name: "Refunded", value: data.refundedTransactions },
+          ]}
+          total={data.totalTransactions}
+          totalLabel="Payments"
+        />
+      </SectionCard>
 
       <SectionCard title="Recent activity">
         <dl className="grid gap-4 sm:grid-cols-3">

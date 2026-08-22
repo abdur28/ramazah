@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Calendar,
+  ChevronRight,
   Check,
   Coins,
   Download,
@@ -26,11 +27,9 @@ import {
 } from "@/components/ui/select";
 import PageHeader from "@/components/admin/ui/PageHeader";
 import StatCard from "@/components/admin/ui/StatCard";
-import SectionCard from "@/components/admin/ui/SectionCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill from "@/components/admin/ui/StatusPill";
-import DonutChart from "@/components/admin/charts/DonutChart";
-import { getPayments, UNRECORDED_METHOD } from "@/lib/admin/payments";
+import { getPayments } from "@/lib/admin/payments";
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/admin/format";
 import type { Transaction } from "@/types/admin";
 
@@ -60,7 +59,6 @@ export default function AdminPaymentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [methodFilter, setMethodFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
 
   const load = useCallback(async () => {
@@ -75,18 +73,12 @@ export default function AdminPaymentsPage() {
     load();
   }, [load]);
 
-  const methods = useMemo(
-    () => Array.from(new Set(payments.map((payment) => payment.paymentMethod))).sort(),
-    [payments]
-  );
-
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const since = startOf(dateFilter);
 
     return payments.filter((payment) => {
       if (statusFilter !== "all" && payment.status !== statusFilter) return false;
-      if (methodFilter !== "all" && payment.paymentMethod !== methodFilter) return false;
       if (since && payment.date < since) return false;
 
       if (query) {
@@ -97,22 +89,31 @@ export default function AdminPaymentsPage() {
 
       return true;
     });
-  }, [payments, statusFilter, methodFilter, dateFilter, searchQuery]);
+  }, [payments, statusFilter, dateFilter, searchQuery]);
 
   const settled = payments.filter((payment) => payment.status === "success");
   const awaiting = payments.filter((payment) => payment.status === "pending");
   const failed = payments.filter((payment) => payment.status === "failed");
   const refunded = payments.filter((payment) => payment.status === "refunded");
 
+  // Days the oldest unpaid order has been waiting; null when nothing is out.
+  const oldestWait =
+    awaiting.length === 0
+      ? null
+      : Math.max(
+          ...awaiting.map((payment) =>
+            Math.floor((Date.now() - (payment.placedAt ?? payment.date).getTime()) / 86_400_000)
+          )
+        );
+
   const sum = (rows: Transaction[]) => rows.reduce((total, row) => total + row.amount, 0);
   const currency = payments[0]?.currency ?? "ngn";
 
   const hasFilters =
-    statusFilter !== "all" || methodFilter !== "all" || dateFilter !== "all" || Boolean(searchQuery);
+    statusFilter !== "all" || dateFilter !== "all" || Boolean(searchQuery);
 
   const clearFilters = () => {
     setStatusFilter("all");
-    setMethodFilter("all");
     setDateFilter("all");
     setSearchQuery("");
   };
@@ -160,32 +161,23 @@ export default function AdminPaymentsPage() {
           value={formatMoney(sum(refunded), currency)}
           hint={`${formatNumber(refunded.length)} refunds`}
         />
+        {/* Was a bare count of failed payments, which on a transfer shop is
+            almost always zero. The actionable number is how long the oldest
+            unpaid order has been sitting. */}
         <StatCard
-          label="Failed"
-          value={formatNumber(failed.length)}
-          hint={failed.length > 0 ? "worth chasing" : "none"}
-          tone={failed.length > 0 ? "attention" : "default"}
+          label="Longest wait"
+          value={oldestWait === null ? "—" : `${oldestWait} ${oldestWait === 1 ? "day" : "days"}`}
+          hint={
+            oldestWait === null
+              ? "nothing outstanding"
+              : failed.length > 0
+                ? `${formatNumber(failed.length)} failed as well`
+                : "oldest unpaid order"
+          }
+          tone={oldestWait !== null && oldestWait >= 7 ? "attention" : "default"}
           icon={AlertTriangle}
         />
       </div>
-
-      {payments.length > 0 && (
-        <SectionCard title="How customers pay">
-          <DonutChart
-            data={methods.map((method) => ({
-              name: method,
-              value: payments.filter((payment) => payment.paymentMethod === method).length,
-            }))}
-            totalLabel="Payments"
-          />
-          {methods.includes(UNRECORDED_METHOD) && (
-            <p className="mt-4 max-w-[65ch] font-body text-xs text-ink-muted">
-              Orders settled over WhatsApp or by transfer arrive with no payment method recorded.
-              Setting one on the order makes this breakdown useful.
-            </p>
-          )}
-        </SectionCard>
-      )}
 
       {/* ----------------------------------------------------------- filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -226,22 +218,6 @@ export default function AdminPaymentsPage() {
             </SelectContent>
           </Select>
 
-          {methods.length > 1 && (
-            <Select value={methodFilter} onValueChange={setMethodFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Any method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any method</SelectItem>
-                {methods.map((method) => (
-                  <SelectItem key={method} value={method}>
-                    {method}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
           {hasFilters && (
             <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
               <X className="h-4 w-4" />
@@ -275,10 +251,13 @@ export default function AdminPaymentsPage() {
         />
       ) : (
         <div className="overflow-hidden rounded-sm border border-rule bg-card">
-          <div className="hidden border-b border-rule bg-wash/60 px-4 py-2.5 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] lg:gap-4">
+          {/* Five headings sat over four cells after the Method column was
+              removed, so Amount printed under "Method". Waiting takes the slot:
+              in a shop paid by transfer it is the only figure anyone acts on. */}
+          <div className="hidden border-b border-rule bg-wash/60 px-4 py-2.5 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-4">
             <span>Customer</span>
             <span>Date</span>
-            <span>Method</span>
+            <span>Waiting</span>
             <span className="text-right">Amount</span>
             <span>Status</span>
           </div>
@@ -287,8 +266,8 @@ export default function AdminPaymentsPage() {
             {filtered.map((payment) => (
               <li key={`${payment.orderNumber}-${payment.id}`}>
                 <Link
-                  href="/admin/orders"
-                  className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-wash/50 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-4"
+                  href={`/admin/orders/${payment.orderId}`}
+                  className="group grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-wash/50 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-4"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-body text-sm text-foreground">
@@ -303,20 +282,15 @@ export default function AdminPaymentsPage() {
                     {formatDateTime(payment.date)}
                   </span>
 
-                  <span className="font-body text-sm text-ink-muted">
-                    {payment.paymentMethod === UNRECORDED_METHOD ? (
-                      <span className="text-ink-muted">{UNRECORDED_METHOD}</span>
-                    ) : (
-                      payment.paymentMethod
-                    )}
-                  </span>
+                  <Waiting payment={payment} />
 
                   <span className="font-body text-sm font-medium tabular-nums text-foreground lg:text-right">
                     {formatMoney(payment.amount, payment.currency)}
                   </span>
 
-                  <span>
+                  <span className="flex items-center justify-between gap-2">
                     <StatusPill status={payment.status} map={PAYMENT_VIEW} />
+                    <ChevronRight className="hidden h-4 w-4 shrink-0 text-ink-faint transition-transform group-hover:translate-x-0.5 lg:block" />
                   </span>
                 </Link>
               </li>
@@ -325,6 +299,38 @@ export default function AdminPaymentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * How long an unpaid order has been unpaid.
+ *
+ * The number this screen exists to surface. Every order here is settled by bank
+ * transfer against an invoice, so an unpaid one is not a failed payment — it is
+ * a customer who has not got round to it, and the only thing to do about it is
+ * chase them. A week is the point at which it stops being normal.
+ *
+ * Settled rows show when the money landed instead, which is the equivalent fact
+ * for them.
+ */
+function Waiting({ payment }: { payment: Transaction }) {
+  if (payment.status !== "pending") {
+    return <span className="font-body text-sm text-ink-faint">—</span>;
+  }
+
+  const since = payment.placedAt ?? payment.date;
+  const days = Math.floor((Date.now() - since.getTime()) / 86_400_000);
+  const late = days >= 7;
+
+  return (
+    <span
+      className={`font-body text-sm tabular-nums ${
+        late ? "font-medium text-terra-ink" : "text-ink-muted"
+      }`}
+      title={late ? "Waiting over a week — worth chasing" : undefined}
+    >
+      {days === 0 ? "today" : `${days} ${days === 1 ? "day" : "days"}`}
+    </span>
   );
 }
 
@@ -353,14 +359,13 @@ function startOf(range: string): Date | null {
  * not shift every column after it.
  */
 function exportCsv(rows: Transaction[]) {
-  const header = ["Order", "Customer", "Email", "Date", "Method", "Amount", "Currency", "Status"];
+  const header = ["Order", "Customer", "Email", "Date", "Amount", "Currency", "Status"];
 
   const body = rows.map((row) => [
     row.orderNumber,
     row.customer,
     row.email,
     row.date.toISOString(),
-    row.paymentMethod,
     row.amount.toFixed(2),
     row.currency.toUpperCase(),
     PAYMENT_VIEW[row.status]?.label ?? row.status,

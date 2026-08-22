@@ -241,6 +241,15 @@ h4, h5, h6 {
     background: #EAF1E2 !important;
   }
 
+  /* The packing slip borrows `.invoice-sheet` for the A4 sizing, repeated table
+     headings and unbreakable rows, but not the invoice's green paper — it is a
+     monochrome working document. Same specificity as the rule above, so this has
+     to sit after it. */
+  html:has(.packing-slip),
+  body:has(.packing-slip) {
+    background: #FFFFFF !important;
+  }
+
   /* Print the invoice and nothing else.
   
      Naming the chrome element by element does not work: the providers in

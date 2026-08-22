@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Loader2,
   RefreshCcw,
   Search,
+  ChevronRight,
   ShoppingBag,
   Store,
   Truck,
@@ -20,11 +22,10 @@ import PageHeader from "@/components/admin/ui/PageHeader";
 import StatCard from "@/components/admin/ui/StatCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill, { ORDER_STATUS, PAYMENT_STATUS } from "@/components/admin/ui/StatusPill";
-import OrderDetailsDialog from "@/components/admin/OrderDetailsDialog";
 import useAdmin from "@/hooks/admin/useAdmin";
 import { formatDateTime, formatMoney, formatNumber, formatRelative } from "@/lib/admin/format";
 import { cn } from "@/lib/utils";
-import type { Order, OrderStatus } from "@/types/types";
+import type { OrderStatus } from "@/types/types";
 
 /**
  * Orders.
@@ -37,8 +38,9 @@ import type { Order, OrderStatus } from "@/types/types";
  * Money is formatted, not concatenated: totals read `NGN 410005.00` before,
  * because the page printed `currency.toUpperCase()` next to `toFixed(2)`.
  *
- * The whole row opens the order. Reaching the only action on the screen used to
- * mean opening a dropdown and choosing its single item.
+ * The whole row opens the order — at `/admin/orders/[id]`, a page rather than a
+ * dialog. A dialog could not carry the audit history, the staff notes or the
+ * invoice, and could not be linked to whoever is packing the parcel.
  */
 const STATUS_TABS: { label: string; value: OrderStatus | "all" }[] = [
   { label: "All", value: "all" },
@@ -59,8 +61,6 @@ export default function AdminOrdersPage() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -102,11 +102,6 @@ export default function AdminOrdersPage() {
       return true;
     });
   }, [orders, statusFilter, paymentFilter, searchQuery]);
-
-  const openOrder = (order: Order) => {
-    setSelectedOrder(order);
-    setDetailsOpen(true);
-  };
 
   const awaitingFulfilment = orders.filter(
     (order) => order.status === "pending" || order.status === "processing"
@@ -270,7 +265,7 @@ export default function AdminOrdersPage() {
         />
       ) : (
         <div className="overflow-hidden rounded-sm border border-rule bg-card">
-          <div className="hidden border-b border-rule bg-wash/60 px-4 py-2.5 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted lg:grid lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-4">
+          <div className="hidden border-b border-rule bg-wash/60 px-4 py-2.5 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted lg:grid lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)] lg:gap-4">
             <span>Customer</span>
             <span>Placed</span>
             <span className="text-right">Total</span>
@@ -281,10 +276,9 @@ export default function AdminOrdersPage() {
           <ul className="divide-y divide-rule">
             {filtered.map((order) => (
               <li key={order.id}>
-                <button
-                  type="button"
-                  onClick={() => openOrder(order)}
-                  className="grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition-colors hover:bg-wash/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sage-deep lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-4"
+                <Link
+                  href={`/admin/orders/${order.id}`}
+                  className="group grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition-colors hover:bg-wash/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sage-deep lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-4"
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
@@ -322,17 +316,16 @@ export default function AdminOrdersPage() {
                     <StatusPill status={order.status} map={ORDER_STATUS} />
                   </span>
 
-                  <span>
+                  <span className="flex items-center justify-between gap-2">
                     <StatusPill status={order.paymentStatus} map={PAYMENT_STATUS} />
+                    <ChevronRight className="hidden h-4 w-4 shrink-0 text-ink-faint transition-transform group-hover:translate-x-0.5 lg:block" />
                   </span>
-                </button>
+                </Link>
               </li>
             ))}
           </ul>
         </div>
       )}
-
-      <OrderDetailsDialog open={detailsOpen} onOpenChange={setDetailsOpen} order={selectedOrder} />
     </div>
   );
 }

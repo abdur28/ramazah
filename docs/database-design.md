@@ -70,7 +70,12 @@ Every product has at least one variant; products without options get a single de
 variant, so price and stock always live in exactly one place.
 
 **Commerce** — `cart_items`, `wishlist_items`, `orders`, `order_items`,
-`order_status_history`, `discount_codes`, `discount_redemptions`
+`order_status_history`, `order_notes`, `discount_codes`, `discount_redemptions`
+
+`order_status_history` is trigger-written and `security definer` — an audit row the
+acting user could decline to write is not an audit trail. `order_notes` is staff-only
+and is a table rather than a column on `orders` because RLS is row-level: a customer
+reads their whole order row, so a note column would go to the person it is about.
 
 **Reviews** — `reviews`, `review_images`, `review_votes`, `review_replies`
 

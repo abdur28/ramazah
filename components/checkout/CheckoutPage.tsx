@@ -31,7 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import type { UserProfile } from "@/types/types";
-import { FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING, TAX_RATE } from "@/constants";
+import { DELIVERY_LEAD_TIME, FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING, TAX_RATE } from "@/constants";
 
 interface CheckoutPageProps {
   userProfile: UserProfile | null;
@@ -140,8 +140,9 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
         return;
       }
 
-      // Success! Redirect to success page
-      toast.success("Order placed successfully!");
+      // The confirmation carries the payment instructions, so the toast does
+      // not claim anything is finished — nothing is paid yet.
+      toast.success("Order received.");
       router.push(`/checkout/success?orderId=${result.orderId}`);
       
     } catch (error: any) {
@@ -445,7 +446,18 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
               </CardContent>
             </Card>
 
-            {/* Place Order Button */}
+            {/*
+              Said before the button, not after it. There is no card step: this
+              raises an invoice, and the shop packs when the transfer lands. A
+              customer who expects a payment screen and does not get one assumes
+              the order failed.
+            */}
+            <p className="mb-3 font-body text-sm leading-relaxed text-ink-muted">
+              No card payment — placing the order raises an invoice, and the next
+              screen has the account details to transfer to. Delivery runs{" "}
+              {DELIVERY_LEAD_TIME} once we have packed it.
+            </p>
+
             <Button
               onClick={handlePlaceOrder}
               disabled={!canPlaceOrder() || isProcessing}
@@ -466,7 +478,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                 </>
               ) : (
                 <>
-                  Proceeed to payment
+                  Place order
                 </>
               )}
             </Button>

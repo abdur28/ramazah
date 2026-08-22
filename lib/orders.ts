@@ -37,7 +37,7 @@ function mapOrderItem(row: any, currency: CurrencyCode): OrderItem {
   };
 }
 
-function mapOrder(row: any): Order {
+export function mapOrder(row: any): Order {
   const currency = String(row.currency).toLowerCase() as CurrencyCode;
 
   return {
@@ -170,26 +170,155 @@ export async function getUserOrders(userId: string): Promise<{
   return { orders: (data ?? []).map(mapOrder) };
 }
 
-/** Admin-only under RLS. The status-history trigger records the transition. */
+/**
+ * Move an order, optionally recording why.
+ *
+ * An RPC rather than an UPDATE from here, for two reasons. The audit trigger on
+ * `orders.status` inserts into `order_status_history`, which `authenticated`
+ * could not write — so **every status change an admin attempted failed** with
+ * "permission denied for table order_status_history" and the order stayed put.
+ * And the timestamps were stamped client-side, which had no branch for
+ * `picked_up_at` at all, so an in-store collection recorded no collection time.
+ *
+ * Both now live in `set_order_status()`. See migration 20260824000021.
+ */
 export async function updateOrderStatus(
   orderId: string,
-  status: Order['status']
+  status: Order['status'],
+  note?: string
 ): Promise<{ success?: boolean; error?: string }> {
-  const patch: Record<string, any> = { status };
-  if (status === 'shipped') patch.shipped_at = new Date().toISOString();
-  if (status === 'delivered') patch.delivered_at = new Date().toISOString();
-
-  const { error } = await supabase().from('orders').update(patch).eq('id', orderId);
+  const { error } = await supabase().rpc('set_order_status', {
+    p_order: orderId,
+    p_status: status,
+    p_note: note?.trim() ? note.trim() : null,
+  });
   return error ? { error: error.message } : { success: true };
 }
 
+/**
+ * Record a payment change.
+ *
+ * `reason` is required by the database when undoing a settled payment, and the
+ * call is refused outright once the order has shipped — see migration
+ * 20260824000023. Both are deliberate: this is the one action on the admin that
+ * moves stock, and it used to be a dropdown.
+ */
 export async function updatePaymentStatus(
   orderId: string,
-  paymentStatus: Order['paymentStatus']
+  paymentStatus: Order['paymentStatus'],
+  reason?: string
 ): Promise<{ success?: boolean; error?: string }> {
-  const patch: Record<string, any> = { payment_status: paymentStatus };
-  if (paymentStatus === 'paid') patch.paid_at = new Date().toISOString();
-
-  const { error } = await supabase().from('orders').update(patch).eq('id', orderId);
+  const { error } = await supabase().rpc('set_order_payment', {
+    p_order: orderId,
+    p_status: paymentStatus,
+    p_reason: reason?.trim() ? reason.trim() : null,
+  });
   return error ? { error: error.message } : { success: true };
+}
+
+// ------------------------------------------------------------------- history
+
+export interface OrderHistoryEntry {
+  id: string;
+  /** 'status' for a fulfilment move, 'payment' for a money one. */
+  kind: 'status' | 'payment';
+  fromStatus?: string;
+  toStatus: string;
+  note?: string;
+  at: string;
+  /** Null for anything the shop's own automation did. */
+  actorName?: string;
+  actorEmail?: string;
+}
+
+/**
+ * Every recorded move on an order, with who made it.
+ *
+ * Fulfilment and payment are two tables and one story, so `order_history()`
+ * returns both under a `kind` and in one chronological order. Returning them
+ * separately would leave the screen interleaving timestamps by hand.
+ *
+ * `changed_by` has been written since the first migration and nothing ever
+ * showed it, because resolving a name meant a query against `profiles` per row.
+ */
+export async function getOrderHistory(orderId: string): Promise<{
+  history: OrderHistoryEntry[];
+  error?: string;
+}> {
+  const { data, error } = await supabase().rpc('order_history', { p_order: orderId });
+  if (error) return { history: [], error: error.message };
+
+  return {
+    history: (data ?? []).map((row: any) => ({
+      id: row.id,
+      kind: row.kind,
+      fromStatus: row.from_status ?? undefined,
+      toStatus: row.to_status,
+      note: row.note ?? undefined,
+      at: row.created_at,
+      actorName: row.actor_name ?? undefined,
+      actorEmail: row.actor_email ?? undefined,
+    })),
+  };
+}
+
+// --------------------------------------------------------------- staff notes
+
+export interface OrderNote {
+  id: string;
+  body: string;
+  at: string;
+  authorName?: string;
+}
+
+/** Admin-only: `order_notes` has a single `is_admin()` policy. */
+export async function getOrderNotes(orderId: string): Promise<{
+  notes: OrderNote[];
+  error?: string;
+}> {
+  const { data, error } = await supabase()
+    .from('order_notes')
+    .select('id, body, created_at, profiles:author_id ( display_name, email )')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: false });
+
+  if (error) return { notes: [], error: error.message };
+
+  return {
+    notes: (data ?? []).map((row: any) => ({
+      id: row.id,
+      body: row.body,
+      at: row.created_at,
+      authorName: row.profiles?.display_name ?? row.profiles?.email ?? undefined,
+    })),
+  };
+}
+
+export async function addOrderNote(orderId: string, body: string): Promise<{
+  note?: OrderNote;
+  error?: string;
+}> {
+  const { data: session } = await supabase().auth.getUser();
+
+  const { data, error } = await supabase()
+    .from('order_notes')
+    .insert({ order_id: orderId, body: body.trim(), author_id: session.user?.id ?? null })
+    .select('id, body, created_at, profiles:author_id ( display_name, email )')
+    .single();
+
+  if (error) return { error: error.message };
+
+  return {
+    note: {
+      id: data.id,
+      body: data.body,
+      at: data.created_at,
+      authorName: (data as any).profiles?.display_name ?? (data as any).profiles?.email ?? undefined,
+    },
+  };
+}
+
+export async function deleteOrderNote(noteId: string): Promise<{ error?: string }> {
+  const { error } = await supabase().from('order_notes').delete().eq('id', noteId);
+  return error ? { error: error.message } : {};
 }

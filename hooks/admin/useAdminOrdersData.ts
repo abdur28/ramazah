@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createClient } from '@/lib/supabase/client';
-import { getOrderById as fetchOrder, updateOrderStatus as setOrderStatus,
+import { getOrderById as fetchOrder, mapOrder, updateOrderStatus as setOrderStatus,
          updatePaymentStatus as setPaymentStatus } from '@/lib/orders';
 import { Order, OrderStatus, PaymentStatus } from '@/types/types';
 import { describeError } from '@/lib/admin/errors';
@@ -26,8 +26,8 @@ interface AdminOrderDataStore {
 
   fetchOrders: (options?: FetchOptions) => Promise<void>;
   getOrderById: (orderId: string) => Promise<Order | null>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
-  updatePaymentStatus: (orderId: string, status: PaymentStatus) => Promise<void>;
+  updateOrderStatus: (orderId: string, status: OrderStatus, note?: string) => Promise<void>;
+  updatePaymentStatus: (orderId: string, status: PaymentStatus, reason?: string) => Promise<void>;
   updateOrder: (orderId: string, data: Partial<Order>) => Promise<void>;
   resetOrders: () => void;
 }
@@ -112,8 +112,7 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
 
       if (error) throw new Error(error.message);
 
-      // Reuse the mapping in lib/orders via a single-row fetch shape.
-      const orders = (data ?? []).map((row: any) => mapRow(row));
+      const orders = (data ?? []).map(mapOrder);
 
       set(state => ({
         orders: offset > 0 ? [...state.orders, ...orders] : orders,
@@ -141,11 +140,11 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
     return order ?? null;
   },
 
-  updateOrderStatus: async (orderId: string, status: OrderStatus) => {
+  updateOrderStatus: async (orderId: string, status: OrderStatus, note?: string) => {
     set(state => ({ loading: { ...state.loading, adminAction: true },
                     error: { ...state.error, adminAction: null } }));
     try {
-      const { error } = await setOrderStatus(orderId, status);
+      const { error } = await setOrderStatus(orderId, status, note);
       if (error) throw new Error(error);
       set(state => ({
         loading: { ...state.loading, adminAction: false },
@@ -158,11 +157,11 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
     }
   },
 
-  updatePaymentStatus: async (orderId: string, paymentStatus: PaymentStatus) => {
+  updatePaymentStatus: async (orderId: string, paymentStatus: PaymentStatus, reason?: string) => {
     set(state => ({ loading: { ...state.loading, adminAction: true },
                     error: { ...state.error, adminAction: null } }));
     try {
-      const { error } = await setPaymentStatus(orderId, paymentStatus);
+      const { error } = await setPaymentStatus(orderId, paymentStatus, reason);
       if (error) throw new Error(error);
       set(state => ({
         loading: { ...state.loading, adminAction: false },
@@ -203,51 +202,5 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
     }
   },
 }));
-
-/** Local copy of the orders mapper, kept in sync with lib/orders.ts. */
-function mapRow(row: any): Order {
-  const currency = String(row.currency).toLowerCase() as Order['currency'];
-  return {
-    id: row.id,
-    orderNumber: row.order_number,
-    userId: row.user_id,
-    deliveryType: row.delivery_type === 'in_store' ? 'inStore' : 'delivery',
-    items: (row.order_items ?? []).map((i: any) => ({
-      id: i.id,
-      productId: i.product_id ?? '',
-      variantId: i.variant_id ?? undefined,
-      name: i.name,
-      sku: i.sku,
-      price: Number(i.unit_price),
-      lineTotal: Number(i.line_total),
-      currency,
-      quantity: i.quantity,
-      variantLabel: i.variant_label ?? undefined,
-      options: i.options ?? {},
-      imageUrl: i.image_url ?? '',
-    })),
-    currency,
-    subtotal: Number(row.subtotal),
-    tax: Number(row.tax_amount ?? 0),
-    shippingCost: Number(row.shipping_cost ?? 0),
-    discount: Number(row.discount_amount ?? 0),
-    total: Number(row.total),
-    status: row.status,
-    paymentStatus: row.payment_status,
-    customerName: row.customer_name,
-    customerEmail: row.customer_email,
-    customerPhone: row.customer_phone,
-    paymentMethod: row.payment_method ?? undefined,
-    trackingNumber: row.tracking_number ?? undefined,
-    carrier: row.carrier ?? undefined,
-    customerNotes: row.customer_notes ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    paidAt: row.paid_at ?? undefined,
-    shippedAt: row.shipped_at ?? undefined,
-    deliveredAt: row.delivered_at ?? undefined,
-    pickedUpAt: row.picked_up_at ?? undefined,
-  };
-}
 
 export default useAdminOrdersData;

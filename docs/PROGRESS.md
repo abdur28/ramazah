@@ -5,6 +5,192 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-22 — Payments stay manual, and stock follows the money
+
+The shop takes no card payment and should not: an order raises an invoice and
+the customer settles it by bank transfer, which is how the business already
+works on WhatsApp. What was missing was everything that makes that model
+actually function.
+
+**Stock moved at the wrong moment.** `create_order` decremented at the instant
+an order was written, so every unpaid order — including the ones never paid —
+held goods off the shelf indefinitely, and the shop's stock figures described a
+warehouse it did not have. With transfer settlement that window is days.
+
+Moving the decrement is the easy half. The hard half is that payment status gets
+set more than once: paid, corrected to unpaid, paid again. Hooking the
+transition would take stock three times. So nothing hooks transitions. There is
+one rule —
+
+> stock is held exactly when an order is paid and not cancelled or refunded
+
+— and `sync_order_stock()` compares that against `orders.stock_committed`,
+acting only on a difference. Called after any status or payment change it is
+idempotent by construction, and it handles paths a transition hook would miss:
+cancelling a paid order returns the goods, un-cancelling one that is still paid
+takes them again. Marking paid when stock is short raises, and the exception
+rolls the payment back with it — an order cannot be settled for goods the shop
+does not have.
+
+Why *paid* and not *shipped*: `stock_count` does double duty here, gating both
+"in stock" on the storefront and `create_order`'s own check, so it has to mean
+available-to-sell. Dropping on shipped would leave a window between payment and
+dispatch in which the site sells the same item again — and with transfers, that
+means two people have paid for one thing.
+
+**The confirmation page did not exist.** `CheckoutPage` has always finished with
+`router.push('/checkout/success?orderId=…')` and `app/checkout/` held one file,
+so a customer placed a real order — stock checked, cart cleared — and was shown
+a **404**. It reads as though the order failed. `/checkout/success` now confirms
+the order and, more importantly, says how to pay: account details, the order
+number as the reference, both with copy buttons because both get typed into a
+banking app by hand. The button no longer says "Proceeed to payment"; it says
+"Place order", with a line above it explaining there is no card step.
+
+`PaymentInstructions` is shared between that page and the customer's own order
+screen, which previously printed "Payment Status: pending" and nothing else — so
+anyone who closed the confirmation had no way back to the account details except
+to ask on WhatsApp. One component, because the account number is the one string
+on this site where a stale copy costs real money. It renders nothing once an
+order is settled, so a paid order never invites a second payment.
+
+**Payment method is gone from the admin.** Every order settles by transfer
+against the invoice, so the field held one value worth having — and cash on
+delivery, the only other thing it could say, is not something the shop
+reconciles from a screen. A column with one real value makes every breakdown
+built on it a lie, so the "How customers pay" donut, the method filter, the
+method column and the CSV field all went with it.
+
+`BANK_DETAILS`, `DELIVERY_LEAD_TIME` and `SUPPORT_WHATSAPP` are placeholders in
+`constants/index.ts` and are the first thing the planned admin settings screen
+should take over.
+
+**Payment is no longer a dropdown.** Idempotency stops the arithmetic breaking
+when someone marks an order paid, unpaid and paid again — but it does not stop
+them *doing* it, and it says nothing about who or why. Payment status sat in the
+same control row as the courier, so recording money — the one action that now
+moves stock — was as easy to click as fixing a typo.
+
+`order_payment_history` records every change with an actor. Undoing a settled
+payment requires a stated reason, refused by the database, not just the form.
+And once an order has shipped or been collected, undoing it is refused outright:
+the goods are gone, so either the money went back — a refund, a real and
+different event — or the customer owes for something they already have, which
+changing a status does not fix.
+
+On the screen, payment has its own card above fulfilment, with the amount, the
+state, and one primary action. Each reversal is a separate quieter button that
+opens a confirmation naming its consequence, and the reason box is required
+before the confirm will fire. `order_history()` now merges fulfilment and
+payment into one chronological timeline under a `kind` — they are one story, and
+two panels leave the reader interleaving timestamps by hand.
+
+The payments screen was also carrying a bug of my own making: removing the
+Method column left five headings over four cells, so Amount printed under
+"Method". The slot now holds **Waiting** — how long an unpaid order has been
+unpaid, in days, going terracotta past a week. That is the only figure anyone
+acts on in a shop paid by transfer, and "Failed", which is almost always zero
+here, gave up its stat card to the longest outstanding wait. Rows link to the
+order they belong to rather than to the unfiltered list.
+
+**Verified**: 20 checks on the payment guard — undoing with no reason refused
+and the order left settled, whitespace not counting as a reason, the reversal
+recorded with actor and direction, re-setting the same status recording nothing,
+a shipped order refusing to be marked unpaid while still accepting a refund, and
+a customer able to read their own payment record but neither write one nor call
+the RPC — plus 8 on the payments screen's data. And 15 checks on the stock rule — placing an order takes nothing, paid
+takes it, paid twice takes nothing more, unpaid returns it once, five
+paid/unpaid cycles leave stock exactly where it started, cancelling a paid order
+returns the goods, un-cancelling takes them again, every movement lands on the
+ledger and nets to the hold, and a shortfall refuses the payment and rolls it
+back — plus 9 on the order-to-confirmation flow including RLS on a guessed order
+id.
+
+One process note: `supabase-js` returns `{ error }` rather than throwing, so two
+test cleanups failed silently and left two demo orders drifted. Both were caught
+and restored to their exact pre-session state. Cleanup blocks now check errors.
+
+---
+
+## 2026-08-22 — Orders could not be moved at all
+
+Found while rebuilding the admin's order screen, and it is the whole story:
+**no admin had ever been able to change an order's status.** Every attempt died
+with `permission denied for table order_status_history`.
+
+`log_order_status()` writes an audit row on every transition. It was a plain
+invoker-rights trigger function, and `authenticated` holds only SELECT on
+`order_status_history`, so the insert was refused and took the enclosing UPDATE
+with it. Setting a courier or a tracking number worked, because only `status`
+fires the trigger — which is exactly why this survived: it looked like a
+half-working screen rather than a broken one. Every order in the database
+reached its status through seeding on the service key.
+
+The trigger is `security definer` now. An audit trail the acting user can refuse
+to write is not an audit trail, and that is the standard shape for one.
+
+**The dialog became a page**, `/admin/orders/[id]`. Three things a dialog could
+not carry, all of which matter more than the space it saved: the audit history,
+a thread of staff notes, and the invoice. It is also nowhere — it cannot be sent
+to whoever is packing the parcel, and it loses everything on a refresh.
+
+New on it:
+
+- **A reason for every move.** `order_status_history.note` has existed since the
+  first migration and nothing ever wrote it, so the trail could say an order went
+  from processing to cancelled but never why — which is the only part anyone
+  needs three weeks later. The note travels to the trigger through a
+  transaction-local `set_config`, so concurrent changes on other orders cannot
+  pick up each other's notes.
+- **The history itself**, with who did it. `changed_by` was written from the
+  start and never displayed, because resolving a name meant a query per row;
+  `order_history()` joins `profiles` once. Unlike the customer's four-step
+  ladder this shows moves backwards, repeats and cancellations — what someone
+  actually looks for when an order has gone wrong.
+- **Staff notes** — `order_notes`, a table rather than a column on `orders`,
+  because RLS is row-level and "own orders readable" hands a customer their whole
+  row. A `staff_notes` column would go straight to the person it is written
+  about. Several timestamped notes rather than one blob: "customer rang, wants it
+  held until Friday" and "courier lost the first parcel" are two facts with two
+  dates.
+- **A packing slip**, at `/admin/orders/[id]/packing-slip` — the document that
+  goes in the box, monochrome and hairline-ruled rather than the invoice's
+  amber-and-green, because it is photocopied, written on and read across a
+  packing table. Tick boxes per line, quantities set large, "packed by" and
+  "checked by" rules to sign, and **no prices anywhere**: the packer does not
+  need them, and a large share of these orders are gifts sent straight to the
+  recipient. The route's select does not fetch a price column at all, so the page
+  cannot print one by accident. It borrows `.invoice-sheet` for the A4 print
+  rules and overrides only the paper colour.
+- **The invoice**, at `/admin/orders/[id]/invoice` — the same `InvoiceView` the
+  customer sees, deliberately. Ramazah takes no card payment, so the invoice *is*
+  the payment instrument and two versions of it is two versions of what is owed.
+  What differs is the gate: `requireAdmin` rather than RLS on one's own order, so
+  staff can print for any order, which is how it gets sent over WhatsApp today.
+- **The next step as a button.** Almost every change an order sees is the obvious
+  one, and making that a two-control operation is how a screen ends up slower
+  than a chat thread.
+- **WhatsApp** alongside mail and phone, since that is where this business
+  actually talks to customers.
+
+Two more bugs fixed on the way. `useAdminOrdersData` carried a "local copy of the
+orders mapper, kept in sync with `lib/orders.ts`" that was not: it never mapped
+`shippingAddress`, so **every delivery order in the admin claimed "No address
+recorded"** while the address sat in the row. The copy is deleted; both paths use
+`mapOrder`. And the client stamped `shipped_at` and `delivered_at` itself with no
+branch for `picked_up_at`, so an in-store collection recorded no collection time
+— `set_order_status()` stamps the right one, and never re-stamps one already set.
+
+**Verified**: 17 checks on the migration (the transition that used to fail, notes
+on and off a transition, timestamps stamped once and not twice, in-store
+collection taking `picked_up_at` and not `delivered_at`, both admin guards, and
+staff notes unreadable and unwritable by a customer), 12 more on the page's own
+data paths including the invoice query and the address the old mapper lost, and 8
+on the packing slip — among them that neither the order select nor the line items
+carry a price column.
+
+---
+
 ## 2026-08-22 — A product belongs to several collections, and one goes on the home page
 
 `products.collection_id` was a single column, so collection membership was

@@ -82,12 +82,21 @@ The chrome is done; the **words and the pictures** are still hoodskool's:
   model in a HOOD hoodie. They are referenced by `Hero.tsx` and the home sections, so
   they go when the content pass replaces those sections, not before.
 
+~~**Orders could only be viewed, not moved.**~~ Fixed 2026-08-22 — the audit trigger was
+refusing every status change. `/admin/orders/[id]` is a full page now, with history, staff
+notes, an invoice and a packing slip. See PROGRESS.
+
 ### 2. Turning a request into an order
 Requests themselves are built — `/dashboard/requests` for the customer,
 `/admin/requests` for staff, moving asked → quoted → buying → fulfilled. What is
 missing is the last step: accepting a quote still means someone creating the order by
 hand. A "convert to order" action on a quoted request would close the loop, and is
 what finally takes the sourcing service off WhatsApp.
+
+~~**Payments.**~~ Settled 2026-08-22 — manual by design: invoice, then bank transfer. The
+missing `/checkout/success` (a 404 after every real order), the payment instructions, and
+stock moving on payment rather than on order are all built. Still open: `BANK_DETAILS` in
+`constants/index.ts` is a placeholder, and no order email is sent — see 6.
 
 ### 3. Shipping: two speeds, and a lead time
 `STANDARD_SHIPPING` and `FREE_SHIPPING_THRESHOLD` are single placeholder Naira amounts.

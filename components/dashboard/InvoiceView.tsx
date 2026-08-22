@@ -55,7 +55,18 @@ function maskPhone(value?: string | null) {
   return `${head}${".".repeat(hidden)}${tail}`;
 }
 
-export default function InvoiceView({ orderAsString }: { orderAsString: string }) {
+export default function InvoiceView({
+  orderAsString,
+  // Where "back" goes. The admin prints the same document from
+  // `/admin/orders/[id]/invoice`, and should return to the order it opened from
+  // rather than to the customer's own order list.
+  backHref = "/dashboard/orders",
+  backLabel = "Back to orders",
+}: {
+  orderAsString: string;
+  backHref?: string;
+  backLabel?: string;
+}) {
   const order = JSON.parse(orderAsString);
   const { formatPrice } = useCurrency();
 
@@ -77,11 +88,11 @@ export default function InvoiceView({ orderAsString }: { orderAsString: string }
       {/* Controls — never printed. */}
       <div className="mb-8 flex items-center justify-between print:hidden">
         <Link
-          href="/dashboard/orders"
+          href={backHref}
           className="inline-flex items-center gap-2 font-body text-sm text-ink-muted transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to orders
+          {backLabel}
         </Link>
 
         <button
