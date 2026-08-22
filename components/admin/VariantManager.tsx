@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { AlertTriangle, RefreshCcw, Trash2, Wand2 } from "lucide-react";
+import Image from "next/image";
+import { AlertTriangle, Check, RefreshCcw, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { availableCurrencies } from "@/constants";
 import { formatMoney } from "@/lib/admin/format";
-import type { ProductOptionDef, ProductPrice, ProductVariant } from "@/types/types";
+import type { ProductImage, ProductOptionDef, ProductPrice, ProductVariant } from "@/types/types";
 
 /**
  * The variants a product actually sells as, and the only place its price and
@@ -41,6 +42,7 @@ export default function VariantManager({
   isPerishable,
   onPerishableChange,
   categoryPath,
+  images,
 }: {
   options: ProductOptionDef[];
   variants: ProductVariant[];
@@ -48,6 +50,7 @@ export default function VariantManager({
   isPerishable: boolean;
   onPerishableChange: (value: boolean) => void;
   categoryPath?: string;
+  images: ProductImage[];
 }) {
   const currencies = availableCurrencies;
   const defaultCurrency = currencies.find((c) => c.isDefault) ?? currencies[0];
@@ -90,6 +93,7 @@ export default function VariantManager({
 
   const makeVariant = (opts: Record<string, string>, index: number): ProductVariant => ({
     id: `new_${Date.now()}_${index}`,
+    imageIds: [],
     // A readable, stable SKU beats a timestamp: it is what appears on the order
     // line, the invoice and the packing list.
     sku: skuFor(opts, index),
@@ -428,6 +432,72 @@ export default function VariantManager({
                     />
                   </Field>
                 </div>
+
+                {/* Which photographs this variant shows. Only worth setting when
+                    the variants genuinely look different — a veil in three
+                    colours. Nothing chosen means the gallery shows everything,
+                    which is right for a coffee sold in two weights. */}
+                {images.length > 1 && (
+                  <div className="mt-4 border-t border-rule pt-3">
+                    <p className="mb-2 font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                      Photographs for this variant
+                      <span className="ml-2 normal-case tracking-normal text-ink-muted">
+                        {(variant.imageIds?.length ?? 0) === 0
+                          ? "— all of them"
+                          : `— ${variant.imageIds!.length} chosen`}
+                      </span>
+                    </p>
+
+                    <ul className="flex flex-wrap gap-2">
+                      {images.map((image) => {
+                        const chosen = variant.imageIds?.includes(image.id) ?? false;
+
+                        return (
+                          <li key={image.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = variant.imageIds ?? [];
+                                update(variant.id, {
+                                  imageIds: chosen
+                                    ? current.filter((id) => id !== image.id)
+                                    : [...current, image.id],
+                                });
+                              }}
+                              aria-pressed={chosen}
+                              title={
+                                chosen
+                                  ? "Shown for this variant — click to remove"
+                                  : "Click to show this photograph for this variant"
+                              }
+                              className={cn(
+                                "relative h-14 w-14 overflow-hidden rounded-sm border-2 transition-all",
+                                chosen
+                                  ? "border-sage-deep"
+                                  : "border-transparent opacity-50 hover:opacity-100"
+                              )}
+                            >
+                              {image.secureUrl && (
+                                <Image
+                                  src={image.secureUrl}
+                                  alt={image.altText || ""}
+                                  fill
+                                  sizes="56px"
+                                  className="object-cover"
+                                />
+                              )}
+                              {chosen && (
+                                <span className="absolute bottom-0 right-0 flex h-4 w-4 items-center justify-center rounded-tl-sm bg-sage-deep">
+                                  <Check className="h-3 w-3 text-background" />
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
 
                 {compare > 0 && price > 0 && compare > price && (
                   <p className="mt-3 font-body text-xs text-sage-deep">

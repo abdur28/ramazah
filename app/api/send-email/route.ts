@@ -10,6 +10,7 @@ import {
   sendAdminOrderNotification,
   EmailType
 } from '@/lib/email';
+import { requireAdminApi } from '@/lib/auth/api';
 
 // Email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,7 +26,18 @@ function isValidEmail(email: string): boolean {
  * POST /api/send-email
  * Send various types of emails
  */
+/**
+ * Send a campaign. Called only from the admin mailer.
+ *
+ * **This route had no authentication.** An unguarded endpoint that sends mail
+ * through the shop's account is an open relay: anyone could have used it to send
+ * whatever they liked from the shop's address, which costs the domain its
+ * sending reputation and is very hard to undo.
+ */
 export async function POST(request: NextRequest) {
+  const gate = await requireAdminApi();
+  if (gate instanceof NextResponse) return gate;
+
   try {
     const body = await request.json();
     const { type, data } = body;

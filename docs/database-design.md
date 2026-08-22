@@ -225,3 +225,47 @@ pages and filters, which is larger than the original "rebrand only" plan assumed
 The storefront UI is also still hoodskool's streetwear design — size filters, size
 guides, `ArtShowcase`, skull cursor. A coffee-and-spices catalog needs different product
 pages and filters, which is larger than the original "rebrand only" plan assumed.
+
+
+## Category depth (2026-08-22)
+
+The tree is an **adjacency list plus a materialised path** — `parent_id` for
+correct writes, `path` so "everything under this shelf" is a prefix scan rather
+than a recursive CTE on every page view. That pairing is the pragmatic choice for
+a shallow, read-heavy hierarchy, but it only holds if four things are enforced,
+and none of them were:
+
+| Guard | Why |
+|---|---|
+| Cascade on rename | `categories_cascade_path` was `after update **of path**`, and Postgres fires a column-scoped trigger only when that column is in the statement's SET list. The admin renames with `set name = …`, so no descendant was ever rewritten and every child kept a stale path. |
+| No cycles | `parent_id` could point at the row's own descendant, making the path recursion non-terminating. |
+| Depth ceiling | Six levels, from `public.category_max_depth()`. |
+| `>` barred from names | It is the path separator; a name containing it produces a path that cannot be split back. |
+
+`categories.depth` (1 for a root) is maintained by the same trigger so the cap,
+the ordering and the admin's guidance are all cheap, and a malformed tree is
+visible in one query rather than by walking parents.
+
+Indexes: `categories (path text_pattern_ops)` for the prefix query behind every
+category page — the default btree opclass cannot serve a prefix `LIKE` on a
+non-C collation — and `(parent_id, sort_order)` for fetching a level.
+
+**Six is the ceiling; three is the advice.** Depth is a merchandising decision,
+not a technical one, so the admin says so at level 4 and stops at 7. Each level
+roughly halves the shoppers who reach the bottom.
+
+
+## Categories in the menu (2026-08-22)
+
+The storefront menu is built from `categories` rather than a hand-written list, so a
+category added in the admin appears without a code change. A menu is not a mirror of a
+table though, and the three decisions it needs that a category name cannot supply live
+on the row:
+
+| Column | For |
+|---|---|
+| `nav_label` | A shorter label, when the real name is too long for the bar. **Null by default** — the software does not abbreviate a shop's own category names; the bar measures itself and overflows into "More" instead. |
+| `show_in_nav` | Leaving a shelf out of the menu while keeping it browsable. Not a depth rule: how deep the menu goes is `MENU_DEPTH` in `lib/navigation.ts`. |
+| `sort_order` | Menu order. It defaulted to 0 on every row, so without seeding it the menu order was whatever the table returned. |
+
+Both columns are editable from the category form.

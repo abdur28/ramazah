@@ -6,7 +6,8 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CornerDownLeft, Search, SearchX, TrendingUp, X } from 'lucide-react';
-import { popularCategories, trendingSearches } from '@/constants/navigation';
+import { trendingSearches } from '@/constants/navigation';
+import { useNavigation } from '@/contexts/NavigationContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { getProducts } from '@/lib/products';
 import type { Product } from '@/types/types';
@@ -58,6 +59,7 @@ interface SearchDialogProps {
 }
 
 export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
+  const { popular: popularCategories } = useNavigation();
   const router = useRouter();
   const { getPriceWithCompare, formatPrice } = useCurrency();
 
@@ -200,7 +202,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain">
+            <div data-lenis-prevent className="flex-1 overflow-y-auto overscroll-contain">
               {/* Searching */}
               {isSearching && (
                 <div className="px-4 py-3 sm:px-5">

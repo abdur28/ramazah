@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { ProductImage } from "@/types/admin";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * Product photographs.
@@ -93,7 +94,7 @@ export default function ImageUpload({
         toast.success(`${added.length} photograph${added.length === 1 ? "" : "s"} added.`);
       } catch (error) {
         console.error("Upload error:", error);
-        toast.error("Could not upload those. Check the connection and try again.");
+        toast.error(describeError(error, "Could not upload those. Try again."));
       } finally {
         setIsUploading(false);
       }

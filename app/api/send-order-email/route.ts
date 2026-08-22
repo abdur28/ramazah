@@ -7,8 +7,25 @@ import {
   sendAdminOrderNotification 
 } from '@/lib/email';
 import { Order } from '@/types/types';
+import { requireAdminApi } from '@/lib/auth/api';
 
+/**
+ * Order lifecycle emails.
+ *
+ * **Nothing calls this route.** It has no caller anywhere in the app — order
+ * confirmations are not wired up yet (see PLAN item 6) — but it was a live,
+ * unauthenticated endpoint that takes an arbitrary order object and mails it
+ * wherever the request says. Guarded rather than deleted, because it is the
+ * shape the notification work will want.
+ *
+ * When confirmations are built, the customer-facing path must not come through
+ * here: a shopper cannot be an admin, and mail should be sent by the server that
+ * already knows the order, not by one that trusts a posted body.
+ */
 export async function POST(request: NextRequest) {
+  const gate = await requireAdminApi();
+  if (gate instanceof NextResponse) return gate;
+
   try {
     const body = await request.json();
     const { type, order, statusChange } = body;

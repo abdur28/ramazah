@@ -6,9 +6,11 @@ import {
   getProducts,
 } from "@/lib/products";
 import ProductImageGallery from "@/components/product/ProductImageGallery";
+import { SelectedVariantProvider } from "@/components/product/SelectedVariantProvider";
 import ProductInfo from "@/components/product/ProductInfo";
 import RelatedProducts from "@/components/product/RelatedProducts";
 import ProductReviews from "@/components/product/ProductReviews";
+import { categoryHref } from "@/lib/categories";
 
 
 export default async function ProductPage({ 
@@ -21,24 +23,20 @@ export default async function ProductPage({
     notFound();
   }
 
-  // Real slugs for the breadcrumb. The product only carries the display path
-  // ("Food & Pantry > Coffee & Tea"), and names cannot be turned back into
-  // slugs reliably — which is why the old breadcrumb linked every category to
+  // Real slugs for the breadcrumb. The product carries only the display path
+  // ("Food & Pantry > Coffee & Tea"), and names cannot be turned back into slugs
+  // reliably — which is why the old breadcrumb linked every category to
   // /clothings, a route from the previous brand.
-  const { parent, current } = await getCategoryHierarchy(product.categoryPath);
-  const breadcrumbs = [
-    ...(parent ? [{ name: parent.name, href: `/categories/${parent.slug}` }] : []),
-    ...(current
-      ? [
-          {
-            name: current.name,
-            href: parent
-              ? `/categories/${parent.slug}/${current.slug}`
-              : `/categories/${current.slug}`,
-          },
-        ]
-      : []),
-  ];
+  //
+  // It also stopped at the immediate parent, so a product filed six levels down
+  // showed two crumbs and skipped four. The whole chain now comes from
+  // `ancestors`, each link built from the slug trail rather than guessed.
+  const { ancestors, current } = await getCategoryHierarchy(product.categoryPath);
+  const trail = current ? [...ancestors, current] : [];
+  const breadcrumbs = trail.map((step, index) => ({
+    name: step.name,
+    href: categoryHref(trail.slice(0, index + 1).map((c) => c.slug)),
+  }));
 
   // The same shelf first. A category with nothing else in it falls back to the
   // newest arrivals, so the section is never a lonely single card — with a
@@ -61,6 +59,11 @@ export default async function ProductPage({
   return (
     <main className="relative bg-background min-h-screen pt-16 md:pt-20">
       <div className="mx-auto">
+        {/* The gallery and the variant picker are siblings, so the selection
+            travels between them through context. */}
+        <SelectedVariantProvider
+          initialVariantAsString={JSON.stringify(product.variants?.[0] ?? null)}
+        >
         <div className="flex flex-col lg:flex-row gap-0">
           {/* Image Gallery - Sticky on large screens */}
           <ProductImageGallery imagesAsString={JSON.stringify(product.images)} productName={product.name} />
@@ -82,6 +85,7 @@ export default async function ProductPage({
             />
           </div>
         </div>
+        </SelectedVariantProvider>
       </div>
 
       <RelatedProducts

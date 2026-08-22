@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import VariantSelector from "@/components/product/VariantSelector";
 import AddToCartSection from "@/components/product/AddToCartSection";
 import ProductDetails from "@/components/product/ProductDetails";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useSelectedVariant } from "@/components/product/SelectedVariantProvider";
 import type { Product, ProductVariant } from "@/types/types";
 
 interface Breadcrumb {
@@ -27,14 +28,16 @@ export default function ProductInfo({
   const breadcrumbs: Breadcrumb[] = JSON.parse(breadcrumbsAsString);
   const { formatPrice, getPriceWithCompare } = useCurrency();
   
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
-    product.variants?.[0] || null
-  );
+  // Shared with the gallery, which needs the selection to know which
+  // photographs belong to the chosen variant.
+  const { selectedVariant, setSelectedVariant } = useSelectedVariant();
 
-  // Memoize the variant change handler to prevent infinite loops
-  const handleVariantChange = useCallback((variant: ProductVariant) => {
-    setSelectedVariant(variant);
-  }, []);
+  // Memoized, because VariantSelector reports through an effect and a fresh
+  // identity each render would loop.
+  const handleVariantChange = useCallback(
+    (variant: ProductVariant) => setSelectedVariant(variant),
+    [setSelectedVariant]
+  );
 
   // Get prices based on selected variant or product default
   const pricesSource = selectedVariant?.prices || product.prices;

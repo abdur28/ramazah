@@ -162,7 +162,7 @@ export default function InvoiceView({ orderAsString }: { orderAsString: string }
           </div>
 
           {/* Items */}
-          <div className="invoice-items mt-10 overflow-x-auto">
+          <div data-lenis-prevent className="invoice-items mt-10 overflow-x-auto">
             {/* `border-separate` rather than `collapse`: a collapsed table
                 discards border-radius on its cells, and the heading row is a
                 rounded white bar sitting on the page's green. */}

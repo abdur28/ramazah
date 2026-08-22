@@ -1,57 +1,68 @@
 import { notFound } from "next/navigation"
 import CategoryPage from "@/components/category/CategoryPage"
-import { 
-  getCategoryByPath, 
-  getProductsByCategoryPath, 
+import {
+  getCategoryByPath,
+  getProductsByCategoryPath,
   getAllCategories,
-  pathToDisplayPath 
+  getCategoryHierarchy,
 } from "@/lib/products"
+import { categoryHref } from "@/lib/categories"
+import type { Category } from "@/types/types"
 
 
+/**
+ * One category, and everything under it.
+ *
+ * Two things were wrong here. The breadcrumbs were built by splitting
+ * `category.path` on `'/'` — the database separates with `' > '`, so a
+ * subcategory produced a single crumb reading "Food & Pantry > Coffee & Tea"
+ * whose link pointed at `/categories/Food & Pantry > Coffee & Tea` and 404'd.
+ * They now come from the real parent/child rows, with slug URLs.
+ *
+ * And a parent category listed neither its children nor their products, so
+ * "Food & Pantry" showed one item while four sat beneath it, with no way to
+ * reach Coffee & Tea from the page above it.
+ */
 export default async function CategoryDynamicPage({ params }: any) {
-  // Convert slug array to path with slashes
-  // Example: ['clothings', 'hood-wears', 'hoodies'] becomes "clothings/hood-wears/hoodies"
   const { slug } = await params
   const path = slug.join('/')
-  
+
   const { category, error: categoryError } = await getCategoryByPath(path)
 
   if (!category || categoryError) {
     notFound()
   }
 
-  const { products, error: productsError } = await getProductsByCategoryPath(category.path)
+  // The real hierarchy, rather than one inferred from the path string.
+  const { ancestors, children } = await getCategoryHierarchy(category.path)
 
-  // Build breadcrumbs from path
-  const pathParts = category.path.split('/')
-  const breadcrumbs = pathParts.map((part, index) => {
-    // Build accumulated path for each level
-    const accumulatedPath = pathParts.slice(0, index + 1).join('/')
-    
-    // Convert slug part to display name
-    const displayName = part
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
-    
-    return {
-      label: displayName,
-      href: `/categories/${accumulatedPath}`
-    }
-  })
+  const { products } = await getProductsByCategoryPath(category.path)
 
-  // Convert path to display path for the title
-  const displayPath = category.path
+  // Every level from the root down, so a breadcrumb is correct at any depth
+  // rather than only for a child of a root.
+  const trail = [...ancestors, category]
+  const breadcrumbs = trail.map((step, index) => ({
+    label: step.name,
+    href: categoryHref(trail.slice(0, index + 1).map((c) => c.slug)),
+  }))
+
+  // Where a shopper can go next. Empty for a leaf.
+  const shelves = children.map((child) => ({
+    name: child.name,
+    href: categoryHref([...trail.map((c) => c.slug), child.slug]),
+    image: child.bannerImage?.secureUrl,
+  }))
 
   return (
     <CategoryPage
       title={category.name.toUpperCase()}
       description={category.description}
       subtitle={category.subtitle}
-      categoryPath={displayPath} // Display format: "Clothings > Hood Wears > Hoodies"
+      categoryPath={category.path}
       bannerImage={category.bannerImage?.secureUrl}
       breadcrumbsAsString={JSON.stringify(breadcrumbs)}
       productsAsString={JSON.stringify(products)}
+      shelvesAsString={JSON.stringify(shelves)}
       isLoading={false}
     />
   )
@@ -61,45 +72,21 @@ export default async function CategoryDynamicPage({ params }: any) {
 export async function generateStaticParams() {
   const { categories } = await getAllCategories()
 
-  // URLs are built from slugs, not the stored display path:
+  // URLs are built from the slug trail, not the stored display path:
   // "Food & Pantry > Coffee & Tea" -> /categories/food-pantry/coffee-tea
+  //
+  // This walked exactly two levels, so a category three deep had no
+  // pre-rendered page. It recurses now, to whatever depth the tree has.
   const params: { slug: string[] }[] = []
 
-  for (const parent of categories) {
-    params.push({ slug: [parent.slug] })
-    for (const child of parent.subCategories ?? []) {
-      params.push({ slug: [parent.slug, child.slug] })
+  const walk = (nodes: Category[], trail: string[]) => {
+    for (const node of nodes) {
+      const next = [...trail, node.slug]
+      params.push({ slug: next })
+      if (node.subCategories?.length) walk(node.subCategories, next)
     }
   }
 
+  walk(categories as Category[], [])
   return params
-}
-
-// Generate metadata for SEO
-export async function generateMetadata({ params }: any) {
-  const { slug } = await params
-  const path = slug.join('/')
-  const { category } = await getCategoryByPath(path)
-
-  if (!category) {
-    return {
-      title: "Category Not Found | Ramazah",
-    }
-  }
-
-  return {
-    title: `${category.name} | Ramazah`,
-    description: category.description || `Shop ${category.name} at Ramazah - Premium streetwear collection`,
-    openGraph: {
-      title: `${category.name} | Ramazah`,
-      description: category.description,
-      images: category.bannerImage?.secureUrl ? [category.bannerImage.secureUrl] : [],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: `${category.name} | Ramazah`,
-      description: category.description,
-      images: category.bannerImage?.secureUrl ? [category.bannerImage.secureUrl] : [],
-    },
-  }
 }

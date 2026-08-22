@@ -3,14 +3,17 @@ import { createClient } from '@/lib/supabase/client';
 import { mapProduct, PRODUCT_SELECT } from '@/lib/products';
 import { Product, ProductImage, ProductOptionDef, ProductVariant } from '@/types/types';
 import { AdminProductDataStore, FetchOptions } from '@/types/admin';
+import { describeError } from '@/lib/admin/errors';
 
 const supabase = () => createClient();
 
-const createErrorMessage = (error: any): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'An unknown error occurred';
-};
+/**
+ * Store-level errors, worded for a person.Previously this returned
+ * `error.message` verbatim, so a dropped connection reached the screen as
+ * "TypeError: Failed to fetch". See `lib/admin/errors.ts`.
+ */
+const createErrorMessage = (error: any): string =>
+  describeError(error, 'Something went wrong. Try again.');
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 
@@ -61,11 +64,19 @@ const toColumns = (data: Partial<Product>) => {
  * `definitions` carries the axes as the form declared them, which is the only
  * place a swatch colour can come from now that Colour is an ordinary axis rather
  * than a special field. Without it a colour value would lose its hex.
+ *
+ * `resolveImageId` translates a form-level image id into the row id the image
+ * actually ended up with. It has to exist because `writeImages` deletes and
+ * re-inserts every photograph on save, so `product_images.id` changes each time
+ * — a variant's image links cannot be stored against an id the next save will
+ * throw away. Cloudinary's `public_id` is the stable identity, so the caller
+ * builds the mapping from that.
  */
 async function writeVariants(
   productId: string,
   variants: ProductVariant[] = [],
-  definitions: ProductOptionDef[] = []
+  definitions: ProductOptionDef[] = [],
+  resolveImageId: (formImageId: string) => string | null = () => null
 ) {
   const db = supabase();
 
@@ -147,7 +158,45 @@ async function writeVariants(
       const { error: pErr } = await db.from('product_prices').insert(prices);
       if (pErr) throw new Error(pErr.message);
     }
+
+    // Which photographs belong to this variant. An empty list means "all of
+    // them", which is the right default: most products look the same whatever
+    // size you buy, and writing a row per image for those would be noise.
+    const imageLinks = (v.imageIds ?? [])
+      .map(resolveImageId)
+      .filter((id): id is string => Boolean(id))
+      .map(image_id => ({ variant_id: variant.id, image_id }));
+
+    if (imageLinks.length > 0) {
+      const { error: iErr } = await db.from('variant_images').insert(imageLinks);
+      if (iErr) throw new Error(iErr.message);
+    }
   }
+}
+
+/**
+ * form image id -> the id that image now has in the database.
+ *
+ * Read back after `writeImages`, keyed on `public_id`, because that is the only
+ * thing about a photograph that survives the delete-and-reinsert.
+ */
+async function buildImageResolver(
+  productId: string,
+  formImages: ProductImage[] = []
+): Promise<(formImageId: string) => string | null> {
+  const { data } = await supabase()
+    .from('product_images').select('id, public_id').eq('product_id', productId);
+
+  const idByPublicId = new Map((data ?? []).map((row: any) => [row.public_id, row.id]));
+  const publicIdByFormId = new Map(formImages.map(image => [image.id, image.publicId]));
+
+  return (formImageId: string) => {
+    const publicId = publicIdByFormId.get(formImageId);
+    if (publicId && idByPublicId.has(publicId)) return idByPublicId.get(publicId)!;
+    // Already a live row id — an edit that never touched the photographs.
+    const live = (data ?? []).some((row: any) => row.id === formImageId);
+    return live ? formImageId : null;
+  };
 }
 
 async function writeImages(productId: string, images: ProductImage[] = []) {
@@ -273,7 +322,8 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
       if (error) throw new Error(error.message);
 
       await writeImages(created.id, data.images);
-      await writeVariants(created.id, data.variants, data.options);
+      const resolveImage = await buildImageResolver(created.id, data.images);
+      await writeVariants(created.id, data.variants, data.options, resolveImage);
 
       set(state => ({ loading: { ...state.loading, adminAction: false } }));
       return created.id;
@@ -307,8 +357,11 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
         if (error) throw new Error(error.message);
       }
 
-      if (data.images)   await writeImages(productId, data.images);
-      if (data.variants) await writeVariants(productId, data.variants, data.options);
+      if (data.images) await writeImages(productId, data.images);
+      if (data.variants) {
+        const resolveImage = await buildImageResolver(productId, data.images);
+        await writeVariants(productId, data.variants, data.options, resolveImage);
+      }
 
       set(state => ({
         loading: { ...state.loading, adminAction: false },

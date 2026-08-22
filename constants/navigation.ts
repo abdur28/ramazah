@@ -27,10 +27,47 @@ export interface NavGroup {
 }
 
 export interface NavItem extends NavLink {
-  /** Present only for categories with children — renders a dropdown. */
+  /**
+   * Children, nested to whatever depth the menu carries. This was
+   * `NavGroup[]` — a single flat group — which could only ever express one
+   * level below the top, so a shop that nests deeper had those shelves
+   * unreachable from the menu.
+   */
+  children?: NavItem[];
+  /** True when this category has more beneath it than the menu shows. */
+  hasMore?: boolean;
+  /** Present only on the legacy fallback list. */
   subCategories?: NavGroup[];
 }
 
+/**
+ * How many top-level items the desktop bar can hold.
+ *
+ * Lives here rather than beside `getStoreNavigation` because the bar is a client
+ * component, and that module reaches for `next/headers` — importing it from the
+ * client drags a server-only API into the browser bundle.
+ *
+ * Six is where the labels start colliding with the lockup and the icons at
+ * ordinary desktop widths. Anything past it goes under "More".
+ */
+export const MAX_DESKTOP_NAV_ITEMS = 6;
+
+/**
+ * Menu entries that are not categories, appended after them.
+ *
+ * The catalogue cannot supply these — Contact is a page, not a shelf — and
+ * building the menu purely from `categories` quietly dropped it. They sit
+ * outside the six-item cap, which counts shelves.
+ */
+export const staticNavItems: NavLink[] = [
+  { name: 'Contact', href: '/contact' },
+];
+
+/**
+ * The fallback menu, used when the categories query fails. The live menu is
+ * built from the catalogue — see `lib/navigation.ts`. A navbar that empties
+ * itself during a database blip looks broken in a way a stale one does not.
+ */
 export const navigationStructure: NavItem[] = [
   { name: 'Veils & Scarves', href: '/categories/veils-scarves' },
   {

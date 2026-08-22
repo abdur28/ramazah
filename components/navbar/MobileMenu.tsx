@@ -6,7 +6,8 @@ import {
   ChevronRight, ChevronLeft, X, Heart, Package,
   LayoutDashboard, LogOut, Mail, Shield,
 } from 'lucide-react';
-import { navigationStructure, type NavItem } from '@/constants/navigation';
+import { type NavItem } from '@/constants/navigation';
+import { useNavigation } from '@/contexts/NavigationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useScrollLock } from '@/hooks/useScrollLock';
 
@@ -22,7 +23,8 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 // The bar shortens labels to fit one line. A full-width sheet has room for the
 // real category names, and `/categories` is what separates a shop link from
 // Home or Contact.
-const shopCategories = navigationStructure.filter((item) => item.href.startsWith('/categories'));
+// No six-item cap here: the sheet scrolls, so every category can be listed.
+// The cap on desktop exists because that bar cannot grow.
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -30,28 +32,42 @@ interface MobileMenuProps {
 }
 
 export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
+  // The sheet already carries its own Contact link further down, so it does
+  // not need `extras`.
+  const { items } = useNavigation();
+  const shopCategories = items.filter((item) => item.href.startsWith('/categories'));
   const pathname = usePathname();
   const { user, profile, isAdmin, signOut } = useAuth();
 
-  const [activeCategory, setActiveCategory] = useState<NavItem | null>(null);
+  /**
+   * The path drilled into, not a single level.
+   *
+   * This was one `activeCategory`, so tapping a shelf that had shelves of its
+   * own was the end of the road — the children were rendered inline as a flat
+   * list and a grandchild had nowhere to go. A stack drills as deep as the
+   * catalogue does, and Back walks out one level at a time.
+   */
+  const [trail, setTrail] = useState<NavItem[]>([]);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
+
+  const activeCategory = trail[trail.length - 1] ?? null;
 
   // Reset the drill-down and hold the page still while the sheet is open.
   useScrollLock(isOpen);
 
-  // Never reopen three levels deep.
+  // Never reopen part-way down a branch.
   useEffect(() => {
-    if (isOpen) setActiveCategory(null);
+    if (isOpen) setTrail([]);
   }, [isOpen]);
 
   const handleCategoryClick = (item: NavItem) => {
     setSlideDirection('right');
-    setActiveCategory(item);
+    setTrail((current) => [...current, item]);
   };
 
   const handleBack = () => {
     setSlideDirection('left');
-    setActiveCategory(null);
+    setTrail((current) => current.slice(0, -1));
   };
 
   const handleSignOut = async () => {
@@ -141,6 +157,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                     animate="center"
                     exit="exit"
                     transition={{ type: 'tween', duration: 0.3 }}
+                    data-lenis-prevent
                     className="absolute inset-0 overflow-y-auto overscroll-contain"
                   >
                     <nav>
@@ -156,7 +173,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.05 + index * 0.03, duration: 0.25 }}
                         >
-                          {item.subCategories ? (
+                          {item.children ? (
                             <button onClick={() => handleCategoryClick(item)} className={row}>
                               {item.name}
                               <ChevronRight className="h-4 w-4 text-ink-faint" />
@@ -251,13 +268,14 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   </motion.div>
                 ) : (
                   <motion.div
-                    key="sub"
+                    key={`level-${trail.length}`}
                     custom={slideDirection}
                     variants={slideVariants}
                     initial="enter"
                     animate="center"
                     exit="exit"
                     transition={{ type: 'tween', duration: 0.3 }}
+                    data-lenis-prevent
                     className="absolute inset-0 overflow-y-auto overscroll-contain"
                   >
                     {/* The parent is a real category page — reachable on desktop
@@ -271,15 +289,33 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                       <ChevronRight className="h-4 w-4" />
                     </Link>
 
-                    {activeCategory.subCategories?.map((group) => (
-                      <div key={group.name}>
-                        {group.items.map((item) => (
-                          <Link key={item.name} href={item.href} onClick={onClose} className={row}>
-                            {item.name}
-                          </Link>
-                        ))}
-                      </div>
-                    ))}
+                    {/*
+                      One level per panel. A child with children of its own is a
+                      button that drills in rather than a link that leaves the
+                      sheet — the whole point of a drill-down is that you can
+                      keep going.
+                    */}
+                    {activeCategory.children?.map((child) =>
+                      child.children && child.children.length > 0 ? (
+                        <button
+                          key={child.href}
+                          onClick={() => handleCategoryClick(child)}
+                          className={row}
+                        >
+                          {child.name}
+                          <ChevronRight className="h-4 w-4 text-ink-faint" />
+                        </button>
+                      ) : (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={onClose}
+                          className={row}
+                        >
+                          {child.name}
+                        </Link>
+                      )
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

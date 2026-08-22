@@ -38,6 +38,7 @@ import {
 } from "@/lib/admin/format";
 import type { Order } from "@/types/types";
 import type { Transaction } from "@/types/admin";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * The dashboard.
@@ -70,7 +71,7 @@ export default function AdminDashboardPage() {
       refreshQueues();
     } catch (err) {
       console.error("Error loading dashboard:", err);
-      toast.error("Could not load the dashboard. Try refreshing.");
+      toast.error(describeError(err, "Could not load the dashboard. Try refreshing."));
     } finally {
       setRefreshing(false);
     }

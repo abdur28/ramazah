@@ -13,6 +13,7 @@ import OrderAnalyticsTab from "@/components/admin/OrderAnalyticsTab";
 import TransactionsAnalyticsTab from "@/components/admin/TransactionsAnalyticsTab";
 import useAdmin from "@/hooks/admin/useAdmin";
 import { formatDateTime } from "@/lib/admin/format";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * Analytics.
@@ -34,7 +35,7 @@ export default function AdminAnalyticsPage() {
       await fetchAnalytics();
     } catch (err) {
       console.error("Error loading analytics:", err);
-      toast.error("Could not load analytics.");
+      toast.error(describeError(err, "Could not load analytics."));
     } finally {
       setRefreshing(false);
     }
@@ -82,7 +83,7 @@ export default function AdminAnalyticsPage() {
         <EmptyState icon={BarChart3} title="Nothing to measure yet" />
       ) : (
         <Tabs defaultValue="orders" className="space-y-6">
-          <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+          <TabsList data-lenis-prevent className="w-full justify-start overflow-x-auto sm:w-auto">
             <TabsTrigger value="orders">
               <ShoppingBag className="mr-2 h-4 w-4" />
               Orders

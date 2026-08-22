@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import { motion } from "framer-motion"
 import CategoryBanner from "@/components/category/CategoryBanner"
+import Link from "next/link"
 import CategoryBreadcrumbs from "@/components/category/CategoryBreadcrumbs"
 import CategoryFilter, { type FilterOptions } from "@/components/category/CategoryFilter"
 import CategorySort, { type SortOption } from "@/components/category/CategorySort"
@@ -22,7 +23,15 @@ interface CategoryPageProps {
   bannerImage?: string
   breadcrumbsAsString: string
   productsAsString: string
+  /** Child categories, so a parent shelf can be browsed into. */
+  shelvesAsString?: string
   isLoading?: boolean
+}
+
+interface Shelf {
+  name: string
+  href: string
+  image?: string
 }
 
 export default function CategoryPage({
@@ -33,6 +42,7 @@ export default function CategoryPage({
   bannerImage,
   breadcrumbsAsString,
   productsAsString,
+  shelvesAsString,
   isLoading = false,
 }: CategoryPageProps) {
   const [sortBy, setSortBy] = useState<SortOption>("featured")
@@ -40,6 +50,10 @@ export default function CategoryPage({
 
   const products: Product[] = useMemo(() => JSON.parse(productsAsString), [productsAsString])
   const breadcrumbs: BreadcrumbItem[] = useMemo(() => JSON.parse(breadcrumbsAsString), [breadcrumbsAsString])
+  const shelves: Shelf[] = useMemo(
+    () => (shelvesAsString ? JSON.parse(shelvesAsString) : []),
+    [shelvesAsString]
+  )
 
   // Extract available filter options from products
   const availableSizes = useMemo(() => {
@@ -195,6 +209,38 @@ export default function CategoryPage({
       <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-8 md:py-12">
         {/* Breadcrumbs */}
         <CategoryBreadcrumbs items={breadcrumbs} />
+
+        {/*
+          The shelves inside this one. Without these a parent category was a
+          dead end: standing on Food & Pantry there was no way to reach Coffee &
+          Tea except through the navbar, and anything added in the admin since
+          the navbar was written was unreachable entirely.
+        */}
+        {shelves.length > 0 && (
+          <motion.nav
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            aria-label="Shelves in this category"
+            className="mb-8 border-b border-rule pb-8"
+          >
+            <h2 className="mb-3 font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+              Browse
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {shelves.map((shelf) => (
+                <li key={shelf.href}>
+                  <Link
+                    href={shelf.href}
+                    className="inline-flex items-center rounded-sm border border-rule bg-card px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-sage hover:bg-wash/60"
+                  >
+                    {shelf.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </motion.nav>
+        )}
 
         {/* Filters & Products Layout */}
         <div className="flex flex-col lg:flex-row gap-8">

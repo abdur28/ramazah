@@ -273,7 +273,7 @@ export default function AdminMailerPage() {
                 : `Nobody has opted into ${TYPE_LABEL[emailType].toLowerCase()} yet.`}
             </p>
           ) : (
-            <ul className="max-h-[460px] divide-y divide-rule overflow-y-auto">
+            <ul data-lenis-prevent className="max-h-[460px] divide-y divide-rule overflow-y-auto">
               {visible.map((recipient) => (
                 <li key={recipient.id}>
                   <label className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-wash/60">

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { isSlugPath } from '@/lib/categories';
 import type {
   CartItem, Category, Collection, Product, ProductFilters,
   ProductPrice, ProductVariant, PaginationParams,
@@ -14,6 +15,7 @@ export const PRODUCT_SELECT = `
   product_images ( id, public_id, url, secure_url, alt_text, position, is_primary ),
   product_variants (
     id, sku, stock_count, in_stock, weight, expiry_date, position,
+    variant_images ( image_id ),
     product_prices ( currency, amount, compare_at_amount ),
     variant_option_values (
       product_option_values (
@@ -63,6 +65,7 @@ function mapVariant(row: any): ProductVariant {
     inStock: !!row.in_stock,
     weight: row.weight ? Number(row.weight) : undefined,
     expiryDate: row.expiry_date ?? undefined,
+    imageIds: (row.variant_images ?? []).map((link: any) => link.image_id),
     size: sizeEntry?.value,
     color: colorEntry ? { name: colorEntry.value, hex: colorEntry.hex ?? '#000000' } : undefined,
   };
@@ -159,6 +162,9 @@ export function mapCategory(row: any): Category {
     name: row.name,
     slug: row.slug,
     path: row.path,
+    depth: row.depth ?? undefined,
+    navLabel: row.nav_label ?? undefined,
+    showInNav: row.show_in_nav ?? true,
     description: row.description ?? undefined,
     subtitle: row.subtitle ?? undefined,
     bannerImage: row.banner_public_id
@@ -177,17 +183,20 @@ export async function getAllCategories() {
     .from('categories').select('*').order('sort_order');
   if (error) return { categories: [], error: error.message };
 
-  const all = (data ?? []).map(mapCategory);
-  const byParent = new Map<string | null, Category[]>();
-  for (const row of data ?? []) {
-    const list = byParent.get(row.parent_id) ?? [];
-    list.push(all.find((c) => c.id === row.id)!);
-    byParent.set(row.parent_id, list);
+  // Nested to whatever depth the tree has. This used to attach one level of
+  // children to each root, so a category three deep belonged to nothing — it
+  // had no pre-rendered page and appeared in no menu built from this call.
+  const byId = new Map<string, Category>(
+    (data ?? []).map((row: any) => [row.id, { ...mapCategory(row), subCategories: [] }])
+  );
+
+  const categories: Category[] = [];
+  for (const row of (data ?? []) as any[]) {
+    const node = byId.get(row.id)!;
+    const parent = row.parent_id ? byId.get(row.parent_id) : undefined;
+    if (parent) parent.subCategories!.push(node);
+    else categories.push(node);
   }
-  const categories = (byParent.get(null) ?? []).map((c) => ({
-    ...c,
-    subCategories: byParent.get(c.id) ?? [],
-  }));
 
   return { categories, error: null };
 }
@@ -200,9 +209,9 @@ export async function getAllCategories() {
  */
 export async function getCategoryByPath(path: string) {
   const client = supabase();
-  const isSlugPath = path.includes('/') || !path.includes('>');
-
-  const query = isSlugPath
+  // See `isSlugPath` — the previous inline test treated every top-level stored
+  // path as a slug, so those categories never resolved.
+  const query = isSlugPath(path)
     ? client.from('categories').select('*').eq('slug', path.split('/').filter(Boolean).pop() ?? path)
     : client.from('categories').select('*').eq('path', path);
 
@@ -212,14 +221,12 @@ export async function getCategoryByPath(path: string) {
               : { category: null, error: 'Category not found' };
 }
 
-/** Legacy helpers, kept for callers that still pass slug paths around. */
-export const pathToDisplayPath = (path: string): string =>
-  path.split('/').map((segment) =>
-    segment.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  ).join(' > ');
-
-export const displayPathToPath = (displayPath: string): string =>
-  displayPath.split('>').map((s) => s.trim().toLowerCase().replace(/\s+/g, '-')).join('/');
+// `pathToDisplayPath` / `displayPathToPath` lived here and converted between a
+// slash-separated slug path and a display path. Nothing calls them any more, and
+// they were the source of the separator confusion this file just shed: a name
+// containing a hyphen ("Ready-to-eat") came back as "Ready To Eat" and no longer
+// matched any row. Removed rather than left as a trap. `lib/categories.ts` holds
+// the real path helpers now.
 
 export async function getCategoryBySlug(slug: string) {
   const { data, error } = await supabase()
@@ -229,20 +236,43 @@ export async function getCategoryBySlug(slug: string) {
               : { category: null, error: 'Category not found' };
 }
 
-export async function getCategoryHierarchy(categoryPath: string) {
+export async function getCategoryHierarchy(categoryPath: string): Promise<{
+  parent: Category | null;
+  ancestors: Category[];
+  current: Category | null;
+  children: Category[];
+  error: string | null;
+}> {
   const { data, error } = await supabase().from('categories').select('*');
-  if (error) return { parent: null, current: null, children: [], error: error.message };
+  if (error) {
+    return { parent: null, ancestors: [], current: null, children: [], error: error.message };
+  }
 
   const rows = data ?? [];
   const currentRow = rows.find((c) => c.path === categoryPath);
   if (!currentRow) {
-    return { parent: null, current: null, children: [], error: 'Category not found' };
+    return { parent: null, current: null, ancestors: [], children: [], error: 'Category not found' };
   }
+
+  // The full chain from the root down to (but excluding) this category. Callers
+  // used to get only the immediate parent, which is all a two-level tree needs
+  // and produces a broken breadcrumb at any greater depth.
+  const ancestors: Category[] = [];
+  let cursor = rows.find((c) => c.id === currentRow.parent_id);
+  let guard = 0;
+
+  while (cursor && guard < 20) {
+    ancestors.unshift(mapCategory(cursor));
+    cursor = rows.find((c) => c.id === cursor!.parent_id);
+    guard += 1;
+  }
+
   const parentRow = rows.find((c) => c.id === currentRow.parent_id);
   const children = rows.filter((c) => c.parent_id === currentRow.id).map(mapCategory);
 
   return {
     parent: parentRow ? mapCategory(parentRow) : null,
+    ancestors,
     current: mapCategory(currentRow),
     children,
     error: null,
@@ -304,7 +334,21 @@ export async function getProducts(
     let q = supabase().from('product_listing').select('id').eq('status', 'active');
 
     if (matchedIds) q = q.in('id', matchedIds);
-    if (filters?.categoryPath) q = q.eq('category_path', filters.categoryPath);
+    if (filters?.categoryPath) {
+      // Prefix, not equality. Paths nest as "Food & Pantry > Coffee & Tea", so
+      // an exact match made a parent category show only what was filed directly
+      // on it — /categories/food-pantry listed one product while four sat in its
+      // children. `includeDescendants: false` restores the old behaviour where a
+      // caller genuinely wants just that shelf.
+      if (filters.includeDescendants === false) {
+        q = q.eq('category_path', filters.categoryPath);
+      } else {
+        q = q.or(
+          `category_path.eq.${filters.categoryPath},` +
+            `category_path.like.${filters.categoryPath} > %`
+        );
+      }
+    }
     if (filters?.itemType)     q = q.eq('item_type', filters.itemType);
     if (filters?.collection)   q = q.eq('collection_slug', filters.collection);
     if (filters?.inStock !== undefined) q = q.eq('in_stock', filters.inStock);
@@ -333,7 +377,7 @@ export async function getProducts(
 export async function getProductsByCategoryPath(categoryPath: string) {
   // Resolve slug paths to the stored display path before filtering.
   let path = categoryPath;
-  if (categoryPath.includes('/') || !categoryPath.includes('>')) {
+  if (isSlugPath(categoryPath)) {
     const { category } = await getCategoryByPath(categoryPath);
     if (!category) return { products: [], error: 'Category not found' };
     path = category.path;

@@ -6,7 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, ArrowRight, Check, MessageCircle, Instagram, Facebook } from "lucide-react";
-import { navigationStructure, socialLinks } from "@/constants/navigation";
+import { socialLinks } from "@/constants/navigation";
+import { useNavigation } from "@/contexts/NavigationContext";
 import { availableCurrencies } from "@/constants";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { subscribeToNewsletter } from "@/lib/newsletter";
@@ -51,10 +52,11 @@ const footerLinks = {
   ],
 };
 
-const shopLinks = navigationStructure.filter((item) => item.href.startsWith("/categories"));
-
 export default function Footer() {
   const pathname = usePathname();
+  // Full names in the footer: there is a column of width here, unlike the bar.
+  const { items } = useNavigation();
+  const shopLinks = items.filter((item) => item.href.startsWith("/categories"));
   const { selectedCurrency, setSelectedCurrency } = useCurrency();
 
   const [email, setEmail] = useState("");

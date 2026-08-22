@@ -7,7 +7,7 @@ import { useCart } from '@/hooks/useCart';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { popularCategories } from '@/constants/navigation';
+import { useNavigation } from '@/contexts/NavigationContext';
 import { FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING, TAX_RATE } from '@/constants';
 
 interface CartSheetProps {
@@ -16,6 +16,7 @@ interface CartSheetProps {
 }
 
 export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
+  const { popular: popularCategories } = useNavigation();
   const { user } = useAuth();
   const {
     items,
@@ -140,7 +141,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
             )}
 
             {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-6">
+            <div data-lenis-prevent className="flex-1 overflow-y-auto overscroll-contain px-6">
               {items.length === 0 ? (
                 // Empty State
                 <div className="flex h-full flex-col items-center justify-center py-10 text-center">

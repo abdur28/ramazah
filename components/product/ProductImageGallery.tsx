@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ProductImage } from "@/types/types";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { useSelectedVariant } from "@/components/product/SelectedVariantProvider";
 
 interface ProductImageGalleryProps {
   imagesAsString: string;
@@ -16,11 +17,54 @@ export default function ProductImageGallery({
   imagesAsString, 
   productName 
 }: ProductImageGalleryProps) {
-  const images: ProductImage[] = JSON.parse(imagesAsString);
+  const images: ProductImage[] = useMemo(
+    () => JSON.parse(imagesAsString),
+    [imagesAsString]
+  );
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  const sortedImages = [...images].sort((a, b) => a.order - b.order);
+  const { selectedVariant } = useSelectedVariant();
+
+  /**
+   * The photographs for the variant being looked at.
+   *
+   * `variant_images` has existed since the first migration and nothing read it,
+   * so a veil in three colours showed the same picture whichever you picked. A
+   * variant with no images of its own shows all of them, which is right for
+   * things that look identical however much you buy — a coffee in 250g and 1kg.
+   *
+   * The fallback matters: if a variant's links point at photographs that have
+   * since been deleted, showing the whole set beats showing an empty gallery.
+   */
+  const sortedImages = useMemo(() => {
+    const all = [...images].sort((a, b) => a.order - b.order);
+    const ids = selectedVariant?.imageIds ?? [];
+    if (ids.length === 0) return all;
+
+    const forVariant = all.filter((image) => ids.includes(image.id));
+    return forVariant.length > 0 ? forVariant : all;
+  }, [images, selectedVariant]);
+
+  /**
+   * Keep the viewer on the same photograph across a variant change when that
+   * photograph is still on offer, and fall back to the first when it is not —
+   * so switching from Black to Sage moves you to the sage picture rather than
+   * silently leaving a stale index pointing at the wrong image.
+   */
+  const previousIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const currentId = previousIdRef.current;
+    const stillThere = currentId
+      ? sortedImages.findIndex((image) => image.id === currentId)
+      : -1;
+
+    setSelectedImageIndex(stillThere >= 0 ? stillThere : 0);
+  }, [sortedImages]);
+
+  useEffect(() => {
+    previousIdRef.current = sortedImages[selectedImageIndex]?.id;
+  }, [sortedImages, selectedImageIndex]);
 
   // Handle keyboard navigation in fullscreen
   useEffect(() => {
@@ -93,7 +137,7 @@ export default function ProductImageGallery({
         </button>
 
         {/* Thumbnails - Right side on desktop, bottom on mobile */}
-        <div className="flex md:flex-col lg:flex-wrap gap-0 overflow-x-auto md:overflow-y-auto md:w-[6.1rem] lg:w-max md:h-full scrollbar-hide">
+        <div data-lenis-prevent className="flex md:flex-col lg:flex-wrap gap-0 overflow-x-auto md:overflow-y-auto md:w-[6.1rem] lg:w-max md:h-full scrollbar-hide">
           {sortedImages.map((image, index) => (
             <motion.button
               key={image.id}

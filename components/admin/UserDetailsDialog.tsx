@@ -23,6 +23,7 @@ import useScrollLock from "@/hooks/useScrollLock";
 import { getCustomerDetail, type CustomerDetail } from "@/lib/admin/customers";
 import { formatDate, formatDateTime, formatMoney, formatNumber } from "@/lib/admin/format";
 import type { UserProfile } from "@/types/types";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * One customer's record.
@@ -67,7 +68,7 @@ export default function UserDetailsDialog({
       setDetail(fetched);
     } catch (err) {
       console.error("Error loading customer:", err);
-      toast.error("Could not load this customer.");
+      toast.error(describeError(err, "Could not load this customer."));
     } finally {
       setIsLoading(false);
     }

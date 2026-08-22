@@ -2,14 +2,17 @@ import { create } from "zustand";
 import { createClient } from '@/lib/supabase/client';
 import { BannerImage, Collection } from '@/types/types';
 import { AdminCollectionDataStore, FetchOptions } from '@/types/admin';
+import { describeError } from '@/lib/admin/errors';
 
 const supabase = () => createClient();
 
-const createErrorMessage = (error: any): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'An unknown error occurred';
-};
+/**
+ * Store-level errors, worded for a person.Previously this returned
+ * `error.message` verbatim, so a dropped connection reached the screen as
+ * "TypeError: Failed to fetch". See `lib/admin/errors.ts`.
+ */
+const createErrorMessage = (error: any): string =>
+  describeError(error, 'Something went wrong. Try again.');
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 

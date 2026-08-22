@@ -72,7 +72,7 @@ export default function AdminOrdersPage() {
     try {
       await fetchOrders({ limit: 100, orderByField: "createdAt", orderDirection: "desc" });
     } catch {
-      toast.error("Could not load orders.");
+      toast.error("Could not load orders. Check your connection and try again.");
     } finally {
       setRefreshing(false);
     }

@@ -23,6 +23,7 @@ import { availableCurrencies } from "@/constants";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types/admin";
 import type { ProductImage, ProductOptionDef, ProductVariant } from "@/types/types";
+import { describeError, isNetworkError } from "@/lib/admin/errors";
 
 /**
  * Create and edit a product.
@@ -191,7 +192,16 @@ export default function ProductForm({
       router.push("/admin/products");
     } catch (error: any) {
       console.error("Error saving product:", error);
-      toast.error(error?.message || "Could not save the product.");
+
+      // A dropped connection is the likeliest failure here and the only one
+      // worth retrying blind — everything the shopkeeper typed is still in
+      // state, so the retry costs nothing and saves refilling the form.
+      toast.error(describeError(error, "Could not save the product."), {
+        duration: isNetworkError(error) ? 12000 : 6000,
+        action: isNetworkError(error)
+          ? { label: "Try again", onClick: () => save(publish) }
+          : undefined,
+      });
     } finally {
       setIsSaving(false);
     }
@@ -380,6 +390,7 @@ export default function ProductForm({
               isPerishable={form.isPerishable}
               onPerishableChange={(value) => set("isPerishable", value)}
               categoryPath={form.categoryPath}
+              images={images}
             />
           </SectionCard>
 

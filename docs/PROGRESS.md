@@ -5,6 +5,365 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-22 — Demo data now in the catalogue
+
+Three seeds exist and all of them are placeholders to remove before launch:
+
+| Script | What it adds |
+|---|---|
+| `npm run seed-demo-reviews` | Four `@demo.ramazah.test` customers, their orders and reviews |
+| `npm run seed-variant-images` | A photograph per colour on the Chiffon Veil |
+| `npm run seed-deep-categories` | A six-level branch under Spices & Condiments with four spice products |
+
+Each takes `--clean`. The images are Unsplash URLs, not Cloudinary — swapping
+them is the same job as replacing `constants/demo.ts`.
+
+---
+
+## 2026-08-22 — Overlays could not be scrolled
+
+Every dialog, sheet and rail in the app stopped scrolling once its content
+overflowed — the admin and account navigation included.
+
+Lenis drives the page from its own wheel listener on `window` and calls
+`preventDefault`, so an element nested inside it never receives the event. It
+has an opt-out — `data-lenis-prevent`, which it checks by walking
+`event.composedPath()` and bailing if *any* ancestor carries it (verified in
+`node_modules/@studio-freight/lenis/dist/lenis.mjs`, not just the docs).
+
+It was being remembered case by case and mostly forgotten: exactly two elements
+in the whole app had it. Because the check walks ancestors, the fix belongs on
+the primitives — `DialogContent`, `AlertDialogContent`, `PopoverContent`,
+`SelectContent`, `DropdownMenuContent` and the shared table wrapper — which
+covers every consumer at once, including everything reached through a `Command`
+inside a popover.
+
+Tagged individually on top of that: the admin and account rails and their phone
+chip rows, the cart sheet, the search dialog, the mobile menu's two sliding
+panels, the desktop menu panel, the category filter drawer, the checkout summary,
+the invoice table, the analytics tab strip, the product gallery thumbnails and
+the mailer's recipient list.
+
+Twenty-one files carry it now, and an audit of every `overflow-*-auto` in the
+app comes back clean — the remainder all sit inside a tagged primitive.
+
+---
+
+## 2026-08-22 — Menus that go all the way down
+
+The mega-menu was the wrong shape. Columns can hold three levels and then stop,
+so a fourth had nowhere to go, and it turned a tidy list into a wall.
+
+**Desktop: one panel, expanded on click.** Four attempts, and the arithmetic of
+the first three is worth keeping.
+
+A mega-menu of columns held three levels and then stopped. Chaining a flyout off
+every row reached any depth but marched panels across the screen until it read
+as a stack of dialogs. Sliding a two-column panel fixed the look and broke the
+behaviour outright — the preview column drilled on `mouseenter`, which put the
+next column under the cursor, which drilled again, so one sweep of the mouse ran
+to the bottom of the tree.
+
+The common fault was hover. Hover is fine for *opening* one panel; it is a poor
+way to walk a hierarchy, because every level is another region the pointer can
+cross by accident and the cost of a wrong guess is the menu rearranging itself
+under the hand.
+
+Nothing inside the panel responds to hover now. A row with children carries a
+chevron that expands it in place and the panel grows downward like an outline;
+the name beside it still links straight to the category page, so *go there* and
+*look inside* are separate targets rather than the same gesture with different
+timing. One panel, 300px, scrolls past 70vh, nests to any depth, cannot run
+away.
+
+**Mobile drills.** `activeCategory` was a single level, so tapping a shelf that
+had shelves of its own was the end of the road — the children were rendered
+inline and a grandchild had nowhere to go. It is a stack now: a child with
+children is a button that pushes another panel rather than a link that leaves
+the sheet, and Back walks out one level at a time. The panel is keyed by depth so
+each drill replays the slide.
+
+**`MENU_DEPTH` raised from 3 to 6**, the ceiling the database enforces — so the
+menu now carries the whole tree. It was three because the columns could not
+express more; neither the cascade nor the drill grows as the tree does, so there
+is no longer a reason to stop short and leave shelves unreachable. Nothing is
+marked "more inside" any more, because nothing is out of reach.
+
+**Verified:** hovering down Food & Pantry › Spices & Condiments › Whole Spices ›
+Seeds › Cumin › Alexandria reaches all six, and the deepest item links to its
+full slug trail.
+
+---
+
+## 2026-08-22 — Menu: real names, three levels
+
+### The abbreviations were mine, and wrong
+
+`20260823000013` seeded `nav_label` with "Food" for Food & Pantry, "Veils" for
+Veils & Scarves, "Home" for Home & Decor — and its comment claimed to be
+reproducing the curated menu. It was not: that menu carried all three in full.
+The short forms were invented to make a bar fit, which is not a decision the
+software gets to make about a shop's own category names.
+
+`nav_label` stays, because a shopkeeper may want a shorter menu label, but it is
+null by default and **editable from the category form** along with
+`show_in_nav`. Fitting the bar is the bar's problem.
+
+Also reset: `show_in_nav = false` for everything below depth 2. That was a depth
+rule wearing a visibility column's clothes, and it contradicted the menu, which
+now carries three levels. Depth is `MENU_DEPTH`'s business; `show_in_nav` is for
+leaving a particular shelf out.
+
+### The bar measures itself
+
+An off-screen copy of the full list is measured against the room actually
+available, and whatever does not fit moves into "More".
+`MAX_DESKTOP_NAV_ITEMS` is a ceiling on top of that rather than a substitute for
+measuring — six long names and six short ones need very different space, and at
+1280px "Beauty & Personal Care" and "School & Stationery" together take the room
+three shorter shelves would. Re-measured on resize and after `document.fonts`
+settles, since web fonts land after first paint and change every label's width.
+
+### The dropdown carries three levels
+
+`NavItem.subCategories` was a single flat `NavGroup[]` — one level below the top,
+and no more. It is a real `children: NavItem[]` tree now.
+
+A category whose children have children renders as **columns**: each child a
+heading that is itself a link, its own children listed beneath. Where the
+children are leaves it stays a single narrow list, because a four-column grid
+holding four links is mostly empty panel. Anything below the menu's three levels
+is marked with a chevron — "more inside" — rather than presented as a leaf, and
+reached from the category page.
+
+The mobile sheet nests the same way, with no cap: it scrolls, so unlike the bar
+there is no reason to flatten it.
+
+### Product breadcrumbs
+
+Stopped at the immediate parent, so a product six levels down showed two crumbs
+and skipped four. Built from the full ancestor chain now.
+
+**Verified:** the menu tree renders Food & Pantry › Spices & Condiments › Whole
+Spices with a "more inside" marker below it; every href is a full slug trail;
+setting a custom label uses it and clearing it falls back to the real name;
+hiding a category removes it from the menu while leaving it browsable.
+
+---
+
+## 2026-08-22 — Menu built from the catalogue
+
+### Product breadcrumbs
+
+Stopped at the immediate parent, so a product filed six levels down showed two
+crumbs and skipped four. Built from the full ancestor chain now, each link from
+the slug trail rather than guessed.
+
+### The navbar reads the catalogue
+
+`constants/navigation.ts` was hand-written, so a category added in the admin was
+invisible until someone edited code — which is what "Tea" ran into.
+
+The reason it was hand-written was sound and is kept: a menu is not a mirror of
+a table. It needs shorter labels than the catalogue uses (six names the length
+of "Beauty & Personal Care" will not sit on one line), an order, and the ability
+to leave shelves out. Those three decisions moved onto the row —
+`nav_label`, `sort_order`, `show_in_nav` — in
+`20260823000013_category_navigation.sql`, seeded with exactly the labels and
+order the curated list had, so nothing changed visually on the switch.
+
+`getStoreNavigation()` resolves it once in the root layout;
+`NavigationProvider` hands it to the five components that show a menu. The
+constants stay as the fallback: a navbar that empties itself during a database
+blip looks broken in a way a stale one does not.
+
+**Desktop caps at six** top-level shelves. The bar cannot grow, and past six the
+labels collide with the lockup and the icons; the rest go under **More** rather
+than wrapping onto a second line or being dropped. The mobile sheet has no cap —
+it scrolls. Verified by adding two categories: More appeared with eight and
+vanished again at six.
+
+Two things this shook out. `MAX_DESKTOP_NAV_ITEMS` first lived beside
+`getStoreNavigation`, which imports `next/headers` — importing it from the
+client bar dragged a server-only API into the browser bundle and failed the
+build. And building the menu purely from categories quietly dropped **Contact**,
+which is a page rather than a shelf; `staticNavItems` carries those, outside the
+cap.
+
+### Deep branch, seeded
+
+`scripts/seed-deep-categories.js` (`npm run seed-deep-categories`, `--clean`)
+puts a real six-level branch under Spices & Condiments with a product at four
+different levels — Whole Spices, Seeds, Cumin, Alexandria — because the roll-up
+is only visible with products scattered down a branch rather than all at the
+bottom. Every level returns 200 and lists 4, 3, 2, 1 as you descend.
+
+---
+
+## 2026-08-22 — Categories nest to six levels
+
+Asked for six levels. The database already allowed any depth; the app hardcoded
+two in five places and silently dropped anything deeper — a grandchild existed
+in `categories` and was attached to nothing, so it appeared in no admin screen,
+no menu and no pre-rendered page.
+
+Depth-agnostic now, with a hard ceiling of six enforced in the database and
+guidance toward three in the admin.
+
+### The database was missing its guards
+
+`20260823000012_category_depth.sql`. Testing the request turned up a bug that
+had nothing to do with depth:
+
+**Renaming a category left every descendant with a stale path.**
+`categories_cascade_path` was declared `after update OF path`, and Postgres fires
+a column-scoped trigger only when that column appears in the statement's SET
+list — not merely when the value changes. The admin renames with
+`set name = …`, so the BEFORE trigger recomputed the row's own path and the
+cascade never ran. Broken at two levels already; worse at six.
+
+Also added: cycle prevention (`parent_id` could point at the row's own
+descendant, making the path recursion non-terminating), a `depth` column
+maintained by the same trigger, the six-level ceiling in
+`public.category_max_depth()`, a bar on `>` in names since it is the path
+separator, and a `text_pattern_ops` index for the prefix query behind every
+category page.
+
+### Five two-level assumptions in the app
+
+- `fetchCategories` attached only children of a root — grandchildren belonged to
+  nothing.
+- `getAllCategories` did the same, so `generateStaticParams` never saw them.
+- `generateStaticParams` walked exactly two levels regardless.
+- `getCategoryHierarchy` returned the immediate parent, not the ancestor chain,
+  so a breadcrumb could only ever be two deep.
+- The admin tree only offered "add subcategory" at the top level.
+
+### Verified end to end
+
+A six-level branch created through the real trigger — Food & Pantry › Spices &
+Condiments › Whole Spices › Seeds › Cumin › Alexandria — returns 200 at every
+level with a full, correct breadcrumb at the deepest. A seventh is refused by
+the database. Cycles, self-parenting, empty names and `>` in a name are all
+refused. Renaming a root now rewrites four levels beneath it. Test branch
+removed; the catalogue is back to its ten real categories.
+
+---
+
+## 2026-08-22 — Subcategories
+
+Reported as "if I add a subcategory I don't see it or manage it". It was four
+separate bugs sharing one cause, plus one older one they were hiding.
+
+### The database separates paths with `' > '`; three places split on `'/'`
+
+`maintain_category_path` builds `Food & Pantry > Coffee & Tea`. `CategoryTree`,
+`CategoryPathSelector` and `CategoryDialog` all split on `'/'`, which always
+returns a single segment — so every category came out at depth zero.
+
+- **The admin tree never rendered a child at all.** `fetchCategories` returns
+  only top-level rows with children nested under `subCategories`, and the tree
+  ignored that field, trying to rebuild the hierarchy from the path string. It
+  walks `subCategories` now, which comes straight from `parent_id`.
+- **The category picker could not file a product under a subcategory**, for the
+  same reason — it only ever saw the roots. It also badged everything "Level 1"
+  and indented nothing.
+- **The dialog's path preview was wrong twice over**: `${parent.path}/${slug}`
+  showed `Food & Pantry/tea` where the trigger writes `Food & Pantry > Tea`, and
+  the URL line showed the stored path when the storefront routes on slugs.
+- **Editing a subcategory silently offered to move it to the top level**, because
+  the parent was resolved by slicing the path on `'/'` and never found.
+- Counts on `/admin/categories` only ever counted roots — six, where the shop has
+  ten.
+
+`lib/categories.ts` now holds the separator and the tree helpers, so it is
+written down once.
+
+### Every top-level category page on the shop was empty
+
+Older, and the more serious one. `getCategoryByPath` decided "is this a slug
+path?" with `path.includes('/') || !path.includes('>')` — true of *every*
+top-level stored path, so `Food & Pantry` was looked up as a slug, no row has
+that slug, and the lookup failed. Six of ten category pages listed nothing.
+
+Replaced with a real test: slugs are lower-case, digits and hyphens, optionally
+slash-separated; stored paths carry capitals, spaces or `&`.
+
+### A parent category showed neither its children nor their products
+
+`getProducts` matched `category_path` exactly, so Food & Pantry listed the one
+item filed directly on it while four sat beneath. It is a prefix match now
+(`includeDescendants: false` restores the old behaviour where a caller wants
+just that shelf), and the category page lists its child shelves as links — so a
+subcategory added in the admin is reachable by browsing, which it previously was
+not from anywhere except a hand-edited navbar.
+
+Breadcrumbs on a category page were built by splitting the stored path on `'/'`
+too, producing a single crumb labelled `Food & Pantry > Coffee & Tea` linking to
+`/categories/Food & Pantry > Coffee & Tea`, which 404'd. They come from the real
+parent/child rows now.
+
+`pathToDisplayPath` / `displayPathToPath` are gone — no callers left, and a
+category name containing a hyphen ("Ready-to-eat") round-tripped as "Ready To
+Eat" and matched nothing.
+
+**Verified against the live database:** every URL resolves and lists what it
+should — Food & Pantry rolls up its four, each leaf shows its own, the newly
+added empty subcategory is reachable and honestly empty, and both the slug and
+stored-path forms work.
+
+### Still curated: the navbar
+
+`constants/navigation.ts` is a hand-written list, so a category added in the
+admin does not appear in the menu until someone adds a line. That remains a
+deliberate choice (see PLAN) — but it is now the *only* place a new subcategory
+is invisible, rather than one of five.
+
+---
+
+## 2026-08-22 — Variant photographs
+
+`variant_images` has existed since the first migration, with an RLS policy
+letting anyone read it, and **nothing had ever written or read a row**. A veil in
+three colours showed the same photograph whichever colour you picked.
+
+The reason it stayed unused is structural rather than an oversight: on the
+product page the gallery and the variant picker are *siblings* — the picker lives
+inside `ProductInfo`, the gallery sits beside it — so the selection had nowhere
+to travel. The gallery could not have known which variant to show even if the
+table had been populated. `SelectedVariantProvider` is that missing channel.
+
+**Admin.** Each variant row in the form now has a strip of the product's
+photographs to toggle on and off. Nothing chosen means all of them, which is the
+right default: a coffee in 250g and 1kg is the same object photographed once, and
+writing a row per image for those products would be noise.
+
+**The awkward part** was that `writeImages` deletes and re-inserts every
+photograph on save, so `product_images.id` changes each time — a variant's links
+cannot be stored against an id the next save throws away. Cloudinary's
+`public_id` is the stable identity, so `buildImageResolver` reads the rows back
+after the rewrite and translates form-level image ids into whatever id the
+photograph ended up with.
+
+**Storefront.** The gallery filters to the selected variant's photographs and
+falls back to the whole set when a variant has none — or when its links point at
+photographs since deleted, where an empty gallery would be worse than a wrong
+one. Switching variant keeps you on the same photograph if it is still on offer
+and moves you to the first if it is not, rather than leaving a stale index
+pointing at the wrong image.
+
+**Seed.** Nothing in the catalogue could demonstrate this — every product had
+exactly one photograph. `scripts/seed-variant-images.js` (`npm run
+seed-variant-images`, `--clean` to undo) gives the Chiffon Veil a shot per
+colour, keeping the original on both.
+
+**Verified against the live database:** an anonymous shopper resolves two
+distinct photograph sets for the two colours and is unaffected on a product with
+no links; and a simulated admin save proves the links survive the
+delete-and-reinsert intact.
+
+---
+
 ## 2026-08-22 — Product form rebuilt; admin charts made interactive
 
 ### The form could not produce a sellable product

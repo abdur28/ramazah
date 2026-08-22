@@ -8,6 +8,9 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
+      // Lenis preventDefaults wheel events on the window, so a sideways-
+      // scrolling table would never receive them. See components/ui/dialog.tsx.
+      data-lenis-prevent
       className="relative w-full overflow-x-auto"
     >
       <table

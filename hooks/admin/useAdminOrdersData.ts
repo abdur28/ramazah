@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/client';
 import { getOrderById as fetchOrder, updateOrderStatus as setOrderStatus,
          updatePaymentStatus as setPaymentStatus } from '@/lib/orders';
 import { Order, OrderStatus, PaymentStatus } from '@/types/types';
+import { describeError } from '@/lib/admin/errors';
 
 interface AdminOrderDataStore {
   orders: Order[];
@@ -43,11 +44,13 @@ interface FilterOption { field: string; operator: any; value: any; }
 
 const supabase = () => createClient();
 
-const createErrorMessage = (error: any): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'An unknown error occurred';
-};
+/**
+ * Store-level errors, worded for a person.Previously this returned
+ * `error.message` verbatim, so a dropped connection reached the screen as
+ * "TypeError: Failed to fetch". See `lib/admin/errors.ts`.
+ */
+const createErrorMessage = (error: any): string =>
+  describeError(error, 'Something went wrong. Try again.');
 
 /** Order field names -> orders column names. */
 const COLUMN: Record<string, string> = {

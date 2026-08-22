@@ -58,6 +58,7 @@ import { formatMoney, formatNumber } from "@/lib/admin/format";
 import { availableCurrencies } from "@/constants";
 import type { Product } from "@/types/types";
 import type { CurrencyCode } from "@/types/types";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * The catalogue.
@@ -108,7 +109,7 @@ export default function AdminProductsPage() {
       await fetchProducts({ limit: 50, orderByField: "createdAt", orderDirection: "desc" });
     } catch (err) {
       console.error("Error loading products:", err);
-      toast.error("Could not load the catalogue.");
+      toast.error(describeError(err, "Could not load the catalogue."));
     } finally {
       setRefreshing(false);
     }
@@ -158,7 +159,7 @@ export default function AdminProductsPage() {
       toast.success(`${productToDelete.name} archived.`);
       setProductToDelete(null);
     } catch (err: any) {
-      toast.error(err?.message || "Could not archive the product.");
+      toast.error(describeError(err, "Could not archive the product."));
     } finally {
       setProcessing(false);
     }

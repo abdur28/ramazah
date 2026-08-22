@@ -59,6 +59,17 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        /*
+          Lenis drives the page from its own wheel listener on the window and
+          calls preventDefault, so a scrollable element nested inside it never
+          receives the event — every overlay in this app was unscrollable once
+          its content overflowed. `data-lenis-prevent` is Lenis's opt-out: wheel
+          and touch inside this subtree are left to the browser.
+
+          Set on the primitive rather than on each consumer, because it was being
+          remembered case by case and mostly forgotten.
+        */
+        data-lenis-prevent
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
           className

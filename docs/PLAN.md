@@ -111,14 +111,21 @@ Verified end to end against the live database as a real admin: a two-axis perish
 product creates, prices, stocks, appears in `product_listing` for an anonymous shopper,
 is accepted by `create_order()`, and disappears again when switched to draft.
 
-**Still not exposed: `variant_images`.** The table exists and nothing anywhere reads or
-writes it. It is what would let a veil in three colours show the right photograph when a
-shopper picks one, rather than the same cover for every variant. Worth doing when the
-catalogue has a product that needs it.
+~~**Still not exposed: `variant_images`.**~~ Done 2026-08-22 — picker in the admin,
+gallery follows the selection on the product page. See PROGRESS.
 
 ### 5. Product pages and filters
-Size filters and size guides do not fit coffee and spices. Filtering should move to
-the generic options plus tags, using `product_listing` and `search_product_ids()`.
+**This is now the most visible storefront gap.** The category filter sidebar offers
+Size, Colour, Tags and Materials — and the catalogue's actual axes are Weight, Grind
+and Flavour, so on every food page it computes empty arrays and renders a panel with
+nothing in it. Filtering should read the generic option axes off the products, the way
+`VariantSelector` and the rebuilt product form already do, using `product_listing` and
+`search_product_ids()`.
+
+Two smaller things belong with it: the Browse chips on a category page carry no product
+counts, so an empty shelf looks the same as a full one until you click; and a category
+with no products falls through to "Try adjusting your filters" when no filter is set —
+it should say the shelf is empty and point up a level.
 
 `ProductCard`'s quick-add dialog is part of this: it only speaks Size and Colour, so a
 product on the generic option model routes to the product page instead of choosing in
@@ -171,9 +178,6 @@ Naira amounts).
   `payment_status`, `payment_method` and `payment_intent_id`.
 - **Expo mobile app** — the architecture already supports it: RLS plus RPCs mean the
   mobile client reuses the same API with no bespoke backend.
-- **Navigation from the database** — `constants/navigation.ts` is curated, so a
-  category added in admin needs a line there. Worth revisiting when the catalog stops
-  changing shape; the labels and order would still need somewhere to live.
 - **Rounding display** — Naira prices drop kobo, so a cart's displayed parts can sum
   ₦1 off its displayed total. Harmless until invoices exist; not once they do.
 - **Electronics and fashion categories** — both are advertised on WhatsApp and neither

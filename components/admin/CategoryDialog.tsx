@@ -16,17 +16,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, FolderTree } from "lucide-react";
 import { toast } from "sonner";
 import useAdmin from "@/hooks/admin/useAdmin";
+import { Switch } from "@/components/ui/switch";
 import useScrollLock from "@/hooks/useScrollLock";
+import { childPathOf, depthOf, MAX_CATEGORY_DEPTH, SUGGESTED_CATEGORY_DEPTH } from "@/lib/categories";
 import { Badge } from "@/components/ui/badge";
 import { Category } from "@/types/types";
 import ImageUpload from "@/components/admin/ImageUpload";
 import { ProductImage } from "@/types/admin";
+import { describeError } from "@/lib/admin/errors";
 
 interface CategoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   category?: Category | null;
   parentCategory?: Category | null;
+  /** Slugs from the root down to the parent, for the URL preview. */
+  parentSlugTrail?: string[];
   mode: 'create' | 'edit';
 }
 
@@ -35,6 +40,7 @@ export default function CategoryDialog({
   onOpenChange, 
   category,
   parentCategory,
+  parentSlugTrail = [],
   mode 
 }: CategoryDialogProps) {
   const { createCategory, updateCategory, loading } = useAdmin();
@@ -48,7 +54,9 @@ export default function CategoryDialog({
     name: '',
     slug: '',
     description: '',
-    subtitle: ''
+    subtitle: '',
+    navLabel: '',
+    showInNav: true,
   });
   const [bannerImages, setBannerImages] = useState<ProductImage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -64,7 +72,9 @@ export default function CategoryDialog({
         name: category.name,
         slug: category.slug,
         description: category.description || '',
-        subtitle: category.subtitle || ''
+        subtitle: category.subtitle || '',
+        navLabel: category.navLabel || '',
+        showInNav: category.showInNav ?? true,
       });
       
       // Load existing banner image if present
@@ -86,7 +96,9 @@ export default function CategoryDialog({
         name: '',
         slug: '',
         description: '',
-        subtitle: ''
+        subtitle: '',
+        navLabel: '',
+        showInNav: true,
       });
       setBannerImages([]);
     }
@@ -132,13 +144,25 @@ export default function CategoryDialog({
     return isValid;
   };
 
-  // Calculate the full path that will be created
-  const getFullPath = (): string => {
-    if (parentCategory) {
-      return `${parentCategory.path}/${formData.slug}`;
-    }
-    return formData.slug;
-  };
+  /**
+   * What the database will actually store.
+   *
+   * The preview used to read `${parent.path}/${slug}` — the wrong separator and
+   * the slug rather than the name — so adding "Tea" under Food & Pantry showed
+   * `Food & Pantry/tea` while the trigger wrote `Food & Pantry > Tea`. The URL
+   * line was wrong the same way: the storefront routes on slugs, not on the
+   * stored path, so the real address is /categories/food-pantry/tea.
+   */
+  const getFullPath = (): string => childPathOf(parentCategory, formData.name || formData.slug);
+
+  /**
+   * The real address. The storefront routes on the slug trail, so the URL is the
+   * whole chain of slugs — not the stored display path the preview used to show.
+   */
+  const getUrl = (): string =>
+    `/categories/${[...parentSlugTrail, formData.slug || '…'].join('/')}`;
+
+  const newDepth = parentCategory ? depthOf(parentCategory) + 1 : 1;
 
   // Convert path to display format
   const getDisplayPath = (path: string): string => {
@@ -167,6 +191,8 @@ export default function CategoryDialog({
         slug: formData.slug,
         description: formData.description,
         subtitle: formData.subtitle,
+        navLabel: formData.navLabel,
+        showInNav: formData.showInNav,
         ...(bannerImages.length > 0 ? {
           bannerImage: {
             id: bannerImages[0].id,
@@ -193,7 +219,7 @@ export default function CategoryDialog({
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error saving category:", error);
-      toast.error(error.message || "Failed to save category");
+      toast.error(describeError(error, "Could not save the category."));
     } finally {
       setIsSaving(false);
     }
@@ -221,11 +247,14 @@ export default function CategoryDialog({
         </DialogHeader>
 
         {parentCategory && (
-          <div className="flex items-center gap-2 p-3 bg-muted rounded-sm">
-            <FolderTree className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-2 rounded-sm bg-wash/60 p-3">
+            <FolderTree className="h-4 w-4 text-ink-muted" />
             <div className="flex-1">
-              <p className="text-sm font-medium">Parent Category</p>
-              <p className="text-xs text-muted-foreground">{getDisplayPath(parentCategory.path)}</p>
+              <p className="text-sm font-medium">
+                Goes inside {parentCategory.name}
+                <span className="ml-2 font-normal text-ink-muted">level {newDepth}</span>
+              </p>
+              <p className="text-xs text-ink-muted">{parentCategory.path}</p>
             </div>
             <Badge variant="secondary">Subcategory</Badge>
           </div>
@@ -291,16 +320,64 @@ export default function CategoryDialog({
             )}
             
             {/* Show full path preview */}
+        {/*
+          The menu is built from the catalogue now, so the two decisions it needs
+          that a category name cannot supply live here. `nav_label` exists because
+          "Beauty & Personal Care" is a good category name and a long menu item —
+          but it is left blank by default: the bar measures itself and overflows
+          into "More" rather than the software abbreviating a shop's own names.
+        */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="navLabel" className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+              Menu label
+            </Label>
+            <Input
+              id="navLabel"
+              value={formData.navLabel}
+              onChange={(e) => setFormData({ ...formData, navLabel: e.target.value })}
+              placeholder={formData.name || 'Uses the name above'}
+            />
+            <p className="font-body text-[11px] text-ink-muted">
+              Optional. Blank uses &ldquo;{formData.name || 'the name above'}&rdquo;.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="font-body text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+              Show in the menu
+            </Label>
+            <div className="flex items-start justify-between gap-3 rounded-sm border border-rule px-3 py-2.5">
+              <span className="font-body text-sm text-ink-muted">
+                {formData.showInNav ? 'Listed in the shop menu' : 'Browsable, but not advertised'}
+              </span>
+              <Switch
+                checked={formData.showInNav}
+                onCheckedChange={(checked) => setFormData({ ...formData, showInNav: checked })}
+                className="mt-0.5 shrink-0"
+              />
+            </div>
+          </div>
+        </div>
+
             {formData.slug && (
               <div className="mt-2 p-2 bg-muted rounded text-xs">
                 <span className="font-medium">Full Path: </span>
-                <code className="text-primary">{getFullPath()}</code>
-                <br />
-                <span className="font-medium">Display: </span>
-                <span className="text-muted-foreground">{getDisplayPath(getFullPath())}</span>
+                <code className="text-sage-deep">{getFullPath()}</code>
                 <br />
                 <span className="font-medium">URL: </span>
-                <code className="text-primary">/categories/{getFullPath()}</code>
+                <code className="text-sage-deep">{getUrl()}</code>
+              </div>
+            )}
+
+            {newDepth > SUGGESTED_CATEGORY_DEPTH && (
+              <div className="mt-3 rounded-sm bg-terra/[0.06] p-3 font-body text-sm text-terra-ink">
+                This would be <strong>level {newDepth}</strong>. Most shops stop around{" "}
+                {SUGGESTED_CATEGORY_DEPTH} — each level roughly halves the shoppers who reach
+                the bottom, and a shelf this deep is often better as a tag or a filter.{" "}
+                {newDepth >= MAX_CATEGORY_DEPTH
+                  ? `${MAX_CATEGORY_DEPTH} is the limit.`
+                  : "Nothing stops you."}
               </div>
             )}
           </div>

@@ -52,6 +52,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getCustomerStats, type CustomerStats } from "@/lib/admin/customers";
 import { formatDate, formatMoney, formatNumber } from "@/lib/admin/format";
 import type { UserProfile } from "@/types/types";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * Customers.
@@ -106,7 +107,7 @@ export default function AdminCustomersPage() {
       setStats(fetched);
     } catch (err) {
       console.error("Error loading customers:", err);
-      toast.error("Could not load customers.");
+      toast.error(describeError(err, "Could not load customers."));
     } finally {
       setRefreshing(false);
     }
@@ -153,7 +154,7 @@ export default function AdminCustomersPage() {
       setSuspendTarget(null);
       loadUsers();
     } catch (err: any) {
-      toast.error(err?.message || "Could not change the account status.");
+      toast.error(describeError(err, "Could not change the account status."));
     } finally {
       setProcessing(false);
     }
@@ -171,7 +172,7 @@ export default function AdminCustomersPage() {
       );
       setRoleTarget(null);
     } catch (err: any) {
-      toast.error(err?.message || "Could not change the role.");
+      toast.error(describeError(err, "Could not change the role."));
     } finally {
       setProcessing(false);
     }

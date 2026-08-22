@@ -102,11 +102,21 @@ export interface ProductVariant {
   weight?: number;
   expiryDate?: string;
 
+  /**
+   * Which of the product's photographs belong to this variant, by
+   * `ProductImage.id`. Empty means "all of them" — most products photograph the
+   * same object whatever weight you buy, and only things that genuinely look
+   * different per variant (a veil in three colours) need this set.
+   *
+   * Backed by the `variant_images` join table, which existed from the first
+   * migration and which nothing read or wrote until now.
+   */
+  imageIds?: string[];
+
   // Legacy apparel axes, derived from options named Size/Colour when present.
   // Empty for most of the catalog; the storefront redesign should drop them.
   size?: string;
   color?: Color;
-  imagePublicIds?: string[];
 }
 
 export interface Product {
@@ -176,7 +186,13 @@ export  interface Category {
   id: string;
   name: string;
   slug: string;
-  path: string; // Category path e.g. "Clothing > Tops"
+  path: string;   // e.g. "Food & Pantry > Coffee & Tea"
+  /** Levels from the root, counting from 1. Maintained by the database. */
+  depth?: number;
+  /** Shorter label for the storefront menu. Empty means use `name`. */
+  navLabel?: string;
+  /** Whether this appears in the storefront menu at all. */
+  showInNav?: boolean;
   description?: string;
   bannerImage?: BannerImage;
   subtitle?: string;
@@ -387,7 +403,12 @@ export interface WishlistItem {
 // ============ FILTER & QUERY TYPES ============
 
 export interface ProductFilters {
-  categoryPath?: string;        // e.g., "Clothing > Hoodies"
+  categoryPath?: string;        // e.g., "Food & Pantry > Coffee & Tea"
+  /**
+   * Whether a parent category also shows what is filed in its children.
+   * Defaults to true: standing on Food & Pantry, a shopper expects the coffee.
+   */
+  includeDescendants?: boolean;
   itemType?: string;
   collection?: string;           // Collection slug
   minPrice?: number;

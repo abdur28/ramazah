@@ -116,7 +116,8 @@ const AdminLayout = ({ authUser }: { authUser: AuthUser }) => {
     <>
       {/* Phone and tablet: one scrolling row of chips, mirroring the account area. */}
       <div className="fixed inset-x-0 top-16 z-40 border-b border-rule bg-card md:top-20 lg:hidden print:hidden">
-        <div className="flex items-center gap-1 overflow-x-auto px-3 py-2">
+        <div data-lenis-prevent
+          className="flex items-center gap-1 overflow-x-auto px-3 py-2">
           {ALL_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = isCurrent(item.href);
@@ -145,7 +146,8 @@ const AdminLayout = ({ authUser }: { authUser: AuthUser }) => {
 
       {/* Desktop rail */}
       <aside className="fixed bottom-0 left-0 top-20 hidden w-72 flex-col border-r border-rule bg-card lg:flex print:hidden">
-        <div className="flex-1 overflow-y-auto px-5 py-6">
+        <div data-lenis-prevent
+          className="flex-1 overflow-y-auto px-5 py-6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}

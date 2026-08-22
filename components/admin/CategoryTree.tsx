@@ -12,27 +12,32 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Category } from "@/types/types";
+import {
+  canNestUnder,
+  depthOf,
+  MAX_CATEGORY_DEPTH,
+  SUGGESTED_CATEGORY_DEPTH,
+} from "@/lib/categories";
 
 /**
  * The category hierarchy.
  *
- * Three things went beyond the restyle.
+ * **Subcategories were never rendered.** `fetchCategories` returns only the
+ * top-level rows, with children hanging off `subCategories` — and this component
+ * ignored that field, trying instead to rebuild the tree by splitting
+ * `category.path` on `'/'`. The database builds paths with `' > '` (see the
+ * `maintain_category_path` trigger), so every split returned a single segment,
+ * every category came out at depth zero, and a child added through the form
+ * appeared nowhere at all. It now walks `subCategories`, which is the
+ * authoritative structure and comes straight from `parent_id`.
  *
- * The drag handle is gone. It rendered a `GripVertical` with `cursor-grab` and
- * no drag implementation behind it, so the affordance promised a reorder that
- * could not happen.
- *
- * Search matches were highlighted with `bg-warning`, which on this palette is
- * terracotta `#AB5E3A` — a dark background carrying dark ink. The highlight was
- * less legible than the text it was meant to pick out. It is a sage wash now.
- *
- * And the row actions no longer appear only on hover, which put every edit and
+ * The drag handle went earlier: it rendered a `GripVertical` with `cursor-grab`
+ * and no drag implementation, promising a reorder that could not happen. Search
+ * matches were highlighted with `bg-warning` — terracotta, a dark background
+ * carrying dark ink, less legible than the text it meant to pick out. And the
+ * row actions no longer appear only on hover, which had put every edit and
  * delete out of reach on a touchscreen.
  */
-interface TreeNode extends Category {
-  children: TreeNode[];
-  level: number;
-}
 
 export default function CategoryTree({
   categories,
@@ -49,9 +54,14 @@ export default function CategoryTree({
   onAddSubcategory: (parentCategory: Category) => void;
   searchQuery?: string;
 }) {
-  const tree = useMemo(() => buildTree(categories, searchQuery), [categories, searchQuery]);
+  /**
+   * Filtering has to keep ancestors: hiding "Food & Pantry" because it does not
+   * match "tea" would orphan the child that does, and the result would read as
+   * an empty search.
+   */
+  const visible = useMemo(() => filterTree(categories, searchQuery), [categories, searchQuery]);
 
-  if (tree.length === 0) {
+  if (visible.length === 0) {
     return (
       <p className="py-10 text-center font-body text-sm text-ink-muted">
         {searchQuery ? "No categories match that search." : "No categories yet."}
@@ -61,10 +71,11 @@ export default function CategoryTree({
 
   return (
     <div className="space-y-0.5">
-      {tree.map((node) => (
+      {visible.map((category) => (
         <TreeItem
-          key={node.id}
-          node={node}
+          key={category.id}
+          category={category}
+          depth={0}
           productCounts={productCounts}
           onEdit={onEdit}
           onDelete={onDelete}
@@ -77,14 +88,16 @@ export default function CategoryTree({
 }
 
 function TreeItem({
-  node,
+  category,
+  depth,
   productCounts,
   onEdit,
   onDelete,
   onAddSubcategory,
   searchQuery,
 }: {
-  node: TreeNode;
+  category: Category;
+  depth: number;
   productCounts?: Map<string, number>;
   onEdit: (category: Category) => void;
   onDelete: (category: Category) => void;
@@ -92,8 +105,9 @@ function TreeItem({
   searchQuery?: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const hasChildren = node.children.length > 0;
-  const count = productCounts?.get(node.id) ?? 0;
+  const children = category.subCategories ?? [];
+  const hasChildren = children.length > 0;
+  const count = productCounts?.get(category.id) ?? 0;
 
   return (
     <div className="w-full">
@@ -103,8 +117,8 @@ function TreeItem({
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             aria-expanded={isExpanded}
-            aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-ink-muted transition-colors hover:bg-wash/60 hover:text-foreground"
+            aria-label={isExpanded ? `Collapse ${category.name}` : `Expand ${category.name}`}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-ink-muted transition-colors hover:bg-wash hover:text-foreground"
           >
             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
@@ -120,15 +134,25 @@ function TreeItem({
 
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 font-body text-sm text-foreground">
-            <span className="truncate">{highlight(node.name, searchQuery)}</span>
+            <span className="truncate">{highlight(category.name, searchQuery)}</span>
             {hasChildren && (
               <span className="shrink-0 font-body text-xs tabular-nums text-ink-muted">
-                {node.children.length} sub
+                {children.length} inside
               </span>
             )}
           </p>
-          <p className="truncate font-body text-xs text-ink-muted">
-            {highlight(node.path, searchQuery)}
+          <p className="flex items-center gap-2 truncate font-body text-xs text-ink-muted">
+            <span className="truncate">{highlight(category.path, searchQuery)}</span>
+            {/* Said once, where the depth actually is, rather than as a rule in
+                a heading nobody reads. */}
+            {depthOf(category) > SUGGESTED_CATEGORY_DEPTH && (
+              <span
+                className="shrink-0 text-terra-ink"
+                title={`Level ${depthOf(category)}. Most shops stop around ${SUGGESTED_CATEGORY_DEPTH} — deeper shelves get fewer visitors.`}
+              >
+                level {depthOf(category)}
+              </span>
+            )}
           </p>
         </div>
 
@@ -138,41 +162,53 @@ function TreeItem({
             "shrink-0 rounded-sm px-2 py-0.5 font-body text-[11px] tabular-nums",
             count === 0 ? "bg-terra/10 text-terra-ink" : "bg-wash/60 text-ink-muted"
           )}
-          title={count === 0 ? "Nothing in this category" : `${count} products`}
+          title={count === 0 ? "Nothing filed here" : `${count} products`}
         >
           {count === 0 ? "empty" : `${count} products`}
         </span>
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => onAddSubcategory(node)}
-            title={`Add a subcategory under ${node.name}`}
-          >
-            <Plus className="h-4 w-4" />
-            <span className="sr-only">Add subcategory under {node.name}</span>
-          </Button>
+          {/* Any depth up to the ceiling. The storefront route is a catch-all
+              and `generateStaticParams` walks the whole tree, so a category five
+              deep has a real page. */}
+          {canNestUnder(category) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onAddSubcategory(category)}
+              title={`Add a subcategory under ${category.name}`}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="sr-only">Add subcategory under {category.name}</span>
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                 <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Actions for {node.name}</span>
+                <span className="sr-only">Actions for {category.name}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(node)}>
+              <DropdownMenuItem onClick={() => onEdit(category)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddSubcategory(node)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add subcategory
-              </DropdownMenuItem>
+              {canNestUnder(category) ? (
+                <DropdownMenuItem onClick={() => onAddSubcategory(category)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add subcategory
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {MAX_CATEGORY_DEPTH} levels is the limit
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onDelete(node)} className="text-destructive">
+              <DropdownMenuItem onClick={() => onDelete(category)} className="text-destructive">
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </DropdownMenuItem>
@@ -183,10 +219,11 @@ function TreeItem({
 
       {isExpanded && hasChildren && (
         <div className="ml-4 border-l border-rule pl-2">
-          {node.children.map((child) => (
+          {children.map((child) => (
             <TreeItem
               key={child.id}
-              node={child}
+              category={child}
+              depth={depth + 1}
               productCounts={productCounts}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -218,48 +255,33 @@ function highlight(text: string, query?: string) {
   );
 }
 
-function buildTree(categories: Category[], searchQuery?: string): TreeNode[] {
-  let filtered = categories;
+/**
+ * Keeps a branch when the category itself matches, or when anything beneath it
+ * does — so searching "tea" shows Food & Pantry with Coffee & Tea inside it,
+ * rather than a child floating with no parent.
+ */
+function filterTree(categories: Category[], query?: string): Category[] {
+  const needle = query?.trim().toLowerCase();
+  if (!needle) return categories;
 
-  if (searchQuery) {
-    const query = searchQuery.toLowerCase();
-    filtered = categories.filter(
-      (category) =>
-        category.name.toLowerCase().includes(query) ||
-        category.slug.toLowerCase().includes(query) ||
-        category.path.toLowerCase().includes(query) ||
-        (category.description ?? "").toLowerCase().includes(query)
-    );
+  const matches = (category: Category) =>
+    category.name.toLowerCase().includes(needle) ||
+    category.slug.toLowerCase().includes(needle) ||
+    category.path.toLowerCase().includes(needle) ||
+    (category.description ?? "").toLowerCase().includes(needle);
+
+  const kept: Category[] = [];
+
+  for (const category of categories) {
+    const children = filterTree(category.subCategories ?? [], query);
+
+    if (matches(category)) {
+      // A matching parent keeps all of its children, so the branch reads whole.
+      kept.push({ ...category, subCategories: category.subCategories ?? [] });
+    } else if (children.length > 0) {
+      kept.push({ ...category, subCategories: children });
+    }
   }
 
-  const sorted = [...filtered].sort((a, b) => a.path.localeCompare(b.path));
-  const nodes = new Map<string, TreeNode>();
-
-  sorted.forEach((category) => {
-    nodes.set(category.path, {
-      ...category,
-      children: [],
-      level: category.path.split("/").length - 1,
-    });
-  });
-
-  const roots: TreeNode[] = [];
-
-  sorted.forEach((category) => {
-    const node = nodes.get(category.path)!;
-    const segments = category.path.split("/");
-
-    if (segments.length === 1) {
-      roots.push(node);
-      return;
-    }
-
-    // A parent filtered out by the search leaves its child at the root, which
-    // is right: a match should stay visible even when its ancestor does not.
-    const parent = nodes.get(segments.slice(0, -1).join("/"));
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  });
-
-  return roots;
+  return kept;
 }

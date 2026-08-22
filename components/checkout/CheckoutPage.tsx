@@ -486,7 +486,7 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
                 </h2>
 
                 {/* Cart Items */}
-                <div className="space-y-4 mb-6 max-h-[400px] pt-2 overflow-y-auto">
+                <div data-lenis-prevent className="space-y-4 mb-6 max-h-[400px] pt-2 overflow-y-auto">
                   {items.map((item) => {
                     const itemPrice = getPrice(item.prices);
 

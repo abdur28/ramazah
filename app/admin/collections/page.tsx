@@ -42,6 +42,7 @@ import useAdmin from "@/hooks/admin/useAdmin";
 import { getCollectionProductCounts } from "@/lib/admin/catalogue";
 import { formatNumber } from "@/lib/admin/format";
 import type { Collection } from "@/types/admin";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * Collections — the curated groupings that cut across categories.
@@ -82,7 +83,7 @@ export default function AdminCollectionsPage() {
       ]);
       setCounts(fetchedCounts);
     } catch {
-      toast.error("Could not load collections.");
+      toast.error("Could not load collections. Check your connection and try again.");
     } finally {
       setRefreshing(false);
     }
@@ -112,7 +113,7 @@ export default function AdminCollectionsPage() {
       setCollectionToDelete(null);
       loadCollections();
     } catch (err: any) {
-      toast.error(err?.message || "Could not delete the collection.");
+      toast.error(describeError(err, "Could not delete the collection."));
     } finally {
       setProcessing(false);
     }

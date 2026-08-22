@@ -3,14 +3,17 @@ import { createClient } from '@/lib/supabase/client';
 import { mapCategory } from '@/lib/products';
 import { Category } from '@/types/types';
 import { AdminCategoryDataStore, FetchOptions } from '@/types/admin';
+import { describeError } from '@/lib/admin/errors';
 
 const supabase = () => createClient();
 
-const createErrorMessage = (error: any): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'An unknown error occurred';
-};
+/**
+ * Store-level errors, worded for a person.Previously this returned
+ * `error.message` verbatim, so a dropped connection reached the screen as
+ * "TypeError: Failed to fetch". See `lib/admin/errors.ts`.
+ */
+const createErrorMessage = (error: any): string =>
+  describeError(error, 'Something went wrong. Try again.');
 
 const generateSlug = (name: string): string =>
   name.toLowerCase().trim()
@@ -25,6 +28,9 @@ const toColumns = (data: Partial<Category>, parentId?: string) => {
   if (data.slug !== undefined)        patch.slug = data.slug;
   if (data.description !== undefined) patch.description = data.description;
   if (data.subtitle !== undefined)    patch.subtitle = data.subtitle;
+  // Null rather than '' so the database's "use the real name" default applies.
+  if (data.navLabel !== undefined)    patch.nav_label = data.navLabel?.trim() || null;
+  if (data.showInNav !== undefined)   patch.show_in_nav = data.showInNav;
   if (parentId !== undefined)         patch.parent_id = parentId || null;
   if (data.bannerImage !== undefined) {
     patch.banner_public_id = data.bannerImage?.publicId ?? null;
@@ -54,28 +60,37 @@ const useAdminCategoriesData = create<AdminCategoryDataStore>((set, get) => ({
     pagination: { ...state.pagination, categories: { lastDoc: null, hasMore: false } }
   })),
 
-  /** Returns top-level categories with their children nested. */
+  /**
+   * The whole tree, nested to whatever depth it actually has.
+   *
+   * This used to attach only rows whose `parent_id` matched a root, so a
+   * grandchild existed in the database and was attached to nothing — it
+   * appeared nowhere in the admin and could not be edited or deleted. Anything
+   * iterating the returned array saw part of the catalogue.
+   */
   fetchCategories: async (_options: FetchOptions = {}) => {
     set(state => ({ loading: { ...state.loading, categories: true },
                     error: { ...state.error, categories: null } }));
     try {
       const { data, error } = await supabase()
-        .from('categories').select('*').order('sort_order');
+        .from('categories').select('*').order('depth').order('sort_order');
       if (error) throw new Error(error.message);
 
       const rows = data ?? [];
-      const mapped = rows.map(mapCategory);
-      const byId = new Map(rows.map((r: any, i: number) => [r.id, mapped[i]]));
+      const byId = new Map<string, Category>(
+        rows.map((row: any) => [row.id, { ...mapCategory(row), subCategories: [] }])
+      );
 
-      const categories = rows
-        .filter((r: any) => !r.parent_id)
-        .map((r: any) => ({
-          ...byId.get(r.id)!,
-          subCategories: rows.filter((c: any) => c.parent_id === r.id).map((c: any) => byId.get(c.id)!),
-        }));
+      const roots: Category[] = [];
+      for (const row of rows as any[]) {
+        const node = byId.get(row.id)!;
+        const parent = row.parent_id ? byId.get(row.parent_id) : undefined;
+        if (parent) parent.subCategories!.push(node);
+        else roots.push(node);
+      }
 
       set(state => ({
-        categories,
+        categories: roots,
         loading: { ...state.loading, categories: false },
         pagination: { ...state.pagination, categories: { lastDoc: null, hasMore: false } }
       }));

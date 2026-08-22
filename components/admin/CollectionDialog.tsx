@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Collection, BannerImage } from "@/types/admin";
 import useAdmin from "@/hooks/admin/useAdmin";
 import useScrollLock from "@/hooks/useScrollLock";
+import { describeError } from "@/lib/admin/errors";
 
 interface CollectionDialogProps {
   open: boolean;
@@ -77,7 +78,7 @@ export default function CollectionDialog({
       setBannerImage(image);
       toast.success("Banner uploaded");
     } catch (error) {
-      toast.error("Failed to upload banner");
+      toast.error(describeError(error, "Could not upload the banner."));
     } finally {
       setUploading(false);
     }
@@ -107,7 +108,7 @@ export default function CollectionDialog({
       
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || "Failed to save collection");
+      toast.error(describeError(error, "Could not save the collection."));
     } finally {
       setIsSaving(false);
     }

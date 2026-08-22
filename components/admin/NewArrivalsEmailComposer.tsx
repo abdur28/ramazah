@@ -100,7 +100,7 @@ export default function NewArrivalsEmailComposer({
           <p className="text-ink-muted">No products available</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto p-1">
+        <div data-lenis-prevent className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto p-1">
           {products.map((product) => (
             <label
               key={product.id}

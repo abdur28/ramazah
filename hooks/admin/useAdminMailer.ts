@@ -4,15 +4,18 @@ import { createClient } from '@/lib/supabase/client';
 const supabase = () => createClient();
 import { AdminMailerDataStore, EmailRecipient, EmailCampaign, EmailStats } from '@/types/admin';
 import { getProductsByIds } from "@/lib/products";
+import { describeError } from '@/lib/admin/errors';
 
 /**
  * Utility function to create error messages
  */
-const createErrorMessage = (error: any): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'An unknown error occurred';
-};
+/**
+ * Store-level errors, worded for a person.Previously this returned
+ * `error.message` verbatim, so a dropped connection reached the screen as
+ * "TypeError: Failed to fetch". See `lib/admin/errors.ts`.
+ */
+const createErrorMessage = (error: any): string =>
+  describeError(error, 'Something went wrong. Try again.');
 
 /**
  * Admin hook for email/mailer management

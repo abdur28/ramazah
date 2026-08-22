@@ -23,8 +23,10 @@ import CategoryDialog from "@/components/admin/CategoryDialog";
 import CategoryTree from "@/components/admin/CategoryTree";
 import useAdmin from "@/hooks/admin/useAdmin";
 import { getCategoryProductCounts } from "@/lib/admin/catalogue";
+import { flattenCategories, slugTrailFor, MAX_CATEGORY_DEPTH } from "@/lib/categories";
 import { formatNumber } from "@/lib/admin/format";
 import type { Category } from "@/types/types";
+import { describeError } from "@/lib/admin/errors";
 
 /**
  * Categories.
@@ -46,6 +48,7 @@ export default function AdminCategoriesPage() {
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [parentCategory, setParentCategory] = useState<Category | null>(null);
+  const [parentSlugTrail, setParentSlugTrail] = useState<string[]>([]);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   useEffect(() => {
@@ -63,29 +66,47 @@ export default function AdminCategoriesPage() {
       setCounts(fetchedCounts);
     } catch (err) {
       console.error("Error loading categories:", err);
-      toast.error("Could not load categories.");
+      toast.error(describeError(err, "Could not load categories."));
     } finally {
       setRefreshing(false);
     }
   };
 
+  /**
+   * Counted across every level. `categories` holds only the top-level rows —
+   * children hang off `subCategories` — so `categories.length` reported six when
+   * the shop has ten, and the "empty" count never looked at a subcategory at
+   * all. The old top-level test was `!path.includes("/")`, which was true of
+   * every row: the database separates with " > ".
+   */
   const totals = useMemo(() => {
-    const topLevel = categories.filter((category) => !category.path.includes("/")).length;
-    const empty = categories.filter((category) => (counts.get(category.id) ?? 0) === 0).length;
-    return { all: categories.length, topLevel, empty };
+    const all = flattenCategories(categories);
+    const empty = all.filter(({ category }) => (counts.get(category.id) ?? 0) === 0).length;
+    return { all: all.length, topLevel: categories.length, empty };
   }, [categories, counts]);
 
   const openCreate = (parent: Category | null = null) => {
     setSelectedCategory(null);
     setParentCategory(parent);
+    setParentSlugTrail(parent ? slugTrailFor(categories, parent.id) : []);
     setDialogMode("create");
     setDialogOpen(true);
   };
 
   const openEdit = (category: Category) => {
     setSelectedCategory(category);
-    const parentPath = category.path.split("/").slice(0, -1).join("/");
-    setParentCategory(parentPath ? categories.find((c) => c.path === parentPath) ?? null : null);
+    // Found by walking the tree rather than by slicing the path: the old version
+    // split on "/" and so never located a parent, meaning editing a subcategory
+    // silently offered to move it to the top level.
+    // Found by walking the whole tree, so a category at any depth resolves its
+    // real parent rather than only a child of a root.
+    const parent =
+      flattenCategories(categories).find(({ category: candidate }) =>
+        (candidate.subCategories ?? []).some((child) => child.id === category.id)
+      )?.category ?? null;
+
+    setParentCategory(parent);
+    setParentSlugTrail(parent ? slugTrailFor(categories, parent.id) : []);
     setDialogMode("edit");
     setDialogOpen(true);
   };
@@ -99,7 +120,7 @@ export default function AdminCategoriesPage() {
       setCategoryToDelete(null);
       loadCategories();
     } catch (err: any) {
-      toast.error(err?.message || "Could not delete the category.");
+      toast.error(describeError(err, "Could not delete the category."));
     } finally {
       setProcessing(false);
     }
@@ -112,7 +133,7 @@ export default function AdminCategoriesPage() {
       <PageHeader
         eyebrow="Catalogue"
         title="Categories"
-        description="How the shop is organised. Each category becomes a path a shopper can browse."
+        description={`How the shop is organised. Nest up to ${MAX_CATEGORY_DEPTH} levels — three is usually plenty.`}
         actions={
           <>
             <Button variant="outline" onClick={loadCategories} disabled={refreshing || loading.categories}>
@@ -131,7 +152,11 @@ export default function AdminCategoriesPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Categories" value={formatNumber(totals.all)} icon={FolderTree} />
-        <StatCard label="Top level" value={formatNumber(totals.topLevel)} hint="shown in the menu" />
+        <StatCard
+          label="Top level"
+          value={formatNumber(totals.topLevel)}
+          hint={`${formatNumber(totals.all - totals.topLevel)} nested beneath them`}
+        />
         <StatCard
           label="Empty"
           value={formatNumber(totals.empty)}
@@ -216,6 +241,7 @@ export default function AdminCategoriesPage() {
         }}
         category={selectedCategory}
         parentCategory={parentCategory}
+        parentSlugTrail={parentSlugTrail}
         mode={dialogMode}
       />
 

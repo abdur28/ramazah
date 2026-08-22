@@ -8,6 +8,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import CartInitializerContext from "@/contexts/CartInitializerContext";
 import { Toaster } from 'sonner'
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
+import { NavigationProvider } from "@/contexts/NavigationContext";
+import { getStoreNavigation } from "@/lib/navigation";
 
 
 // Display face — never used below 28px; see docs/design-system.md
@@ -34,11 +36,14 @@ export const metadata: Metadata = {
     "Coffee, spices, veils and homeware — imported from Egypt, delivered across Nigeria.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolved once here rather than in each of the five components that show a
+  // menu. Falls back to the curated constants if the query fails.
+  const navigation = await getStoreNavigation();
        
   //     </body>
   //   </html>
@@ -49,6 +54,7 @@ export default function RootLayout({
       <body
         className={`${cormorant.variable} ${jost.variable} antialiased`}
       >
+        <NavigationProvider navigationAsString={JSON.stringify(navigation)}>
         <CurrencyProvider>
           <AuthProvider>
             <CartInitializerContext />
@@ -62,6 +68,7 @@ export default function RootLayout({
             </SmoothScrollProvider>
           </AuthProvider>
         </CurrencyProvider>
+        </NavigationProvider>
       </body>
     </html>
   );
