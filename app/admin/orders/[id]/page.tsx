@@ -298,7 +298,7 @@ export default function AdminOrderPage() {
 
               <ContactLink
                 icon={Mail}
-                href={`mailto:${order.customerEmail}?subject=${encodeURIComponent(`Your Ramazah order ${order.orderNumber}`)}`}
+                href={`mailto:${order.customerEmail}?subject=${encodeURIComponent(`Your Ramazah Store order ${order.orderNumber}`)}`}
               >
                 {order.customerEmail}
               </ContactLink>
@@ -311,7 +311,7 @@ export default function AdminOrderPage() {
                   {whatsapp && (
                     <ContactLink
                       icon={MessageCircle}
-                      href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(`Hello, about your Ramazah order ${order.orderNumber}:`)}`}
+                      href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(`Hello, about your Ramazah Store order ${order.orderNumber}:`)}`}
                       external
                     >
                       Message on WhatsApp

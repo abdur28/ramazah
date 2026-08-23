@@ -1,0 +1,21 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:#6B7060;">A new edit</div>
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:36px;font-weight:400;color:#2A2E24;line-height:1.1;padding-top:8px;">{{collectionName}}</div>
+  {{#if description}}
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.75;padding-top:14px;">{{description}}</div>
+  {{/if}}
+</td></tr>
+
+{{#if bannerUrl}}
+<tr><td style="padding:22px 34px 0;">
+  <img src="{{bannerUrl}}" width="532" alt="{{bannerAlt}}" style="display:block;width:100%;max-width:532px;height:auto;border-radius:4px;" />
+</td></tr>
+{{/if}}
+
+<tr><td style="padding:24px 34px 0;">
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#6B7060;line-height:1.7;">
+    {{productCount}} in it, chosen together.
+  </div>
+</td></tr>
+
+<tr><td style="padding:22px 34px 0;">{{> button url=collectionUrl label="See the collection"}}</td></tr>

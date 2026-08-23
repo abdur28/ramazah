@@ -160,7 +160,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Ramazah"
+        eyebrow="Ramazah Store"
         title="Dashboard"
         description="Everything moving through the shop, and everything waiting on you."
         actions={

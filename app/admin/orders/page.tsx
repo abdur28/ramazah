@@ -9,6 +9,7 @@ import {
   RefreshCcw,
   Search,
   ChevronRight,
+  Plus,
   ShoppingBag,
   Store,
   Truck,
@@ -38,6 +39,10 @@ import type { OrderStatus } from "@/types/types";
  * Money is formatted, not concatenated: totals read `NGN 410005.00` before,
  * because the page printed `currency.toUpperCase()` next to `toFixed(2)`.
  *
+ * Orders raised by staff for someone with no account sit here alongside the
+ * website's own — same list, same numbering, same invoice. They carry a channel
+ * chip so it is obvious which is which.
+ *
  * The whole row opens the order — at `/admin/orders/[id]`, a page rather than a
  * dialog. A dialog could not carry the audit history, the staff notes or the
  * invoice, and could not be linked to whoever is packing the parcel.
@@ -51,6 +56,13 @@ const STATUS_TABS: { label: string; value: OrderStatus | "all" }[] = [
   { label: "Cancelled", value: "cancelled" },
   { label: "Refunded", value: "refunded" },
 ];
+
+/** How an order reached the shop, for the chip on staff-raised rows. */
+const CHANNEL: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  phone: "Phone",
+  in_store: "In shop",
+};
 
 export default function AdminOrdersPage() {
   const { fetchOrders, orders, loading, error, resetOrders } = useAdmin();
@@ -121,10 +133,20 @@ export default function AdminOrdersPage() {
         title="Orders"
         description="Every order placed, and where each one has got to."
         actions={
-          <Button variant="outline" onClick={loadOrders} disabled={refreshing}>
-            <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <>
+            <Button variant="outline" onClick={loadOrders} disabled={refreshing}>
+              <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            {/* Most of this shop's selling happens on WhatsApp. Until this
+                existed, none of it was in the database. */}
+            <Button asChild>
+              <Link href="/admin/orders/new">
+                <Plus className="mr-2 h-4 w-4" />
+                New order
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -285,6 +307,14 @@ export default function AdminOrdersPage() {
                       <span className="truncate font-body text-sm text-foreground">
                         {order.customerName}
                       </span>
+                      {order.channel && order.channel !== "web" && (
+                        <span
+                          className="inline-flex shrink-0 items-center rounded-sm bg-sage/25 px-1.5 py-0.5 font-body text-[10px] uppercase tracking-[0.1em] text-sage-deep"
+                          title="Raised by staff, not placed on the website"
+                        >
+                          {CHANNEL[order.channel] ?? order.channel}
+                        </span>
+                      )}
                       {order.deliveryType === "inStore" && (
                         <span
                           className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-wash/60 px-1.5 py-0.5 font-body text-[10px] uppercase tracking-[0.1em] text-ink-muted"

@@ -233,7 +233,7 @@ export interface ProductRequest {
   referenceUrl: string | null;
   quantity: number;
   budget: number | null;
-  status: 'asked' | 'quoted' | 'buying' | 'fulfilled' | 'declined';
+  status: 'asked' | 'quoted' | 'accepted' | 'buying' | 'fulfilled' | 'declined' | 'withdrawn';
   quotedAmount: number | null;
   staffNote: string | null;
   createdAt: string;
@@ -245,14 +245,21 @@ const mapRequest = (row: any): ProductRequest => ({
   details: row.details ?? '',
   referenceUrl: row.reference_url,
   quantity: row.quantity,
-  budget: row.budget ? Number(row.budget) : null,
+  // `? :` on a numeric turns a stored 0 into "no budget". Zero is an answer.
+  budget: row.budget != null ? Number(row.budget) : null,
   status: row.status,
-  quotedAmount: row.quoted_amount ? Number(row.quoted_amount) : null,
+  quotedAmount: row.quoted_amount != null ? Number(row.quoted_amount) : null,
   staffNote: row.staff_note,
   createdAt: row.created_at,
 });
 
-/** Sourcing requests belonging to this customer. */
+/**
+ * Sourcing requests belonging to this customer.
+ *
+ * Callers must show `error`. The dashboard used to drop it and render the empty
+ * array, so a dropped connection told a customer they had never asked for
+ * anything.
+ */
 export async function getMyRequests(userId: string) {
   const { data, error } = await createClient()
     .from('product_requests')
@@ -264,6 +271,33 @@ export async function getMyRequests(userId: string) {
   return { requests: (data ?? []).map(mapRequest), error: null };
 }
 
+/**
+ * Only a real web address gets stored.
+ *
+ * The admin renders this as a "Their reference" link, which reads as something
+ * the shop can trust. It accepted any string — `javascript:` included. React
+ * blocks that one at render and browsers block top-level `data:` navigation, so
+ * it was not script execution, but an arbitrary scheme or host behind a
+ * trustworthy-looking link is not something to hand staff.
+ */
+function safeUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    // A bare host is what people actually paste.
+    try {
+      const url = new URL(`https://${trimmed}`);
+      return url.hostname.includes('.') ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 export async function submitRequest(
   userId: string,
   input: { item: string; details: string; referenceUrl: string; quantity: number; budget: string }
@@ -272,11 +306,15 @@ export async function submitRequest(
     return { error: 'Tell us what you are looking for.' };
   }
 
+  if (input.referenceUrl.trim() && !safeUrl(input.referenceUrl)) {
+    return { error: 'That link does not look like a web address. Leave it blank if you have none.' };
+  }
+
   const { error } = await createClient().from('product_requests').insert({
     user_id: userId,
     item: input.item.trim(),
     details: input.details.trim(),
-    reference_url: input.referenceUrl.trim() || null,
+    reference_url: safeUrl(input.referenceUrl),
     quantity: Math.max(1, Number(input.quantity) || 1),
     budget: input.budget ? Number(input.budget) : null,
   });
@@ -287,6 +325,21 @@ export async function submitRequest(
   }
 
   return { error: null };
+}
+
+/**
+ * The customer answers their own quote.
+ *
+ * `status` is not grantable to customers, so this goes through a SECURITY
+ * DEFINER function that checks ownership. Accepting is only possible from
+ * `quoted`; withdrawing stops once the shop has started buying.
+ */
+export async function answerRequest(requestId: string, accept: boolean) {
+  const { error } = await createClient().rpc('answer_request', {
+    p_request: requestId,
+    p_accept: accept,
+  });
+  return { error: error?.message ?? null };
 }
 
 /** Admin queue. Admin-only by RLS, not by this function. */

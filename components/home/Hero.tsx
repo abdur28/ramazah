@@ -6,6 +6,7 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import { ArrowDown, ArrowRight } from "lucide-react";
 import { heroImage } from "@/constants/demo";
+import type { HomeContent } from "@/lib/content";
 
 /**
  * The landing image, and the page's thesis: a market in Egypt, which is where
@@ -28,7 +29,16 @@ import { heroImage } from "@/constants/demo";
  */
 const stepIndent = ["", "pl-[1.8em] lg:pl-[3em]", "pl-[3.6em] lg:pl-[6em]"];
 
-export default function Hero() {
+/**
+ * The words and the photograph come from `site_content`, edited at
+ * /admin/pages/home. The staircase indent, the parallax and the timing stay in
+ * code — those are the design, not copy, and an editor that could change them
+ * would be an editor that could produce a page that is not this shop.
+ *
+ * An unset image falls back to the demo placeholder, so a half-filled row never
+ * renders an empty frame.
+ */
+export default function Hero({ content }: { content: HomeContent["hero"] }) {
   const sectionRef = useRef<HTMLElement>(null);
 
   const { scrollYProgress } = useScroll({
@@ -50,8 +60,8 @@ export default function Hero() {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 -top-[9%] -bottom-[9%]">
         <Image
-          src={heroImage.src}
-          alt={heroImage.alt}
+          src={content.imageUrl || heroImage.src}
+          alt={content.imageAlt || heroImage.alt}
           fill
           priority
           sizes="100vw"
@@ -71,7 +81,7 @@ export default function Hero() {
             fixed pixel value. Each line arrives after the one above it, so the
             staircase builds instead of appearing. */}
         <h1 className="font-heading text-[44px] font-light leading-[1.06] text-background sm:text-6xl md:text-7xl">
-          {["The pantry,", "The shelf,", "The table"].map((line, index) => (
+          {content.lines.map((line, index) => (
             <motion.span
               key={line}
               initial={{ opacity: 0, y: 18 }}
@@ -90,8 +100,7 @@ export default function Hero() {
           transition={{ duration: 0.8, delay: 0.62 }}
           className="mt-6 max-w-[46ch] font-body text-base text-background/80 md:text-lg"
         >
-          Veils and scarves, coffee and spices, beauty, kitchenware and home goods —
-          sourced in Egypt and sent anywhere in Nigeria.
+          {content.body}
         </motion.p>
 
         {/* Not a matched pair of pills. One block that reads as the action, one

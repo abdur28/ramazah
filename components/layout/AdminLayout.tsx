@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import {
   BarChart3,
   Coins,
+  FileText,
   FolderTree,
   Images,
   LayoutDashboard,
@@ -31,8 +32,9 @@ import useAdminQueues, { type QueueCounts } from "@/hooks/admin/useAdminQueues";
  * Three things changed from the version inherited with the storefront.
  *
  * It no longer lies about where it can go: `Pages` and `Settings` pointed at
- * `/admin/pages` and `/admin/settings`, neither of which exists, so two of the
- * thirteen links in the sidebar were 404s.
+ * `/admin/pages` and `/admin/settings`, neither of which existed, so two of the
+ * thirteen links in the sidebar were 404s. `Pages` is back now that the route it
+ * promised is real; `Settings` is still absent until it is.
  *
  * Thirteen flat links became five named groups. A flat list gives no clue that
  * Categories and Collections are two halves of the same job, and puts Analytics
@@ -83,6 +85,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "Reach",
     items: [
       { name: "Mailer", href: "/admin/mailer", icon: Mail },
+      // Back after being removed for pointing at a 404. The route exists now.
+      { name: "Pages", href: "/admin/pages", icon: FileText },
       { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
     ],
   },

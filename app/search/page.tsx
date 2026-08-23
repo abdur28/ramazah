@@ -21,8 +21,8 @@ import {
  * someone.
  */
 export const metadata = {
-  title: "Search · Ramazah",
-  description: "Search everything Ramazah brings back from Egypt.",
+  title: "Search · Ramazah Store",
+  description: "Search everything Ramazah Store brings back from Egypt.",
 }
 
 const RESERVED = new Set(["q", "tags", "min", "max", "stock", "sort", "page"])

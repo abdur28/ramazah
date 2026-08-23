@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
+import { COMPANY } from "@/constants";
 
 /**
  * The slip that goes in the box.
@@ -64,7 +65,7 @@ export default function PackingSlip({ orderAsString }: { orderAsString: string }
           <div>
             {/* Typographic, not the masked-PNG lockup: those are white artwork
                 filled by CSS, and a mask that fails to print leaves a blank. */}
-            <p className="font-heading text-[40px] font-light leading-none">Ramazah</p>
+            <p className="font-heading text-[40px] font-light leading-none">Ramazah Store</p>
             <p className="mt-2 font-body text-[11px] uppercase tracking-[0.28em]">
               Packing slip
             </p>
@@ -211,7 +212,7 @@ export default function PackingSlip({ orderAsString }: { orderAsString: string }
         )}
 
         <footer className="mt-auto pt-10 font-body text-[11px] leading-relaxed text-neutral-600">
-          <p className="font-semibold text-black">Ramazah Group · Alexandria, Egypt</p>
+          <p className="font-semibold text-black">{COMPANY.legalName} · {COMPANY.address}</p>
           <p className="mt-1">
             {/* The slip has no prices on it, so it says where to find them
                 rather than leaving someone hunting. */}

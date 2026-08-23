@@ -1,0 +1,9 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:32px;font-weight:400;color:#2A2E24;line-height:1.12;">{{#if isSecond}}Still holding your order{{else}}A reminder about {{orderNumber}}{{/if}}</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:12px;">
+    {{#if isSecond}}We have kept {{orderNumber}} aside for you, but we have not seen a transfer yet. If you have changed your mind that is completely fine &mdash; just tell us and we will release it.{{else}}We have not seen your transfer for {{orderNumber}} yet. Nothing is wrong; bank transfers take a day or two and we would rather remind you than let the order go quiet.{{/if}}
+  </div>
+</td></tr>
+
+<tr><td style="padding:26px 34px 0;">{{> paymentBlock}}</td></tr>
+<tr><td style="padding:26px 34px 0;">{{> button url=invoiceUrl label="View your invoice"}}</td></tr>

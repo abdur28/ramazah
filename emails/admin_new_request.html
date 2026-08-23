@@ -1,0 +1,15 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:32px;font-weight:400;color:#2A2E24;line-height:1.12;">{{item}}</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:10px;">
+    {{customerName}}{{#if quantityLabel}} &middot; {{quantityLabel}}{{/if}}{{#if budget}} &middot; budget {{budget}}{{/if}}
+  </div>
+  {{#if details}}
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#2A2E24;line-height:1.65;padding-top:12px;">{{details}}</div>
+  {{/if}}
+  {{#if referenceUrl}}
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;padding-top:10px;">
+    <a href="{{referenceUrl}}" style="color:#5C6647;">Their reference</a>
+  </div>
+  {{/if}}
+</td></tr>
+<tr><td style="padding:24px 34px 0;">{{> button url=adminUrl label="Quote it"}}</td></tr>

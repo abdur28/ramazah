@@ -5,7 +5,6 @@ import useAdminCategoriesData from "./useAdminCategoriesData";
 import useAdminProductsData from "./useAdminProductsData";
 import useAdminCollectionsData from "./useAdminCollectionsData";
 import useAdminOrdersData from "./useAdminOrdersData";
-import useAdminMailer from "./useAdminMailer";
 import useAdminAnalyticsData from "./useAdminAnalyticsData";
 
 /**
@@ -19,7 +18,6 @@ const useAdmin = create<AdminStore>((set, get) => {
   const collectionDataState = useAdminCollectionsData.getState();
   const productDataState = useAdminProductsData.getState();
   const orderDataState = useAdminOrdersData.getState();
-  const mailerDataState = useAdminMailer.getState();
   const analyticsDataState = useAdminAnalyticsData.getState();
 
   // Helper function to wrap async methods to ensure direct updates to main store
@@ -90,17 +88,6 @@ const useAdmin = create<AdminStore>((set, get) => {
       return methods;
     }, {} as Record<string, any>);
 
-  // Wrap all mailer methods
-  const wrappedMailerMethods = Object.keys(mailerDataState)
-    .filter(key => typeof mailerDataState[key as keyof typeof mailerDataState] === 'function')
-    .reduce((methods, key) => {
-      methods[key] = wrapAsyncMethod(
-        mailerDataState[key as keyof typeof mailerDataState] as Function,
-        () => useAdminMailer.getState()
-      );
-      return methods;
-    }, {} as Record<string, any>);
-
   // Wrap all analytics methods
   const wrappedAnalyticsMethods = Object.keys(analyticsDataState)
     .filter(key => typeof analyticsDataState[key as keyof typeof analyticsDataState] === 'function')
@@ -128,9 +115,6 @@ const useAdmin = create<AdminStore>((set, get) => {
     }));
     useAdminOrdersData.setState(state => ({
       error: { ...state.error, orders: null, adminAction: null }
-    }));
-    useAdminMailer.setState(state => ({
-      error: { ...state.error, users: null, adminAction: null }
     }));
     useAdminAnalyticsData.setState(state => ({
       error: { ...state.error, analytics: null, adminAction: null }
@@ -173,13 +157,6 @@ const useAdmin = create<AdminStore>((set, get) => {
     set((currentState) => ({ ...currentState, ...stateWithoutMethods }));
   });
 
-  useAdminMailer.subscribe((state) => {
-    const stateWithoutMethods = Object.fromEntries(
-      Object.entries(state).filter(([_, value]) => typeof value !== 'function')
-    );
-    set((currentState) => ({ ...currentState, ...stateWithoutMethods }));
-  });
-
   useAdminAnalyticsData.subscribe((state) => {
     const stateWithoutMethods = Object.fromEntries(
       Object.entries(state).filter(([_, value]) => typeof value !== 'function')
@@ -194,14 +171,12 @@ const useAdmin = create<AdminStore>((set, get) => {
     ...collectionDataState,
     ...productDataState,
     ...orderDataState,
-    ...mailerDataState,
     ...analyticsDataState,
     ...wrappedUserMethods,
     ...wrappedCategoryMethods,
     ...wrappedCollectionMethods,
     ...wrappedProductMethods,
     ...wrappedOrderMethods,
-    ...wrappedMailerMethods,
     ...wrappedAnalyticsMethods,
     resetErrors,
   };

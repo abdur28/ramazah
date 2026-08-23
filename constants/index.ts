@@ -33,6 +33,32 @@ export const FREE_SHIPPING_THRESHOLD = 100_000;
 export const STANDARD_SHIPPING = 2_500;
 
 /**
+ * Who the shop legally is.
+ *
+ * Two names, and they are not interchangeable.
+ *
+ * `tradingName` is the shop — what customers know it as, what goes in an email
+ * header, a page title, a copyright line. `legalName` is the registered company
+ * at the CAC, and belongs anywhere a party is being named rather than a brand:
+ * the invoice, the terms, and the bank account a customer transfers to.
+ *
+ * The first version of this used "Ramazah Group", which is not a registered
+ * entity at all — it was on the invoice, the packing slip, every email footer
+ * and, worst, as the name on the bank account customers were told to pay.
+ *
+ * PLACEHOLDER: `rcNumber` and `address` still need the real values. An invoice
+ * is a tax document and a Nigerian one is expected to carry the RC number.
+ */
+export const COMPANY = {
+  legalName: 'RAMAZAH GLOBAL EMPORIUM LIMITED',
+  tradingName: 'Ramazah Store',
+  /** CAC registration number — goes on the invoice. */
+  rcNumber: '',
+  /** The registered address, not the buying office. */
+  address: 'Alexandria, Egypt',
+} as const;
+
+/**
  * Where the money goes.
  *
  * Ramazah takes no card payment: an order raises an invoice and the customer
@@ -49,7 +75,15 @@ export const STANDARD_SHIPPING = 2_500;
  */
 export const BANK_DETAILS = {
   bankName: 'Bank name',
-  accountName: 'Ramazah Group',
+  /**
+   * Must match the name on the actual account, letter for letter.
+   *
+   * A customer transferring money compares this against what their banking app
+   * shows when they enter the account number. A mismatch is the moment somebody
+   * stops and messages to ask whether the shop is real — and with a manual
+   * payment model that hesitation is the whole sale.
+   */
+  accountName: COMPANY.legalName,
   accountNumber: '0000000000',
   /** Shown under the account, for anyone paying from outside Nigeria. */
   swift: '',

@@ -34,5 +34,5 @@ export default async function InvoicePage({ params }: any) {
 
 export async function generateMetadata({ params }: any) {
   const { id } = await params;
-  return { title: `Invoice ${id.slice(0, 8)} | Ramazah` };
+  return { title: `Invoice ${id.slice(0, 8)} | Ramazah Store` };
 }

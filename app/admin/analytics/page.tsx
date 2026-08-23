@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, BarChart3, Coins, Loader2, Package, RefreshCcw, ShoppingBag, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, Coins, Loader2, Package, RefreshCcw, Search, ShoppingBag, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,7 @@ import CustomerAnalyticsTab from "@/components/admin/CustomerAnalyticsTab";
 import ProductAnalyticsTab from "@/components/admin/ProductAnalyticsTab";
 import OrderAnalyticsTab from "@/components/admin/OrderAnalyticsTab";
 import TransactionsAnalyticsTab from "@/components/admin/TransactionsAnalyticsTab";
+import RequestAnalyticsTab from "@/components/admin/RequestAnalyticsTab";
 import useAdmin from "@/hooks/admin/useAdmin";
 import { formatDateTime } from "@/lib/admin/format";
 import { describeError } from "@/lib/admin/errors";
@@ -100,6 +101,12 @@ export default function AdminAnalyticsPage() {
               <Users className="mr-2 h-4 w-4" />
               Customers
             </TabsTrigger>
+            {/* The service the business leads with, and the analytics screen had
+                no idea it existed. */}
+            <TabsTrigger value="requests">
+              <Search className="mr-2 h-4 w-4" />
+              Requests
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders">
@@ -113,6 +120,9 @@ export default function AdminAnalyticsPage() {
           </TabsContent>
           <TabsContent value="customers">
             <CustomerAnalyticsTab data={analytics.customers} />
+          </TabsContent>
+          <TabsContent value="requests">
+            <RequestAnalyticsTab data={analytics.requests} />
           </TabsContent>
         </Tabs>
       )}

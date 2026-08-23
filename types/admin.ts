@@ -87,12 +87,17 @@ export interface CustomerAnalytics {
   newCustomersToday: number;
   newCustomersThisWeek: number;
   newCustomersThisMonth: number;
+  /** Accounts that have ordered at least once. */
   activeCustomers: number;
+  /** People who have ordered with no account — staff-raised orders. */
+  offSiteCustomers: number;
   customerGrowthRate: number;
   topCustomers: Array<{
     uid: string;
     name: string;
     email: string;
+    /** False for a customer who only exists on staff-raised orders. */
+    hasAccount: boolean;
     totalOrders: number;
     revenues: Array<{
       currency: string;
@@ -162,6 +167,38 @@ export interface OrderAnalytics {
       amount: number;
     }>;
   }>;
+  /** Where the orders came from. Most of this shop's selling is not the website. */
+  ordersByChannel: Array<{
+    channel: string;
+    count: number;
+    settled: number;
+    revenues: Array<{
+      currency: string;
+      amount: number;
+    }>;
+  }>;
+}
+
+/**
+ * The sourcing service, measured.
+ *
+ * "Tell us what you need and we'll do the rest" is what the business leads with
+ * and nothing anywhere counted it. The number that matters is not how many were
+ * asked but how many turned into something: a quote nobody answers is work done
+ * for nothing.
+ */
+export interface RequestAnalytics {
+  total: number;
+  byStatus: Array<{ status: string; count: number }>;
+  /** Asked, quoted, but neither accepted nor refused — the queue that ages. */
+  awaitingAnswer: number;
+  /** Not yet quoted. The queue that is on the shop. */
+  awaitingQuote: number;
+  /** Of the quotes that got an answer, the share that was yes. */
+  acceptanceRate: number;
+  quotedValue: number;
+  acceptedValue: number;
+  oldestOpenDays: number | null;
 }
 
 export interface TransactionAnalytics {
@@ -179,6 +216,7 @@ export interface TransactionAnalytics {
 export interface AdminAnalytics {
   customers: CustomerAnalytics;
   products: ProductAnalytics;
+  requests: RequestAnalytics;
   orders: OrderAnalytics;
   transactions: TransactionAnalytics;
   lastUpdated: string;
@@ -309,6 +347,7 @@ export interface AdminAnalyticsDataStore {
   fetchCustomerAnalytics: () => Promise<CustomerAnalytics>;
   fetchProductAnalytics: () => Promise<ProductAnalytics>;
   fetchOrderAnalytics: () => Promise<OrderAnalytics>;
+  fetchRequestAnalytics: () => Promise<RequestAnalytics>;
   fetchTransactionAnalytics: () => Promise<TransactionAnalytics>;
   resetAnalytics: () => void;
 }
@@ -378,49 +417,10 @@ export interface EmailStats {
   emailsSentThisMonth: number;
 }
 
-// ============ ADMIN MAILER DATA STORE ============
-
-export interface AdminMailerDataStore {
-  // State
-  emailRecipients: EmailRecipient[];
-  emailCampaigns: EmailCampaign[];
-  emailStats: EmailStats | null;
-  
-  // Loading & Error states
-  loading: AdminLoadingState;
-  error: AdminErrorState;
-  
-  // Methods
-  fetchEmailRecipients: (emailType?: 'promotions' | 'newArrivals' | 'newsletter') => Promise<void>;
-  fetchEmailCampaigns: (options?: FetchOptions) => Promise<void>;
-  fetchEmailStats: () => Promise<void>;
-  sendPromotionEmail: (data: {
-    recipients: string[];
-    promoData: {
-      title: string;
-      description: string;
-      discountCode?: string;
-      discountPercent?: number;
-      expiryDate?: string;
-    };
-  }) => Promise<{ successCount: number; failedCount: number; results: any[] }>;
-  sendNewArrivalsEmail: (data: {
-    recipients: string[];
-    productIds: string[];
-  }) => Promise<{ successCount: number; failedCount: number; results: any[] }>;
-  sendNewsletterEmail: (data: {
-    recipients: string[];
-    newsletterData: {
-      subject: string;
-      headline: string;
-      content: string;
-      imageUrl?: string;
-      ctaText?: string;
-      ctaUrl?: string;
-    };
-  }) => Promise<{ successCount: number; failedCount: number; results: any[] }>;
-  resetMailer: () => void;
-}
+// Campaigns and the outbox moved out of the zustand store entirely. They are
+// plain functions in `lib/admin/campaigns.ts` and `lib/admin/mail.ts` that the
+// two mailer tabs call directly — there is no cross-screen state to share, and
+// the store's version posted to an API route that no longer exists.
 
 // ============ ADMIN STORE ============
 
@@ -430,7 +430,6 @@ export interface AdminStore extends
   AdminCategoryDataStore, 
   AdminCollectionDataStore, 
   AdminProductDataStore,
-  AdminMailerDataStore,
   AdminAnalyticsDataStore {
   // Global methods
   resetErrors: () => void;

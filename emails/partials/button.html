@@ -1,0 +1,8 @@
+{{!-- A link that looks like a button without being one. `display:inline-block`
+     on the anchor rather than padding on the cell, so the whole shape is
+     clickable in Outlook too. --}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+  <td style="background:{{#if secondary}}#FFFFFF{{else}}#5C6647{{/if}};border-radius:4px;{{#if secondary}}border:1px solid #E4E3D8;{{/if}}">
+    <a href="{{url}}" style="display:inline-block;padding:13px 28px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:{{#if secondary}}#2A2E24{{else}}#FAF9F5{{/if}};text-decoration:none;">{{label}}</a>
+  </td>
+</tr></table>

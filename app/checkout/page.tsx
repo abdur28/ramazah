@@ -22,6 +22,6 @@ export default async function Checkout() {
 }
 
 export const metadata = {
-  title: "Checkout | Ramazah",
+  title: "Checkout | Ramazah Store",
   description: "Complete your purchase securely",
 };

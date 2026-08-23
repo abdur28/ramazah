@@ -1,38 +1,29 @@
 import PolicyPage from "@/components/PolicyPage";
+import { getContent, type PolicyContent } from "@/lib/content";
 
+/**
+ * The words on this page come from `site_content`, edited at
+ * /admin/pages/privacy. The eyebrow and the title stay here: they are the page's
+ * identity in the navigation rather than copy somebody rewrites week to week.
+ *
+ * `getContent` falls back to the literals in `lib/content.ts`, so an unedited
+ * shop renders exactly what it rendered before this existed.
+ */
 export const metadata = {
   title: "Privacy policy · Ramazah Store",
-  description: "How Ramazah handles your personal information.",
+  description: "How Ramazah Store handles your personal information.",
 };
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const content = await getContent<PolicyContent>("privacy");
+
   return (
     <PolicyPage
       eyebrow="Legal"
       title="Privacy policy"
-      standfirst="What we hold, why we hold it, and what we never do with it."
-      awaitingCopy
-      sections={[
-        {
-          heading: "What the site stores",
-          body: [
-            "An account holds your name, email address, phone number and delivery address, along with your order history and anything you save to your wishlist.",
-            "Email preferences are yours to change at any time under Account, and unsubscribing from newsletters does not stop order emails.",
-          ],
-        },
-        {
-          heading: "What we do not do",
-          body: [
-            "We do not sell your details, and we do not take card numbers — payment is by transfer against an invoice, so no card data ever reaches this site.",
-          ],
-        },
-        {
-          heading: "The full policy",
-          body: [
-            "The complete policy, including retention periods and how to request deletion of your data, is being prepared. You can delete your account yourself at any time from Account settings.",
-          ],
-        },
-      ]}
+      standfirst={content.standfirst}
+      awaitingCopy={content.awaitingCopy}
+      sections={content.sections}
     />
   );
 }

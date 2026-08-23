@@ -8,6 +8,6 @@ export default function Page() {
 
 export async function generateMetadata() {
   return {
-    title: 'Reset Password | Ramazah',
+    title: 'Reset Password | Ramazah Store',
   };
 }

@@ -5,6 +5,424 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-23 — The words came out of the code
+
+Every sentence on the home page and the six support and legal pages was a string
+literal in a `.tsx` file. Correcting "two to three weeks" meant a developer, a
+commit and a deploy — for a shop whose delivery time, shipping cost and returns
+wording will all move before launch.
+
+`site_content` is one key-value table, and `/admin/pages` edits it. Seven pages:
+the home page, FAQ, shipping, returns, terms, privacy and cookies.
+
+**Layout is deliberately not editable.** The pages keep their components, their
+section order and their design in code. A page builder would let somebody produce
+a page that no longer looks like this shop, which is a bigger loss than the
+flexibility is a gain — so only the words and the pictures come from the
+database.
+
+**Every read falls back to the code.** `lib/content-defaults.ts` holds the
+literals the site rendered before this existed, and `getContent` merges a stored
+row over them per-field. So an empty table renders exactly the old site, a
+missing key renders the old section, and a row written before a field existed
+still gets that field. A page that has never been edited says so in the admin
+rather than opening an empty form — which would be a trap, since saving it once
+would blank the live page.
+
+"Back to the original" deletes the row rather than writing today's defaults into
+it. The point of the fallback is that an unedited page tracks the code, and
+freezing a copy would quietly break that the next time the code changed.
+
+The home editor covers five sections: the opening, the two category bands, the
+six tiles in the category table, the editorial story block, and the newsletter
+invitation — words and photographs in each.
+
+Two things stay out of reach, and the screen says so rather than leaving somebody
+hunting. The product rail and the collection band are drawn from the catalogue
+and from Collections, so editing their contents here would put two places in
+charge of the same words. And **how the six tiles are cut across the grid** —
+which is wide, which is tall — stays in code: that composition is what holds the
+top half of the page together while the tiles between it change width, and an
+editor that could re-cut it could break the page. The names, blurbs and
+photographs inside it are editable; the shape is not.
+
+Every photograph falls back to its `constants/demo.ts` placeholder when unset, so
+a half-filled row renders a page rather than an empty frame — and a tile whose
+slug is not in the layout map still renders, at a default width, rather than
+throwing.
+
+`Pages` is back in the admin sidebar. It was removed earlier for pointing at a
+route that did not exist; `Settings` is still absent for the same reason.
+
+One thing the build caught: the admin editor is a client component and imports
+the defaults to open an unedited page, which dragged `@/lib/supabase/server` into
+the browser bundle. The types and defaults moved to `content-defaults.ts`, which
+has no server imports.
+
+**Verified**: 16 checks — an untouched table rendering the original words, an
+edit reaching the live page and the old words going, the editor recorded, the
+hero and a band editable, dropping to one band rendering one, the placeholder
+photograph surviving an empty image, a partial row still getting its default
+sections, a stranger refused while anyone can still read, and deleting the row
+restoring the original.
+
+---
+
+## 2026-08-23 — Email, all three tiers
+
+The shop could not send an email. `sendOrderConfirmationEmail`,
+`sendOrderShippedEmail` and `sendOrderDeliveredEmail` had existed in
+`lib/email.ts` since the first week and **nothing called any of them** — the only
+caller of any mail path in the codebase was the admin mailer. The FAQ's promise,
+"you will receive an invoice", had never been true.
+
+**The spine is an outbox, not a call from the browser.** The tempting shortcut is
+to hit a mail route after checkout; it is also the wrong one, because the
+customer closes the tab, the request never lands, and the order that just took
+their money sends nothing — with no record either way, so nobody can answer "I
+never got my invoice". Triggers write `email_outbox` rows and a worker drains
+them. `dedupe_key` is unique, which is what stops a payment being corrected and
+set again from sending three confirmations; reminders are ordinary rows dated
+forward rather than a second mechanism; five attempts with a widening gap, then
+the row stops and stays visible, because five failures is a problem for a person
+rather than for a retry loop.
+
+**29 templates from one layout.** The five that existed were 400–570 lines each
+of near-identical hand-written HTML — 2,425 in total — which is why changing the
+footer meant changing it five times. One layout, four partials and 29 content
+blocks come to 580 lines for six times as many emails. Style B from the two
+demos: the shop's cream and sage rather than the invoice's amber, because only
+three of the twenty-nine are money documents and amber-and-green on a review
+invitation is a shop that only ever writes to you about invoices. The printed
+invoice keeps its own identity; it is a different object. Every template has a
+hand-written plain-text twin built from the same data — a generated one reads
+like debris, and sending none at all is a spam signal.
+
+**Transactional and marketing are now different things.** The old
+`orderUpdates` switch let a customer turn off "your order shipped". It now
+governs the courtesies — packed, delivered, review invitations — and never the
+invoice, the payment confirmation or the dispatch notice. `may_email()` is the
+one place that decides, so no template has to remember which it is.
+
+**The unsubscribe page exists.** Four of the five originals linked to
+`{{websiteUrl}}/unsubscribe` and it was a 404 — both a compliance problem and the
+fastest route into a spam folder, since mailbox providers watch precisely this.
+It takes an unguessable token rather than a session, because it gets followed
+from a forwarded email on a phone that has never signed in, and it acts on load:
+a one-click unsubscribe is what `List-Unsubscribe-Post` promises the mail client,
+and making somebody hunt for a second button is how they press "spam" instead.
+Order email keeps working afterwards, and the page says so — otherwise the next
+message is "why have my invoices stopped".
+
+**nodemailer 7.0.9 → 9.0.5**, closing six high-severity advisories including SMTP
+command injection. `npm audit` is clean.
+
+**Campaigns were rewritten too, not restyled.** Reviewing that half turned up
+worse than the discount-code field that prompted it. It sent by firing one
+`fetch` per recipient straight at SMTP from the browser — no record once the
+dialog closed, no retries, no dedupe so pressing Send twice sent twice, a hundred
+parallel connections at any real volume, and it stopped halfway if the tab was
+closed. It was also **broken**: the templates it named were four of the five
+replaced earlier the same day, so a promotion would have rendered the fallback
+div rather than an email.
+
+A campaign is now a set of outbox rows with a `campaign_id`, so the record, the
+retries and the dedupe all come with it. `send_campaign()` expands a segment and
+queues; the worker sends. Pressing Send twice produces two campaigns rather than
+two emails to the same person, because the dedupe key carries the campaign id.
+
+Segments replaced the checkbox list — picking people out of a list stops working
+somewhere around fifty names, and "everyone who bought in the last ninety days"
+is what somebody actually wants to say. The count shown is computed in the
+database with opt-out already applied, so the number on the button is the number
+that will really be written to.
+
+**The discount-code field is gone.** `discount_codes` is empty and there is no
+way to create one in this admin, so a code typed there would be refused by
+`create_order` at checkout — the customer would be the one to find out. The
+screen says so rather than silently dropping the field.
+
+Three composers of 574 near-identical lines became one, and the mailer page
+itself went from 363 lines to 57 because both halves own their own state. The old
+send path — `lib/email.ts`, `/api/send-email`, `/api/send-order-email`, the three
+composers and `useAdminMailer` — is deleted rather than left as dead code
+pointing at a route that no longer exists.
+
+**The mailer became two halves.** Campaigns is what it always was. Notifications
+is new and larger: every transactional template grouped by what it is for, a
+preview rendered against the most recent *real* order or request rather than
+placeholder data, a test send to one address, and the queue itself with retry
+and cancel. The dry run renders everything due and sends nothing, which is how
+you find out the queue would go out cleanly before doing something
+irreversible — and it is what made all of this testable before SMTP credentials
+exist.
+
+Two of my own mistakes on the way. `unsubscribe()` declared `returns table
+(email text, ...)`, which made every reference to `newsletter_subscribers.email`
+inside it ambiguous — and Postgres resolves that at call time, so it failed only
+when somebody actually clicked the link. And the outbox status pills used
+`--ink-faint` at 2.4:1 and then `--ink-muted` on full `--wash` at 4.48:1; they
+use the admin's own `StatusPill`, whose tones are already measured.
+
+**The shop is called Ramazah Store, not Ramazah.** Caught after the first real
+send went out. The email header, the From line — which is what an inbox shows in
+the sender column, and so the most visible name in the whole system — and seven
+subject lines all said "Ramazah". Corrected across 29 templates and swept through
+the rest of the app: page titles, meta descriptions, the collections eyebrow, the
+packing slip lockup, the unsubscribe page, and the WhatsApp and mailto messages
+the admin sends a customer.
+
+**And "Ramazah Group" was not a real company.** It was carried over from the
+printed invoice template and had spread to the invoice, the packing slip, every
+email footer, the terms — and, worst, to the **name on the bank account customers
+are told to transfer to**. A customer comparing that against what their banking
+app shows when they type the account number sees a mismatch, and with a manual
+payment model that hesitation is the sale.
+
+The registered company is **RAMAZAH GLOBAL EMPORIUM LIMITED**. It now lives in
+`COMPANY` in constants alongside the trading name, and the split is by what is
+being named rather than by taste:
+
+- **Ramazah Store** where a *brand* is named — the email header, page titles, the
+  brand lockup, the copyright line.
+- **RAMAZAH GLOBAL EMPORIUM LIMITED** where a *party* is named — the invoice
+  (a tax document), the packing slip, every email footer, the bank account, and
+  one new section of the terms saying plainly that Ramazah Store is a trading
+  name of that company and the contract is with it. A customer needs to know
+  which entity they have recourse against, and a trading name does not answer
+  that.
+
+Still placeholder: `rcNumber`, which a Nigerian invoice is expected to carry, and
+`address` — the invoice says Alexandria, which is the buying end rather than
+where the company is registered.
+
+**Still needed before a single real send**: `EMAIL_USER`, `EMAIL_PASSWORD` and
+`EMAIL_FROM` are empty, and a real sending domain with SPF, DKIM and DMARC
+matters more here than in most shops, because the invoice *is* how the shop gets
+paid. A real run refuses cleanly rather than half-sending while they are missing.
+
+**Verified**: 23 checks on the triggers and preferences — a corrected payment
+sending one confirmation rather than three, paying cancelling both reminders,
+delivery picking the delivered wording over collected, an invoice ignoring
+preferences while marketing respects them, unsubscribe working with no login and
+a made-up token refused — 29 template renders, 8 through the real pipeline over
+HTTP against live records, and 10 end to end on a full order journey.
+
+---
+
+## 2026-08-23 — Analytics catches up with how the shop actually sells
+
+Three changes, one of them a regression I had just introduced.
+
+**A regression.** Making `orders.user_id` nullable meant every staff-raised order
+keyed on `null` in the customer aggregate, so all of them collapsed into a single
+row labelled "Unknown" in Best Customers — and counted as *one* active customer
+between them. Buyers are keyed by account, then email, then name, and carry a
+`hasAccount` flag so a WhatsApp buyer appears as themselves rather than being
+folded into an account they do not have. `activeCustomers` counts accounts that
+have ordered, which is what the percentage beside it claims; the people with no
+account get their own figure instead of quietly distorting it.
+
+**Where orders come from.** Until staff could raise one, a website order was the
+only kind that could exist, so there was nothing to split by. Now the Orders tab
+carries a channel breakdown — the panel that says whether the totals above
+describe the business or only the part of it with a checkout. Revenue there means
+settled money, as it does everywhere else on the screen.
+
+**Requests, measured at all.** The analytics screen had four tabs and none of them
+knew requests existed — for the service the business leads with. The new tab
+splits the two queues that matter, because they are owned by different people:
+*waiting on you* is unquoted, *waiting on them* is quoted and unanswered, with the
+value of each. The acceptance rate counts only quotes that got an answer either
+way — counting the ones still open as refusals would make the rate fall simply
+because a quote went out this morning. And it says how long the oldest open
+request has waited, since deliveries here run in weeks and the clock a customer
+feels starts at the question, not at the parcel.
+
+Also removed: `loadOrders` still selected `payment_method`, dead since the method
+breakdown went; and the Best Customers rank divided any RUB figure by 90, a
+hoodskool leftover for a currency this shop has never taken. It ranks on Naira.
+
+**Verified**: 6 checks on the aggregates against live data — channel revenue
+matching its settled orders exactly, web counted separately, no null key in the
+buyer map, every off-site buyer a separate named row, none labelled "Unknown",
+and active customers still counting accounts rather than everyone who bought —
+plus 5 on the requests aggregate.
+
+Two of the first run's assertions failed and both were wrong in the test, not the
+code: they assumed only one WhatsApp order existed, and `RMZ-01011` — a real
+order raised through the new screen while this was being written — was correctly
+in the data, paid, with its three catalogue lines having moved stock exactly as
+designed.
+
+---
+
+## 2026-08-23 — Orders for people who are not on the site
+
+Most of this shop's selling happens on WhatsApp: a message, an agreed price, a
+transfer. None of it existed in the database — so the invoice went out as a
+photograph of something typed by hand, stock described only website sales, and
+the payments screen reported a minority of the business as if it were all of it.
+
+Built as a **real order**, not a document generator. A generator would have meant
+a second invoice implementation — two versions of what is owed — a second
+numbering scheme competing with `order_number`, which is also the payment
+reference, and goods leaving the shelf with nothing recording it. As an order,
+the order page, the invoice, the packing slip, the status ladder, the payment
+guard and the audit history all work on it unchanged, with no new document code.
+
+The schema was most of the way there already: `order_items.product_id` and
+`variant_id` have always been nullable, so a line for something that was never in
+the catalogue is representable, and the customer's name, phone and email have
+always lived on the order rather than being read from a profile. Two things were
+in the way — `user_id` and `customer_email` were both NOT NULL. Plenty of
+customers here have a phone number and no email at all, and requiring one only
+produces invented addresses.
+
+`orders` gained `placed_by` and `channel` (`web` / `whatsapp` / `phone` /
+`in_store`), and staff-raised orders carry a chip in the list so it is obvious
+which is which.
+
+`create_manual_order()` is deliberately not `create_order`. That one is the
+customer's path and reads prices from the catalogue, refusing to trust the
+client — exactly right when the client is a browser. Staff need the opposite in
+two places: a line for something never in the catalogue, and the price that was
+actually agreed rather than the one on the shelf today. Catalogue lines still
+default to the database price, so the common case cannot be fat-fingered.
+
+No stock check on creation, on purpose. On a WhatsApp sale the goods have often
+already changed hands, and refusing to record it would leave the shop with a sale
+it cannot represent. Stock still moves when the order is marked paid, and a
+shortfall surfaces then — which is the right moment for someone to go and count
+the shelf.
+
+**A bug this would have hit immediately.** `sync_order_stock` looped over every
+line and updated `product_variants` by id, and `inventory_movements.variant_id`
+is NOT NULL — so the first manual order with a one-off line would have failed to
+be marked paid at all. Both loops now skip lines with nothing to move, and the
+test covers a mixed order in both directions.
+
+**Verified**: 20 checks on the RPC — an ownerless order raised and invisible to
+customers, the same number sequence as the website, a catalogue line priced from
+the database and a free line standing alone, idempotency returning the first
+order rather than a second invoice, and every guard — plus 13 more end to end on
+the hardest shape (in-store collection, no address, no email): the invoice query,
+the packing slip query still fetching no price column, the history, settling it,
+and only the catalogue line moving stock.
+
+One process note, and a correction to my own housekeeping: a reconciliation of
+every variant against `seed.sql` found two drifts. Three movements dated today
+against RMZ-D1004 — a seeded order that never legitimately moved stock — left
+`RMZ-VEIL-01-BLK` one unit high. Both removed. `RMZ-COF-01-1KG-W` is two units
+below its seed value with no movement explaining it and no date to attribute it
+to, so it has been left alone and flagged rather than silently "corrected".
+
+---
+
+## 2026-08-23 — Requests reviewed, and seven things fixed
+
+A review of the sourcing feature, both sides. The structure held up — RLS,
+column grants, a SECURITY DEFINER RPC for the staff-owned fields — but seven
+defects came out of it, each confirmed against the database rather than read off
+the code.
+
+**A customer could rewrite a request after it was quoted.** The update policy
+allowed it at any status and the grant covers `item` and `quantity`, so
+"Hibiscus tea, 1kg" quoted at ₦24,000 could become "A gold bar ×50" still quoted
+at ₦24,000. Editing now stops the moment there is a price against it — refining
+what you asked for is normal *before* anyone has looked, and part of the deal
+after.
+
+**The customer had no way to answer.** The dashboard said "Reply to accept and
+we will buy it on the next run" and there was nothing to reply with: no button,
+no link. They could not withdraw one either. That is the whole point of the
+feature — getting this conversation out of WhatsApp — and the customer's half was
+still in WhatsApp. `request_status` gained `accepted` and `withdrawn`, and
+`answer_request()` lets the owner say yes or no. No haggling: a quote is answered
+yes or no. Withdrawing stops once the shop has spent money.
+
+**Budget and quote were mislabelled in another currency.** `formatPrice` swaps
+the symbol and does no conversion — there are no rates in this app — so a Naira
+budget rendered as "$24,000" for anyone who had switched the site to USD, while
+the admin showed the same figure in Naira. Requests are quoted in Naira and now
+say so on both screens.
+
+**A failed load told the customer they had no requests.** The error was dropped
+and the empty array rendered, so a dropped connection read as "No requests yet"
+and they would reasonably send it again.
+
+**Staff could never clear a note or a quote.** `coalesce(p_quote, quoted_amount)`
+reads null as "leave it alone", so emptying the note box reported success and
+changed nothing while the customer went on reading it. The admin form seeds both
+fields from what is stored, which makes direct assignment the honest rule: what
+is on screen is what is saved, including when you have emptied it. The
+amount-required check for a quote moved into the database at the same time.
+
+**A zero quote read as no quote.** `row.budget ? Number(row.budget) : null` turns
+a stored `0` into an absence.
+
+**`reference_url` accepted any scheme.** React blocks `javascript:` at render and
+browsers block top-level `data:` navigation, so it was not script execution — but
+an arbitrary scheme or host behind a link the admin reads as "their reference" is
+not something to hand staff. Only http and https are stored now, and a bare host
+gets `https://` rather than being rejected, because that is what people paste.
+
+Also: the status tabs carry counts, as the orders list does — a queue you have to
+click into to find out is empty is not a queue.
+
+**Verified**: 12 checks — an open request still editable and a quoted one frozen,
+notes cleared by emptying them, a quote refused without an amount, zero surviving
+the mapper, accept refused before there is a quote and allowed after, withdraw
+allowed while open and refused once buying, nobody able to answer somebody
+else's request, and a customer still unable to set a status directly.
+
+---
+
+## 2026-08-23 — Customers got a page
+
+The customer dialog had two tabs, and most of what matters about a customer here
+fitted in neither.
+
+**Sourcing requests were absent entirely.** "Tell us what you need and we'll do
+the rest" is the service this business leads with, and the admin's customer
+record showed no sign of it — so the screen could not tell a buyer from someone
+who has asked for six things and bought none of them. They are on the page now,
+with what was quoted and where each one has got to.
+
+**Reviews were a count.** A number answers nothing: what staff need is what this
+person actually said, and whether any of it is still sitting unapproved. The rows
+are there, with the product, the rating and the moderation state.
+
+**The orders were dead text.** Eleven order numbers you could read and not open.
+Each one links to its order.
+
+**Role and suspension lived in a row dropdown**, three clicks from any context
+that would tell you whether using them was right. They sit under the order
+history now, which is what you want to look at before suspending someone. The
+list's dropdown and its two confirmation dialogs went with them — about 150 lines
+— and rows became links, which is also how the orders list works.
+
+The guards stay in the database, not the screen: an admin cannot demote
+themselves, suspend themselves, or demote the last remaining admin. The page
+greys the first two so the refusal is visible before the click, but `set_user_role`
+and `set_user_status` are the boundary — a check in React only protects the button.
+
+Wishlists are still deliberately absent, and the page now says so rather than
+leaving a reader wondering. `wishlist_items` is owner-only in RLS with no admin
+clause, unlike orders and addresses, and that is the right line: staff should see
+what someone bought, not what they are considering.
+
+`getCustomerDetail` takes an email as well as an id, because the newsletter table
+is keyed by email — anyone can subscribe from the footer without an account, so
+there is no user id to join on.
+
+**Verified**: 13 checks as a signed-in admin — every query the page runs, the
+lifetime-spend rule counting only settled and unrefunded orders, both self-guards
+still refusing, suspend and reinstate working on somebody else, and wishlists
+staying out of reach even for an admin.
+
+---
+
 ## 2026-08-22 — Payments stay manual, and stock follows the money
 
 The shop takes no card payment and should not: an order raises an invoice and

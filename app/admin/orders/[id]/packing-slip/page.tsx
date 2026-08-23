@@ -43,5 +43,5 @@ export async function generateMetadata({ params }: any) {
   const { data } = await supabase
     .from('orders').select('order_number').eq('id', id).maybeSingle();
 
-  return { title: `Packing slip ${data?.order_number ?? id.slice(0, 8)} | Ramazah admin` };
+  return { title: `Packing slip ${data?.order_number ?? id.slice(0, 8)} | Ramazah Store admin` };
 }

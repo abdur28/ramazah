@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import type { HomeContent } from "@/lib/content-defaults";
 
 /**
  * The closing section.
@@ -16,7 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
  * from the moment the account exists. Capturing anonymous emails properly needs
  * a subscribers table, which does not exist yet.
  */
-export default function Newsletter() {
+export default function Newsletter({ content }: { content: HomeContent["newsletter"] }) {
   const { user } = useAuth();
 
   return (
@@ -31,18 +32,16 @@ export default function Newsletter() {
         >
           <div>
             <p className="font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
-              Restocks and arrivals
+              {content.eyebrow}
             </p>
             <h2 className="mt-4 max-w-[16ch] font-heading text-4xl font-light leading-[1.05] text-foreground md:text-5xl">
-              Know when the next crate lands
+              {content.title}
             </h2>
           </div>
 
           <div>
             <p className="max-w-[46ch] font-body text-base text-ink-muted">
-              Stock arrives in batches, and the coffee and dates go first. Account holders
-              get an email when a crate is unpacked and when a saved item is back — nothing
-              else, and you can turn it off in one click.
+              {content.body}
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">

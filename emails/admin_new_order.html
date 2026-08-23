@@ -1,0 +1,15 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:32px;font-weight:400;color:#2A2E24;line-height:1.12;">{{orderNumber}} &mdash; {{total}}</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:10px;">
+    {{customerName}}{{#if customerPhone}} &middot; {{customerPhone}}{{/if}}<br />
+    {{channelLabel}} &middot; {{deliveryLabel}}
+  </div>
+</td></tr>
+<tr><td style="padding:22px 34px 0;">{{> orderLines}}</td></tr>
+{{#if address}}
+<tr><td style="padding:22px 34px 0;">
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:#6B7060;">Deliver to</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#2A2E24;line-height:1.6;padding-top:8px;">{{{address}}}</div>
+</td></tr>
+{{/if}}
+<tr><td style="padding:24px 34px 0;">{{> button url=adminUrl label="Open the order"}}</td></tr>

@@ -470,7 +470,7 @@ export default function ProductForm({
                 <Input
                   value={form.metaTitle}
                   onChange={(event) => set("metaTitle", event.target.value)}
-                  placeholder={form.name || "Egyptian Ground Coffee | Ramazah"}
+                  placeholder={form.name || "Egyptian Ground Coffee | Ramazah Store"}
                 />
               </Field>
               <Field label="Description">

@@ -1,37 +1,29 @@
 import PolicyPage from "@/components/PolicyPage";
+import { getContent, type PolicyContent } from "@/lib/content";
 
+/**
+ * The words on this page come from `site_content`, edited at
+ * /admin/pages/cookies. The eyebrow and the title stay here: they are the page's
+ * identity in the navigation rather than copy somebody rewrites week to week.
+ *
+ * `getContent` falls back to the literals in `lib/content.ts`, so an unedited
+ * shop renders exactly what it rendered before this existed.
+ */
 export const metadata = {
-  title: "Cookie policy · Ramazah Store",
-  description: "The cookies and local storage this site uses.",
+  title: "Cookies · Ramazah Store",
+  description: "What this site keeps on your device, and why.",
 };
 
-export default function CookiesPage() {
+export default async function CookiesPage() {
+  const content = await getContent<PolicyContent>("cookies");
+
   return (
     <PolicyPage
       eyebrow="Legal"
       title="Cookies"
-      standfirst="This site sets very little, and none of it is advertising."
-      awaitingCopy
-      sections={[
-        {
-          heading: "Signing in",
-          body: [
-            "A session cookie keeps you signed in and is refreshed as you browse. Without it you would be signed out on every page.",
-          ],
-        },
-        {
-          heading: "Your basket and preferences",
-          body: [
-            "Your basket, your chosen currency and your recent searches are kept in your browser's local storage on your own device, so they survive a refresh. Clearing your browser data clears them.",
-          ],
-        },
-        {
-          heading: "What is not here",
-          body: [
-            "No advertising trackers and no third-party analytics cookies are set by this site.",
-          ],
-        },
-      ]}
+      standfirst={content.standfirst}
+      awaitingCopy={content.awaitingCopy}
+      sections={content.sections}
     />
   );
 }

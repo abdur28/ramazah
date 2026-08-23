@@ -1,0 +1,30 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:34px;font-weight:400;color:#2A2E24;line-height:1.12;">We found it.</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:12px;">
+    <span style="color:#2A2E24;">{{item}}</span>{{#if quantityLabel}}, {{quantityLabel}}{{/if}}.
+  </div>
+</td></tr>
+
+<tr><td style="padding:24px 34px 0;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EFF1E9;border-radius:4px;">
+    <tr><td align="center" style="padding:24px 22px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:#6B7060;">Our price</div>
+      <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:40px;font-weight:400;color:#2A2E24;line-height:1;padding-top:8px;">{{quotedAmount}}</div>
+      {{#if budget}}<div style="font-size:13px;color:#6B7060;padding-top:8px;">You said around {{budget}}</div>{{/if}}
+    </td></tr>
+  </table>
+</td></tr>
+
+{{#if staffNote}}
+<tr><td style="padding:22px 34px 0;">
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#2A2E24;line-height:1.65;">{{staffNote}}</div>
+</td></tr>
+{{/if}}
+
+<tr><td style="padding:24px 34px 0;">
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#6B7060;line-height:1.7;">
+    Say yes and it goes on the next buying run. Say no and that is the end of it &mdash; no cost either way, and we have not bought anything yet.
+  </div>
+</td></tr>
+
+<tr><td style="padding:22px 34px 0;">{{> button url=requestsUrl label="Accept or decline"}}</td></tr>

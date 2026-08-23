@@ -70,12 +70,42 @@ Every product has at least one variant; products without options get a single de
 variant, so price and stock always live in exactly one place.
 
 **Commerce** — `cart_items`, `wishlist_items`, `orders`, `order_items`,
-`order_status_history`, `order_notes`, `discount_codes`, `discount_redemptions`
+`order_status_history`, `order_payment_history`, `order_notes`, `discount_codes`,
+`discount_redemptions`
 
 `order_status_history` is trigger-written and `security definer` — an audit row the
 acting user could decline to write is not an audit trail. `order_notes` is staff-only
 and is a table rather than a column on `orders` because RLS is row-level: a customer
 reads their whole order row, so a note column would go to the person it is about.
+`order_payment_history` exists because `order_status_history.to_status` is an
+`order_status` and a payment change has nowhere to go in it.
+
+`orders.user_id` is nullable: staff raise orders for customers who bought over
+WhatsApp, and `placed_by` and `channel` record who took it and how. Stock is held
+exactly when an order is paid and not cancelled or refunded — one rule, enforced by
+`sync_order_stock()`, which compares it against `orders.stock_committed` and acts only
+on a difference. That is what makes paid → unpaid → paid safe.
+
+**Sourcing** — `product_requests`
+
+The ladder runs asked → quoted → accepted → buying → fulfilled. `declined` is the
+shop's no; `withdrawn` is the customer's. A request freezes when it is quoted — the
+update policy allows edits only while it is still `asked`, so a quote cannot end up
+attached to something else.
+
+**Email** — `email_outbox`, `email_campaigns`
+
+Nothing sends directly. Triggers write outbox rows and a worker drains them, which is
+what buys a record, retries and dedupe. `dedupe_key` is unique, so a corrected payment
+cannot send three confirmations, and reminders are ordinary rows dated forward rather
+than a second mechanism. `may_email()` is the one place that decides whether an address
+may be written to; transactional mail ignores preferences by design.
+
+**Content** — `site_content`
+
+Key-value, one row per page. Every read falls back to the literals in
+`lib/content-defaults.ts`, so an empty table renders exactly the site the code
+describes. Layout stays in code; only words and pictures live here.
 
 **Reviews** — `reviews`, `review_images`, `review_votes`, `review_replies`
 

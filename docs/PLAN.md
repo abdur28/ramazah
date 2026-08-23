@@ -70,6 +70,10 @@ Naira.
 ## Next
 
 ### 1. Storefront content
+The copy is now editable at `/admin/pages` (2026-08-23) — home, FAQ, shipping, returns,
+terms, privacy, cookies. What is left below is the *writing*, plus the photography, which
+is still Unsplash placeholders.
+
 The chrome is done; the **words and the pictures** are still hoodskool's:
 
 - Copy across `components/home/` is streetwear: "STREET CULTURE REDEFINED",
@@ -87,6 +91,12 @@ refusing every status change. `/admin/orders/[id]` is a full page now, with hist
 notes, an invoice and a packing slip. See PROGRESS.
 
 ### 2. Turning a request into an order
+`/admin/orders/new` (2026-08-23) is most of the machinery — an accepted request becomes a
+manual order with one free-text line. What is left is the button that does it.
+
+Reviewed 2026-08-23 and seven defects fixed — see PROGRESS. The customer can now accept
+or withdraw a quote, so the ladder runs asked -> quoted -> accepted -> buying -> fulfilled
+without leaving the site. What is still missing is the last step below.
 Requests themselves are built — `/dashboard/requests` for the customer,
 `/admin/requests` for staff, moving asked → quoted → buying → fulfilled. What is
 missing is the last step: accepting a quote still means someone creating the order by
@@ -152,7 +162,14 @@ product in one. See PROGRESS.
 replaces `products.collection_id`, so a buying run and an occasion can both claim the same
 product. Which collection the home page shows is now an explicit choice in the admin.
 
-### 6. Notifications and admin — deferred by the client (2026-08-21)
+~~### 6. Notifications and admin~~ — built 2026-08-23
+29 templates, an `email_outbox` with triggers and a worker, preferences split between
+transactional and marketing, a working unsubscribe, and the mailer rebuilt around
+Notifications and Campaigns. See PROGRESS. **Outstanding**: SMTP credentials, and a real
+sending domain with SPF/DKIM/DMARC — the invoice is how the shop gets paid, so deliverability
+matters more here than usual.
+
+### 6b. Notifications — original note (2026-08-21)
 Working, but nobody is told anything by email:
 
 - **Wishlist back-in-stock alerts.** `preferences.emailNotifications.wishlistAlerts`

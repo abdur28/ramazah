@@ -12,6 +12,6 @@ export default async function Page({ searchParams }: any) {
 
 export async function generateMetadata() {
   return {
-    title: 'Sign in | Ramazah',
+    title: 'Sign in | Ramazah Store',
   };
 }

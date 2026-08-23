@@ -43,6 +43,6 @@ export default async function CheckoutSuccessPage({ searchParams }: any) {
 }
 
 export const metadata = {
-  title: "Order placed | Ramazah",
+  title: "Order placed | Ramazah Store",
   description: "Your order is with us. Here is how to settle it.",
 };

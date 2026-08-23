@@ -1,0 +1,23 @@
+{{!-- Where the money goes.
+
+     Appears on the invoice and on both reminders. There is no card checkout, so
+     this block is the single most important thing the shop sends — and the
+     reference is the string that, mistyped, produces a payment nobody can match
+     to an order. It gets its own weight for that reason. --}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EFF1E9;border-radius:4px;">
+  <tr><td style="padding:22px 24px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;">
+    <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:28px;font-weight:400;color:#2A2E24;line-height:1.15;">{{payTitle}}</div>
+    <div style="font-size:13px;color:#6B7060;line-height:1.65;padding-top:8px;">We do not take card payment.</div>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="padding-top:16px;font-size:14px;color:#2A2E24;">
+      <tr><td style="padding:5px 0;color:#6B7060;width:130px;">Bank</td><td>{{bank.name}}</td></tr>
+      <tr><td style="padding:5px 0;color:#6B7060;">Account name</td><td>{{bank.accountName}}</td></tr>
+      <tr><td style="padding:5px 0;color:#6B7060;">Account number</td><td style="letter-spacing:.05em;">{{bank.accountNumber}}</td></tr>
+      {{#if bank.swift}}<tr><td style="padding:5px 0;color:#6B7060;">SWIFT</td><td style="letter-spacing:.05em;">{{bank.swift}}</td></tr>{{/if}}
+      <tr><td style="padding:5px 0;color:#6B7060;">Reference</td><td style="color:#5C6647;font-weight:500;">{{orderNumber}}</td></tr>
+      <tr><td style="padding:5px 0;color:#6B7060;">Amount</td><td style="font-weight:500;">{{total}}</td></tr>
+    </table>
+
+    <div style="font-size:12px;color:#6B7060;padding-top:12px;line-height:1.6;">Quote the reference, or we cannot match your payment to this order.</div>
+  </td></tr>
+</table>

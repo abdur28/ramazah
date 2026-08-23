@@ -1,7 +1,7 @@
 # Structure
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind 4 · Supabase (Postgres 17) ·
-Cloudinary · nodemailer. 86 components, 8 migrations.
+Cloudinary · nodemailer. 110 components, 31 migrations.
 
 ## Architecture
 
@@ -22,20 +22,21 @@ talks to Supabase directly under RLS, so the mobile app gets the same API for fr
 
 ```
 app/
-├── admin/            Admin dashboard (products, categories, collections,
-│                     customers, orders, transactions, analytics, mailer)
+├── admin/            Admin (products, categories, collections, customers,
+│                     orders (+ [id]/invoice, packing-slip, new), payments,
+│                     requests, reviews, mailer, pages, analytics)
 ├── api/
 │   ├── admin/users/  Privileged account deletion (verifies admin server-side)
 │   ├── auth/         Account deletion for the signed-in user
 │   ├── upload-images/, delete-image/   Cloudinary
-│   └── send-email/, send-order-email/  nodemailer
+│   └── email/worker, email/preview     drains the outbox · renders a template
 ├── auth/             login · signup · reset-password · callback (OAuth/confirm)
 ├── categories/       [...slug] catch-all, slug-addressed
 ├── dashboard/        overview · orders (+ [id]/invoice) · wishlist · requests ·
 │                     reviews · addresses · preferences · settings
 ├── faq/, shipping/, returns/, privacy/, terms/, cookies/
 │                     Support and Legal, linked from the footer
-├── checkout/, product/, contact/
+├── checkout/ (+ success), product/, contact/, unsubscribe/
 
 components/          ui/ (shadcn), admin/, home/, layout/, navbar/, footer/,
                      cart/, checkout/, product/, category/, brand/
@@ -57,9 +58,20 @@ lib/
 ├── reviews.ts       Public reviews, eligibility, submission, moderation
 ├── newsletter.ts    Subscribe (insert-only under RLS)
 ├── auth/redirect.ts safeRedirect — same-site paths only
-├── cloudinary.ts, email.ts, chartUtils.ts
+├── email/           templates registry · render · send · worker
+├── content.ts       Page copy, server-side reads
+├── content-defaults.ts  The same copy as literals — every read falls back here,
+│                     and the admin editor imports it from the browser
+├── categories.ts, navigation.ts, collections via products.ts
+├── admin/           format · errors · payments · customers · catalogue ·
+│                     campaigns · mail · content
+├── cloudinary.ts, chartUtils.ts
+emails/              29 templates + partials/ (layout · button · order lines ·
+                     payment block). Tables and inline styles — Gmail strips
+                     <style> and Outlook renders through Word.
+
 supabase/
-├── migrations/      8 migrations (see below)
+├── migrations/      31 migrations (see below)
 └── seed.sql         Sample catalog
 scripts/             make-admin.js · seed.js · seed-demo-reviews.js
                      (demo customers, orders and reviews; --clean removes them)
@@ -82,6 +94,19 @@ proxy.ts             Session refresh + route protection (Next 16 name)
 | `...000008_newsletter_subscribers` | Email captures; anon may insert, never read |
 | `...000009_review_public` | Approved reviews plus author name, and nothing else |
 | `...000010_product_requests` | Sourcing requests; quote and status are staff-only |
+| `...000011_admin_self_guard` | An admin cannot demote or suspend themselves |
+| `...000012–14_category_*` | Six levels deep, cycle-proof, with nav labels |
+| `...000015–18_filtering_search` | Server-side facets, paging, prefix search |
+| `...000019_collection_scope` | Collections become a third scope on `filter_products` |
+| `...000020_product_collections` | A product belongs to many collections |
+| `...000021_order_management` | The audit trigger could not write — no status ever moved |
+| `...000022_stock_follows_payment` | Stock is held exactly when an order is paid |
+| `...000023_payment_is_deliberate` | Undoing a payment needs a reason, and a record |
+| `...000024_request_answers` | The customer can accept or withdraw a quote |
+| `...000025_manual_orders` | Orders for people with no account |
+| `...000026–28_email_*` | Outbox, triggers, preferences, unsubscribe |
+| `...000029_campaigns` | Campaigns queue through the same outbox |
+| `...000030_site_content` | Editable page copy, with the code as the fallback |
 
 ## Key conventions
 

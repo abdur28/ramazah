@@ -72,9 +72,12 @@ export const REVIEW_STATUS: Record<string, Definition> = {
 export const REQUEST_STATUS: Record<string, Definition> = {
   asked:     { label: "With us",   icon: Search,      tone: "attention" },
   quoted:    { label: "Quoted",    icon: ReceiptText, tone: "progress" },
+  // The customer's yes. Their no is `withdrawn`; `declined` is the shop's.
+  accepted:  { label: "Accepted",  icon: Check,       tone: "attention" },
   buying:    { label: "Buying",    icon: ShoppingBag, tone: "progress" },
   fulfilled: { label: "Fulfilled", icon: Check,       tone: "done" },
   declined:  { label: "Declined",  icon: X,           tone: "danger" },
+  withdrawn: { label: "Withdrawn", icon: X,           tone: "neutral" },
 };
 
 export const PRODUCT_STATUS: Record<string, Definition> = {

@@ -1,8 +1,9 @@
 "use client";
 
-import { Coins, Package, ShoppingBag, TrendingUp } from "lucide-react";
+import { Coins, MessageCircle, Package, ShoppingBag, Store, TrendingUp } from "lucide-react";
 import StatCard from "@/components/admin/ui/StatCard";
 import SectionCard from "@/components/admin/ui/SectionCard";
+import BarList from "@/components/admin/charts/BarList";
 import DonutChart from "@/components/admin/charts/DonutChart";
 import StatusPill, { ORDER_STATUS } from "@/components/admin/ui/StatusPill";
 import { formatMoney, formatMoneyByCurrency, formatNumber } from "@/lib/admin/format";
@@ -16,6 +17,14 @@ import type { OrderAnalytics } from "@/types/admin";
  * formatted money through a symbol table with no Naira entry, so the shop's own
  * currency rendered as `NGN410005.00`. This says each thing once.
  */
+/** Reads the way the shopkeeper would say it, not the way it is stored. */
+const CHANNEL: Record<string, string> = {
+  web: "The website",
+  whatsapp: "WhatsApp",
+  phone: "Phone call",
+  in_store: "In the shop",
+};
+
 export default function OrderAnalyticsTab({ data }: { data: OrderAnalytics }) {
   const primary = data.revenues[0];
   const currency = primary?.currency ?? "ngn";
@@ -99,6 +108,31 @@ export default function OrderAnalyticsTab({ data }: { data: OrderAnalytics }) {
           </ul>
         </SectionCard>
       </div>
+
+      {/*
+        Whether the numbers above describe the business or only the part of it
+        with a checkout. Website orders were the only kind that could exist until
+        staff could raise one, and most of this shop's selling is WhatsApp.
+      */}
+      {data.ordersByChannel.length > 1 && (
+        <SectionCard
+          title="Where orders come from"
+          description="Revenue counts settled money only, as it does everywhere on this screen."
+        >
+          <BarList
+            data={data.ordersByChannel.map((row) => ({
+              name: CHANNEL[row.channel] ?? row.channel,
+              value: row.count,
+              display: `${formatNumber(row.count)}`,
+              meta:
+                row.revenues.length > 0
+                  ? formatMoneyByCurrency(row.revenues, true)
+                  : "nothing settled yet",
+            }))}
+            emptyMessage="No orders yet."
+          />
+        </SectionCard>
+      )}
 
       <SectionCard title="Recent activity">
         <dl className="grid gap-4 sm:grid-cols-3">

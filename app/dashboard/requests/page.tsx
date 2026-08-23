@@ -2,45 +2,71 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Plus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCurrency } from '@/contexts/CurrencyContext';
-import { getMyRequests, submitRequest, type ProductRequest } from '@/lib/account';
+import { answerRequest, getMyRequests, submitRequest, type ProductRequest } from '@/lib/account';
+// Not `formatPrice` from the currency context. That only swaps the symbol —
+// there are no exchange rates in this app — so a budget entered in Naira
+// rendered as "$24,000" for anyone who had switched the site to USD. Requests
+// are quoted in Naira and are shown in Naira.
+import { formatMoney } from '@/lib/admin/format';
 
 /**
  * "Tell us what you need and we'll do the rest" — the service the business
  * leads with, which until now lived entirely in WhatsApp threads where neither
  * side could see what state a request was in.
  *
- * The customer owns the item, details and budget. The quote and the status are
- * staff-owned and not grantable to customers, which is why they arrive here
- * read-only.
+ * The customer owns the item, details and budget. The price is staff-owned and
+ * not grantable to customers, which is why it arrives read-only — but the
+ * *answer* to it is theirs, and used to have nowhere to go. This page told them
+ * "Reply to accept and we will buy it on the next run" with nothing to reply
+ * with: no button, no link. Accepting and withdrawing both go through
+ * `answer_request`, which checks ownership.
+ *
+ * No haggling. A quote is answered yes or no.
  */
 const STATUS: Record<ProductRequest['status'], { label: string; className: string; note: string }> = {
-  asked:     { label: 'With us',   className: 'bg-wash text-ink-muted',            note: 'We are looking for it.' },
-  quoted:    { label: 'Quoted',    className: 'bg-sage-deep/10 text-sage-deep',    note: 'Reply to accept and we will buy it on the next run.' },
-  buying:    { label: 'Buying',    className: 'bg-warning/10 text-warning',        note: 'Being bought in Egypt.' },
-  fulfilled: { label: 'Fulfilled', className: 'bg-success/10 text-success',        note: 'On its way to you as an order.' },
+  asked:     { label: 'With us',   className: 'bg-wash text-ink-muted',             note: 'We are looking for it.' },
+  quoted:    { label: 'Quoted',    className: 'bg-sage-deep/10 text-sage-deep',     note: 'Accept and we will buy it on the next run.' },
+  accepted:  { label: 'Accepted',  className: 'bg-sage-deep/10 text-sage-deep',     note: 'Going on the next buying run.' },
+  buying:    { label: 'Buying',    className: 'bg-warning/10 text-warning',         note: 'Being bought in Egypt.' },
+  fulfilled: { label: 'Fulfilled', className: 'bg-success/10 text-success',         note: 'On its way to you as an order.' },
   declined:  { label: 'Declined',  className: 'bg-destructive/10 text-destructive', note: 'We could not source this one.' },
+  withdrawn: { label: 'Withdrawn', className: 'bg-wash text-ink-muted',             note: 'You cancelled this one.' },
 };
 
 export default function RequestsPage() {
   const { user } = useAuth();
-  const { formatPrice } = useCurrency();
 
   const [requests, setRequests] = useState<ProductRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [answering, setAnswering] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({ item: '', details: '', referenceUrl: '', quantity: 1, budget: '' });
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const { requests: fetched } = await getMyRequests(user.id);
+    // The error used to be dropped and the empty array rendered, so a dropped
+    // connection told the customer they had never asked for anything — and they
+    // would reasonably send the request again.
+    const { requests: fetched, error } = await getMyRequests(user.id);
+    setLoadError(error);
     setRequests(fetched);
     setIsLoading(false);
   }, [user?.id]);
+
+  const answer = async (request: ProductRequest, accept: boolean) => {
+    setAnswering(request.id);
+    const { error } = await answerRequest(request.id, accept);
+    setAnswering(null);
+
+    if (error) { toast.error(error); return; }
+    toast.success(accept ? 'Accepted — we will buy it on the next run.' : 'Request withdrawn.');
+    load();
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -125,6 +151,21 @@ export default function RequestsPage() {
 
       {isLoading ? (
         <div className="flex justify-center py-16 text-ink-muted"><Loader2 className="h-5 w-5 animate-spin" /></div>
+      ) : loadError ? (
+        <div className="rounded-sm border border-dashed border-rule py-16 text-center">
+          <AlertTriangle className="mx-auto h-5 w-5 text-terra-ink" />
+          <p className="mt-3 font-body text-sm text-foreground">Could not load your requests</p>
+          <p className="mx-auto mt-1 max-w-[42ch] font-body text-sm text-ink-muted">
+            This is a connection problem, not an empty list — anything you have asked for is
+            still there.
+          </p>
+          <button
+            onClick={() => { setIsLoading(true); load(); }}
+            className="mt-4 rounded-sm border border-rule px-5 py-2.5 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted transition-colors hover:text-foreground"
+          >
+            Try again
+          </button>
+        </div>
       ) : requests.length === 0 ? (
         <div className="rounded-sm border border-dashed border-rule py-16 text-center">
           <p className="font-body text-sm text-foreground">No requests yet</p>
@@ -160,7 +201,9 @@ export default function RequestsPage() {
                 {request.quotedAmount !== null && (
                   <p className="mt-3 font-body text-sm text-foreground">
                     Quoted at{' '}
-                    <span className="font-medium tabular-nums">{formatPrice(request.quotedAmount)}</span>
+                    <span className="font-medium tabular-nums">
+                      {formatMoney(request.quotedAmount, 'ngn')}
+                    </span>
                   </p>
                 )}
 
@@ -170,13 +213,46 @@ export default function RequestsPage() {
                   </p>
                 )}
 
+                {/* Yes or no, and only where they make sense. Withdrawing stops
+                    once the shop has spent money — `answer_request` refuses it
+                    there too, so this is not the only thing holding the line. */}
+                {(request.status === 'quoted' || request.status === 'asked' ||
+                  request.status === 'accepted') && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {request.status === 'quoted' && (
+                      <button
+                        onClick={() => answer(request, true)}
+                        disabled={answering === request.id}
+                        className="inline-flex items-center gap-2 rounded-sm bg-sage-deep px-5 py-2.5 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-background transition-colors hover:bg-foreground disabled:opacity-60"
+                      >
+                        {answering === request.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Accept this price
+                      </button>
+                    )}
+                    <button
+                      onClick={() => answer(request, false)}
+                      disabled={answering === request.id}
+                      className="inline-flex items-center gap-2 rounded-sm border border-rule px-5 py-2.5 font-body text-[11px] uppercase tracking-[0.16em] text-ink-muted transition-colors hover:border-destructive hover:text-destructive disabled:opacity-60"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      {request.status === 'quoted' ? 'No thanks' : 'Withdraw'}
+                    </button>
+                  </div>
+                )}
+
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-body text-xs text-ink-muted">
                   <span>
                     {new Date(request.createdAt).toLocaleDateString('en-NG', {
                       day: 'numeric', month: 'long', year: 'numeric',
                     })}
                   </span>
-                  {request.budget !== null && <span>Budget {formatPrice(request.budget)}</span>}
+                  {request.budget !== null && (
+                    <span>Budget {formatMoney(request.budget, 'ngn')}</span>
+                  )}
                   <span>{status.note}</span>
                 </div>
               </li>

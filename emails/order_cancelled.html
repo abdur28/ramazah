@@ -1,0 +1,16 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:34px;font-weight:400;color:#2A2E24;line-height:1.12;">{{orderNumber}} has been cancelled.</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:12px;">
+    Nothing further will be charged or sent.{{#if reason}}{{else}} If this is a surprise, reply and we will look into it.{{/if}}
+  </div>
+</td></tr>
+
+{{#if reason}}
+<tr><td style="padding:22px 34px 0;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EFF1E9;border-radius:4px;">
+    <tr><td style="padding:16px 20px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#2A2E24;line-height:1.6;">{{reason}}</td></tr>
+  </table>
+</td></tr>
+{{/if}}
+
+<tr><td style="padding:26px 34px 0;">{{> button url=websiteUrl label="Back to the shop" secondary=true}}</td></tr>

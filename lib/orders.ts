@@ -76,6 +76,8 @@ export function mapOrder(row: any): Order {
     trackingNumber: row.tracking_number ?? undefined,
     carrier: row.carrier ?? undefined,
     customerNotes: row.customer_notes ?? undefined,
+    channel: row.channel ?? 'web',
+    placedBy: row.placed_by ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     paidAt: row.paid_at ?? undefined,
@@ -142,6 +144,96 @@ export async function createOrder(orderData: CreateOrderData): Promise<{
     console.error('Error creating order:', error);
     return { error: error.message || 'Failed to create order' };
   }
+}
+
+// ------------------------------------------------------ orders raised by staff
+
+export interface ManualOrderLine {
+  /** A catalogue variant, or null for a one-off with its own description. */
+  variantId?: string | null;
+  name?: string;
+  sku?: string;
+  quantity: number;
+  /** Overrides the catalogue price when set; required for a one-off. */
+  unitPrice?: number | null;
+}
+
+export interface ManualOrderInput {
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  /** Link to an existing account when the customer has one. */
+  userId?: string | null;
+  channel: 'whatsapp' | 'in_store' | 'phone';
+  deliveryType: 'delivery' | 'inStore';
+  shippingAddress?: {
+    street: string; city: string; state: string; zipCode: string; country: string;
+  } | null;
+  lines: ManualOrderLine[];
+  shippingCost?: number;
+  discount?: number;
+  tax?: number;
+  notes?: string;
+  idempotencyKey?: string;
+}
+
+/**
+ * Raise an order for someone who is not on the site.
+ *
+ * Most of this shop's selling happens on WhatsApp, and none of it existed in the
+ * database — so the invoice went out as a photograph of something typed by hand,
+ * stock described only website sales, and the payments screen reported a
+ * minority of the business as if it were all of it.
+ *
+ * Deliberately an order rather than a document generator: the invoice, the
+ * packing slip, the status ladder, the payment guard and the audit history then
+ * all work on it unchanged, and there is one numbering scheme rather than two.
+ */
+export async function createManualOrder(input: ManualOrderInput): Promise<{
+  orderId?: string;
+  orderNumber?: string;
+  error?: string;
+}> {
+  const { data, error } = await supabase().rpc('create_manual_order', {
+    p_customer_name: input.customerName.trim(),
+    p_customer_phone: input.customerPhone.trim(),
+    p_lines: input.lines.map((line) => ({
+      variant_id: line.variantId ?? null,
+      name: line.name ?? null,
+      sku: line.sku ?? null,
+      quantity: line.quantity,
+      unit_price: line.unitPrice ?? null,
+    })),
+    p_customer_email: input.customerEmail?.trim() || null,
+    p_user: input.userId ?? null,
+    p_channel: input.channel,
+    p_delivery_type: toDbDelivery(input.deliveryType),
+    p_shipping_address:
+      input.deliveryType === 'delivery' && input.shippingAddress
+        ? {
+            full_name: input.customerName.trim(),
+            phone: input.customerPhone.trim(),
+            street: input.shippingAddress.street,
+            city: input.shippingAddress.city,
+            state: input.shippingAddress.state,
+            postal_code: input.shippingAddress.zipCode,
+            country: input.shippingAddress.country,
+          }
+        : null,
+    p_currency: 'NGN',
+    p_shipping_cost: input.shippingCost ?? 0,
+    p_discount: input.discount ?? 0,
+    p_tax_amount: input.tax ?? 0,
+    p_notes: input.notes?.trim() || null,
+    p_idempotency_key:
+      input.idempotencyKey ??
+      (globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now()}-${Math.random()}`),
+  });
+
+  if (error) return { error: error.message };
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return { orderId: row?.id, orderNumber: row?.order_number };
 }
 
 export async function getOrderById(orderId: string): Promise<{

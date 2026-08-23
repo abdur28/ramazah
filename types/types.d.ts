@@ -341,6 +341,10 @@ export interface Order {
   customerPhone: string;
   
   paymentMethod?: string;
+  /** How the order reached the shop. 'web' unless staff raised it. */
+  channel?: 'web' | 'whatsapp' | 'in_store' | 'phone';
+  /** The admin who raised it, for orders taken by staff. */
+  placedBy?: string;
   paymentIntentId?: string;
   
   trackingNumber?: string;

@@ -119,7 +119,7 @@ export async function generateMetadata({ params }: any) {
   }
 
   return {
-    title: `${product.name} | Ramazah`,
+    title: `${product.name} | Ramazah Store`,
     description: product.metaDescription || product.shortDescription || product.description,
     keywords: product.metaKeywords?.join(', '),
     openGraph: {

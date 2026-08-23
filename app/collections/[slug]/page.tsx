@@ -61,10 +61,10 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: any) {
   const { slug } = await params
   const { collection } = await getCollectionBySlug(slug)
-  if (!collection) return { title: "Collection · Ramazah" }
+  if (!collection) return { title: "Collection · Ramazah Store" }
 
   return {
-    title: `${collection.name} · Ramazah`,
+    title: `${collection.name} · Ramazah Store`,
     description: collection.description,
     openGraph: {
       title: collection.name,

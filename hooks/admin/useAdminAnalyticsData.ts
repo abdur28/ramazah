@@ -6,6 +6,7 @@ import {
   CustomerAnalytics,
   ProductAnalytics,
   OrderAnalytics,
+  RequestAnalytics,
   TransactionAnalytics,
   CurrencyRevenue
 } from '@/types/admin';
@@ -170,47 +171,66 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
       // Get orders for customer analytics
       const orders: any[] = await loadOrders();
       
-      // Calculate top customers with multi-currency revenue
-      const customerOrderMap = new Map<string, { totalOrders: number; revenues: Map<string, number> }>();
+      // Top customers, counting the people who have no account.
+      //
+      // `user_id` is nullable now — staff raise orders for customers who bought
+      // over WhatsApp — and keying on it alone put every one of those into a
+      // single bucket labelled "Unknown", which then also counted as one active
+      // customer. They are keyed by email or name instead, and marked so nobody
+      // reads them as an account.
+      const customerOrderMap = new Map<string, {
+        totalOrders: number; revenues: Map<string, number>;
+        name: string; email: string; hasAccount: boolean;
+      }>();
+
       orders.forEach(order => {
-        const customerId = order.userId;
-        if (!customerOrderMap.has(customerId)) {
-          customerOrderMap.set(customerId, {
+        const key = order.userId
+          ?? (order.customerEmail ? `email:${order.customerEmail.toLowerCase()}` : null)
+          ?? `name:${(order.customerName ?? '').toLowerCase()}`;
+
+        if (!customerOrderMap.has(key)) {
+          customerOrderMap.set(key, {
             totalOrders: 0,
-            revenues: new Map()
+            revenues: new Map(),
+            name: order.customerName ?? 'Unnamed',
+            email: order.customerEmail ?? '',
+            hasAccount: Boolean(order.userId),
           });
         }
-        const customer = customerOrderMap.get(customerId)!;
+        const customer = customerOrderMap.get(key)!;
         customer.totalOrders += 1;
-        
-        const currency = order.currency || 'usd';
+
+        const currency = order.currency || 'ngn';
         const currentRevenue = customer.revenues.get(currency) || 0;
         customer.revenues.set(currency, currentRevenue + (order.total || 0));
       });
       
       const topCustomers = Array.from(customerOrderMap.entries())
-        .map(([userId, stats]) => {
-          const user = users.find(u => u.uid === userId);
-          // Calculate total spent in USD for sorting (using a simple conversion for demo)
-          const totalSpentUSD = Array.from(stats.revenues.entries()).reduce((sum, [curr, amount]) => {
-            return sum + (curr === 'rub' ? amount / 90 : amount); // Simple conversion for sorting
-          }, 0);
-          
+        .map(([key, stats]) => {
+          const user = stats.hasAccount ? users.find(u => u.uid === key) : undefined;
+
+          // Sorted on Naira, which is what this shop sells in. The previous rank
+          // divided any RUB figure by 90 — a hoodskool leftover for a currency
+          // this shop has never taken.
+          const rank = stats.revenues.get('ngn')
+            ?? Array.from(stats.revenues.values()).reduce((sum, amount) => sum + amount, 0);
+
           return {
-            uid: userId,
-            name: user?.displayName || user?.email || 'Unknown',
-            email: user?.email || '',
+            uid: stats.hasAccount ? key : '',
+            name: user?.displayName || user?.email || stats.name,
+            email: user?.email || stats.email,
+            hasAccount: stats.hasAccount,
             totalOrders: stats.totalOrders,
-            totalSpentUSD, // For sorting only
+            rank,
             revenues: Array.from(stats.revenues.entries()).map(([currency, amount]) => ({
               currency,
               amount
             }))
           };
         })
-        .sort((a, b) => b.totalSpentUSD - a.totalSpentUSD)
+        .sort((a, b) => b.rank - a.rank)
         .slice(0, 10)
-        .map(({ totalSpentUSD, ...rest }) => rest); // Remove sorting helper
+        .map(({ rank, ...rest }) => rest);
       
       // Get customer locations from address field
       const locationMap = new Map<string, number>();
@@ -229,7 +249,13 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         newCustomersToday: newToday,
         newCustomersThisWeek: newThisWeek,
         newCustomersThisMonth: newThisMonth,
-        activeCustomers: customerOrderMap.size,
+        // Accounts that have ordered. Deliberately not the size of the map
+        // above, which now also holds people with no account at all.
+        activeCustomers: new Set(
+          orders.filter(order => order.userId).map(order => order.userId)
+        ).size,
+        offSiteCustomers: Array.from(customerOrderMap.values())
+          .filter(customer => !customer.hasAccount).length,
         customerGrowthRate: growthRate,
         topCustomers,
         customersByLocation
@@ -308,6 +334,57 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
   /**
    * Fetch order analytics
    */
+  /**
+   * The sourcing service, measured.
+   *
+   * Nothing counted it before, which is odd for the thing the business leads
+   * with. The useful number is not how many were asked — it is how many turned
+   * into something. A quote nobody ever answers is work done for nothing, and a
+   * request nobody quotes is a customer being ignored.
+   */
+  fetchRequestAnalytics: async (): Promise<RequestAnalytics> => {
+    const { data, error } = await supabase()
+      .from('product_requests')
+      .select('status, quoted_amount, created_at');
+    if (error) throw new Error(error.message);
+
+    const rows = data ?? [];
+    const count = (status: string) => rows.filter((r: any) => r.status === status).length;
+    const sum = (statuses: string[]) =>
+      rows
+        .filter((r: any) => statuses.includes(r.status) && r.quoted_amount != null)
+        .reduce((total: number, r: any) => total + Number(r.quoted_amount), 0);
+
+    const byStatus = ['asked', 'quoted', 'accepted', 'buying', 'fulfilled', 'declined', 'withdrawn']
+      .map(status => ({ status, count: count(status) }))
+      .filter(row => row.count > 0);
+
+    // Of the quotes that got an answer either way, how many were yes. Quotes
+    // still waiting are excluded — counting them as refusals would make the rate
+    // fall simply because a quote went out this morning.
+    const answeredYes = count('accepted') + count('buying') + count('fulfilled');
+    const answeredNo = count('withdrawn');
+    const answered = answeredYes + answeredNo;
+
+    // Anything still on somebody's desk, and how long it has sat there.
+    const open = rows.filter((r: any) => ['asked', 'quoted', 'accepted'].includes(r.status));
+    const oldestOpenDays = open.length
+      ? Math.max(...open.map((r: any) =>
+          Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86_400_000)))
+      : null;
+
+    return {
+      total: rows.length,
+      byStatus,
+      awaitingAnswer: count('quoted'),
+      awaitingQuote: count('asked'),
+      acceptanceRate: answered > 0 ? (answeredYes / answered) * 100 : 0,
+      quotedValue: sum(['quoted']),
+      acceptedValue: sum(['accepted', 'buying', 'fulfilled']),
+      oldestOpenDays,
+    };
+  },
+
   fetchOrderAnalytics: async (): Promise<OrderAnalytics> => {
     try {
       const orders: any[] = await loadOrders();
@@ -409,6 +486,41 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         ? ((primaryRevenue.revenueThisMonth - lastMonthPrimaryRevenue) / lastMonthPrimaryRevenue) * 100 
         : 0;
       
+      // Where the orders came from.
+      //
+      // Website orders were the only kind that could exist until staff could
+      // raise one, and the shop's actual selling happens on WhatsApp — so this
+      // is the split that says whether the numbers above describe the business
+      // or only the part of it with a checkout.
+      const channelMap = new Map<string, { count: number; settled: number; revenues: Map<string, number> }>();
+      orders.forEach(order => {
+        const channel = order.channel || 'web';
+        if (!channelMap.has(channel)) {
+          channelMap.set(channel, { count: 0, settled: 0, revenues: new Map() });
+        }
+        const stats = channelMap.get(channel)!;
+        stats.count += 1;
+
+        // Revenue means settled money here, as it does everywhere else on this
+        // screen — an unpaid order is not income.
+        if (order.paymentStatus === 'paid' && order.status !== 'refunded') {
+          stats.settled += 1;
+          const currency = order.currency || 'ngn';
+          stats.revenues.set(currency, (stats.revenues.get(currency) || 0) + (order.total || 0));
+        }
+      });
+
+      const ordersByChannel = Array.from(channelMap.entries())
+        .map(([channel, stats]) => ({
+          channel,
+          count: stats.count,
+          settled: stats.settled,
+          revenues: Array.from(stats.revenues.entries()).map(([currency, amount]) => ({
+            currency, amount,
+          })),
+        }))
+        .sort((a, b) => b.count - a.count);
+
       // Orders by status with revenue
       const ordersByStatus = [
         { 
@@ -456,7 +568,8 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         orderGrowthRate,
         revenueGrowthRate,
         revenues,
-        ordersByStatus
+        ordersByStatus,
+        ordersByChannel
       };
     } catch (error) {
       console.error('Error fetching order analytics:', error);
@@ -543,10 +656,11 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
     }));
     
     try {
-      const [customers, products, orders, transactions] = await Promise.all([
+      const [customers, products, orders, requests, transactions] = await Promise.all([
         get().fetchCustomerAnalytics(),
         get().fetchProductAnalytics(),
         get().fetchOrderAnalytics(),
+        get().fetchRequestAnalytics(),
         get().fetchTransactionAnalytics()
       ]);
       
@@ -554,6 +668,7 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
         customers,
         products,
         orders,
+        requests,
         transactions,
         lastUpdated: new Date().toISOString()
       };

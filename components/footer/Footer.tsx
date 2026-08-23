@@ -289,8 +289,12 @@ export default function Footer() {
         </div>
 
         <div className="mt-14 border-t border-background/15 pt-6">
+          {/* The trading name. A copyright line is a brand statement rather
+              than a contract, so the name people know is the right one here.
+              The registered company appears on the invoice and in the terms,
+              where a party is actually being named. */}
           <p className="font-body text-xs text-background/50">
-            © {new Date().getFullYear()} Ramazah. All rights reserved.
+            © {new Date().getFullYear()} Ramazah Store. All rights reserved.
           </p>
         </div>
       </div>

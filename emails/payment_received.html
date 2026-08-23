@@ -1,0 +1,10 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:34px;font-weight:400;color:#2A2E24;line-height:1.12;">Your payment reached us.</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:12px;">
+    {{total}} received against {{orderNumber}}, {{paidOn}}. Thank you &mdash; that is the part that needed doing.
+    {{#if isCollection}}We are packing it now and will message you when it is ready to collect.{{else}}We are packing it for the next consignment. Delivery runs {{leadTime}} once it leaves us.{{/if}}
+  </div>
+</td></tr>
+
+<tr><td style="padding:26px 34px 0;">{{> orderLines}}</td></tr>
+<tr><td style="padding:26px 34px 0;">{{> button url=orderUrl label="Follow your order"}}</td></tr>

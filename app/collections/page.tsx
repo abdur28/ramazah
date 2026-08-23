@@ -10,7 +10,7 @@ import { getCollectionSummaries } from "@/lib/products"
  * what we have put together" rather than one particular edit.
  */
 export const metadata = {
-  title: "Collections · Ramazah",
+  title: "Collections · Ramazah Store",
   description: "Edits and buying runs — things chosen to go together.",
 }
 
@@ -24,7 +24,7 @@ export default async function CollectionsPage() {
       <div className="mx-auto max-w-[1400px] px-4 py-10 md:px-6 md:py-14">
         <header className="mb-10 border-b border-rule pb-8">
           <p className="font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
-            Ramazah
+            Ramazah Store
           </p>
           <h1 className="mt-2 font-heading text-[32px] font-light leading-none tracking-[0.02em] text-foreground md:text-5xl">
             Collections

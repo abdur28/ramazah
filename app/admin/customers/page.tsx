@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
-  Ban,
-  Eye,
+  ChevronRight,
   Loader2,
-  MoreHorizontal,
   RefreshCcw,
   Search,
   Shield,
-  UserCheck,
   Users,
   X,
 } from "lucide-react";
@@ -19,39 +17,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/admin/ui/PageHeader";
 import StatCard from "@/components/admin/ui/StatCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill, { ACCOUNT_STATUS, ROLE } from "@/components/admin/ui/StatusPill";
-import UserDetailsDialog from "@/components/admin/UserDetailsDialog";
 import useAdmin from "@/hooks/admin/useAdmin";
 import { useAuth } from "@/contexts/AuthContext";
 import { getCustomerStats, type CustomerStats } from "@/lib/admin/customers";
 import { formatDate, formatMoney, formatNumber } from "@/lib/admin/format";
-import type { UserProfile } from "@/types/types";
 import { describeError } from "@/lib/admin/errors";
 
 /**
@@ -75,21 +54,17 @@ import { describeError } from "@/lib/admin/errors";
  * the buttons are not offered in the first place.
  */
 export default function AdminCustomersPage() {
-  const { fetchUsers, toggleUserStatus, assignUserRole, users, loading, error, pagination, resetUsers } =
-    useAdmin();
+  // Role and suspension moved to `/admin/customers/[id]`, where the order
+  // history that ought to inform them is on the same screen.
+  const { fetchUsers, users, loading, error, pagination, resetUsers } = useAdmin();
   const { user: currentUser } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [processing, setProcessing] = useState(false);
   const [stats, setStats] = useState<Map<string, CustomerStats>>(new Map());
 
-  const [suspendTarget, setSuspendTarget] = useState<UserProfile | null>(null);
-  const [roleTarget, setRoleTarget] = useState<UserProfile | null>(null);
-  const [nextRole, setNextRole] = useState<"user" | "admin">("user");
-  const [detailsUserId, setDetailsUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -139,44 +114,7 @@ export default function AdminCustomersPage() {
   const adminCount = users.filter((user) => user.role === "admin").length;
   const suspendedCount = users.filter((user) => (user.status ?? "active") === "inactive").length;
 
-  const handleSuspendToggle = async () => {
-    if (!suspendTarget) return;
-    const suspending = (suspendTarget.status ?? "active") === "active";
 
-    setProcessing(true);
-    try {
-      await toggleUserStatus(suspendTarget.uid, suspending ? "inactive" : "active");
-      toast.success(
-        suspending
-          ? `${suspendTarget.displayName || suspendTarget.email} suspended.`
-          : `${suspendTarget.displayName || suspendTarget.email} reinstated.`
-      );
-      setSuspendTarget(null);
-      loadUsers();
-    } catch (err: any) {
-      toast.error(describeError(err, "Could not change the account status."));
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleRoleChange = async () => {
-    if (!roleTarget) return;
-    setProcessing(true);
-    try {
-      await assignUserRole(roleTarget.uid, nextRole);
-      toast.success(
-        nextRole === "admin"
-          ? `${roleTarget.displayName || roleTarget.email} is now an admin.`
-          : `${roleTarget.displayName || roleTarget.email} is now a customer.`
-      );
-      setRoleTarget(null);
-    } catch (err: any) {
-      toast.error(describeError(err, "Could not change the role."));
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   return (
     <div className="space-y-8">
@@ -302,10 +240,11 @@ export default function AdminCustomersPage() {
               const suspended = (user.status ?? "active") === "inactive";
 
               return (
-                <li
-                  key={user.uid}
-                  className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-wash/50 lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_2.5rem] lg:items-center lg:gap-4"
-                >
+                <li key={user.uid}>
+                  <Link
+                    href={`/admin/customers/${user.uid}`}
+                    className="group grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-wash/50 lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_2.5rem] lg:items-center lg:gap-4"
+                  >
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar className="h-9 w-9 shrink-0">
                       <AvatarImage src={user.photoURL} alt="" />
@@ -353,54 +292,9 @@ export default function AdminCustomersPage() {
                   </span>
 
                   <span className="justify-self-end">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Actions for {user.displayName || user.email}</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setDetailsUserId(user.uid)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View details
-                        </DropdownMenuItem>
-
-                        {/* Both actions are refused by the database for your own
-                            account, so they are not offered here either. */}
-                        {!isSelf && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setRoleTarget(user);
-                                setNextRole(user.role === "admin" ? "user" : "admin");
-                              }}
-                            >
-                              <Shield className="mr-2 h-4 w-4" />
-                              {user.role === "admin" ? "Remove admin access" : "Make admin"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setSuspendTarget(user)}
-                              className={suspended ? "" : "text-destructive"}
-                            >
-                              {suspended ? (
-                                <>
-                                  <UserCheck className="mr-2 h-4 w-4" />
-                                  Reinstate account
-                                </>
-                              ) : (
-                                <>
-                                  <Ban className="mr-2 h-4 w-4" />
-                                  Suspend account
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <ChevronRight className="h-4 w-4 text-ink-faint transition-transform group-hover:translate-x-0.5" />
                   </span>
+                  </Link>
                 </li>
               );
             })}
@@ -421,96 +315,6 @@ export default function AdminCustomersPage() {
         </div>
       )}
 
-      {/* --------------------------------------------------- suspend/reinstate */}
-      <AlertDialog
-        open={Boolean(suspendTarget)}
-        onOpenChange={(open) => !open && setSuspendTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-body">
-              {(suspendTarget?.status ?? "active") === "inactive"
-                ? `Reinstate ${suspendTarget?.displayName || "this customer"}?`
-                : `Suspend ${suspendTarget?.displayName || "this customer"}?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {(suspendTarget?.status ?? "active") === "inactive"
-                ? "They will be able to sign in and place orders again."
-                : "They keep their account and their history, but cannot place new orders until you reinstate them."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleSuspendToggle}
-              disabled={processing}
-              className={
-                (suspendTarget?.status ?? "active") === "inactive"
-                  ? ""
-                  : "bg-destructive hover:bg-destructive/90"
-              }
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Working…
-                </>
-              ) : (suspendTarget?.status ?? "active") === "inactive" ? (
-                "Reinstate"
-              ) : (
-                "Suspend"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ---------------------------------------------------------------- role */}
-      <AlertDialog open={Boolean(roleTarget)} onOpenChange={(open) => !open && setRoleTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-body">
-              {nextRole === "admin"
-                ? `Make ${roleTarget?.displayName || "this person"} an admin?`
-                : `Remove admin access from ${roleTarget?.displayName || "this person"}?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {nextRole === "admin"
-                ? "Admins can see every order and customer, change prices and stock, moderate reviews, and email your whole list. They will need to sign out and back in for it to take effect."
-                : "They keep their account and their order history, and lose access to the admin area."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {nextRole === "admin" && (
-            <p className="flex items-start gap-2 rounded-sm bg-terra/[0.06] p-3 font-body text-sm text-terra-ink">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              Only do this for someone you trust with the whole shop.
-            </p>
-          )}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRoleChange} disabled={processing}>
-              {processing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating…
-                </>
-              ) : nextRole === "admin" ? (
-                "Make admin"
-              ) : (
-                "Remove access"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <UserDetailsDialog
-        open={Boolean(detailsUserId)}
-        onOpenChange={(open) => !open && setDetailsUserId(null)}
-        userId={detailsUserId}
-      />
     </div>
   );
 }

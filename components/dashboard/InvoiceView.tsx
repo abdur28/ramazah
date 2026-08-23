@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Printer } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { COMPANY } from "@/constants";
 
 /**
  * The invoice, rebuilt from the printed Ramazah template.
@@ -254,9 +255,13 @@ export default function InvoiceView({
 
           {/* Footer */}
           <footer className="mt-16 flex flex-wrap items-end justify-between gap-6 font-body text-sm">
+            {/* The registered company, not the shop's trading name. An invoice
+                is a tax document and names the party issuing it — a customer
+                querying a payment months later needs to find a real entity. */}
             <div className="text-neutral-800">
-              <p className="font-semibold text-neutral-900">Ramazah Group</p>
-              <p>Alexandria, Egypt.</p>
+              <p className="font-semibold text-neutral-900">{COMPANY.legalName}</p>
+              <p>{COMPANY.address}.</p>
+              {COMPANY.rcNumber && <p>RC {COMPANY.rcNumber}</p>}
             </div>
 
             {/* Not on the printed template, but this invoice is the payment

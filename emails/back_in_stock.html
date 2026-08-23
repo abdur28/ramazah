@@ -1,0 +1,23 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:34px;font-weight:400;color:#2A2E24;line-height:1.12;">{{productName}} is back.</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:12px;">
+    You put this on your wishlist and it went out of stock. It came back on the last run.
+  </div>
+</td></tr>
+
+<tr><td style="padding:24px 34px 0;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+    <tr>
+      <td width="110" valign="top" style="padding-right:16px;">
+        {{#if imageUrl}}<img src="{{imageUrl}}" width="110" alt="" style="display:block;width:110px;height:110px;object-fit:cover;border-radius:4px;border:1px solid #E4E3D8;" />{{/if}}
+      </td>
+      <td valign="top" style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;">
+        <div style="font-size:16px;color:#2A2E24;">{{productName}}</div>
+        <div style="font-size:15px;color:#6B7060;padding-top:6px;">{{price}}</div>
+        {{#if stockCount}}<div style="font-size:13px;color:#9C5433;padding-top:8px;">{{stockCount}} left</div>{{/if}}
+      </td>
+    </tr>
+  </table>
+</td></tr>
+
+<tr><td style="padding:24px 34px 0;">{{> button url=productUrl label="Have a look"}}</td></tr>

@@ -1,0 +1,79 @@
+{{!--
+  The one layout. Every email is this file plus a content block.
+
+  Written as tables with inline styles because that is the only thing that
+  survives: Gmail strips <style> blocks, Outlook renders through Word, and
+  flexbox and grid do not exist here. The five templates this replaced were
+  400–570 lines each of near-identical hand-written HTML, which is why changing
+  the footer used to mean changing it five times.
+
+  Style B from the two demos — the shop's own cream and sage rather than the
+  invoice's amber. Only three of twenty-seven templates are money documents; the
+  rest are "your parcel shipped" and "how was it?", and amber-and-green on a
+  review invitation is a shop that only ever writes to you about invoices. The
+  printed invoice keeps its own identity, because it is a different object.
+
+  Cormorant appears only at display sizes, exactly as the site rule says, with
+  Georgia behind it — webfonts do not load in most mail clients.
+
+  Two names, deliberately. **Ramazah Store** is the shop — the name in the header
+  above, the site title, the brand lockup. The **registered company** goes in the
+  address block at the foot, because that is where a party is being named rather
+  than a brand. An earlier draft used "Ramazah Group" there, which is not a
+  registered entity at all.
+--}}
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="x-apple-disable-message-reformatting" />
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
+<title>{{subject}}</title>
+<!--[if mso]>
+<style>body,table,td{font-family:Arial,Helvetica,sans-serif !important;}</style>
+<![endif]-->
+</head>
+<body style="margin:0;padding:0;background:#FAF9F5;">
+
+{{!-- Preheader: the grey line the inbox shows next to the subject. Left blank
+     it shows the first words of the body, which is usually "View this email". --}}
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#FAF9F5;">
+  {{preheader}}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#FAF9F5;">
+<tr><td align="center" style="padding:24px 12px;">
+
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;background:#FFFFFF;border:1px solid #E4E3D8;border-radius:4px;">
+
+    <tr><td style="padding:30px 34px 0;">
+      <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:30px;font-weight:400;color:#2A2E24;letter-spacing:.01em;line-height:1;">Ramazah Store</div>
+      <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.26em;color:#6B7060;padding-top:9px;">{{eyebrow}}</div>
+    </td></tr>
+
+    {{{body}}}
+
+    <tr><td style="padding:30px 34px 32px;">
+      <div style="border-top:1px solid #E4E3D8;padding-top:16px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:12px;color:#6B7060;line-height:1.7;">
+        <span style="color:#2A2E24;">{{companyName}}</span> &middot; {{companyAddress}}<br />
+        <a href="{{websiteUrl}}" style="color:#5C6647;text-decoration:none;">{{websiteHost}}</a>
+        {{#if supportWhatsapp}}
+          &middot; <a href="https://wa.me/{{supportWhatsapp}}" style="color:#5C6647;text-decoration:none;">WhatsApp</a>
+        {{/if}}
+        {{#if unsubscribeUrl}}
+        <br /><br />
+        <span style="color:#9AA08D;">
+          You are getting this because you asked to hear from us.
+          <a href="{{unsubscribeUrl}}" style="color:#6B7060;">Unsubscribe</a>.
+        </span>
+        {{/if}}
+      </div>
+    </td></tr>
+
+  </table>
+
+</td></tr></table>
+</body>
+</html>

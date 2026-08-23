@@ -22,21 +22,30 @@ import { getRequestsForStaff, setRequestStatus, type ProductRequest } from "@/li
  * be a queue nobody could drain — the same failure the review form would have
  * had without /admin/reviews.
  *
- * Two changes beyond the restyle. Sending a quote now requires an amount:
- * "Send quote" with the field empty used to set the status to `quoted` with a
- * null price, and the customer would see their request marked Quoted with no
- * figure attached. And each request carries the quote and note it already has,
- * rather than only offering blank fields — you can see what you told someone
- * last week before you tell them something else.
+ * Sending a quote requires an amount, in the database as well as here: "Send
+ * quote" with the field empty used to set the status to `quoted` with a null
+ * price, and the customer saw their request marked Quoted with no figure
+ * attached.
+ *
+ * Each request carries the quote and note it already has rather than only
+ * offering blank fields — you can see what you told someone last week before you
+ * tell them something else. That seeding is also what makes direct assignment
+ * right: `set_request_status` used to `coalesce` a null onto the stored value,
+ * so emptying the note box reported success and changed nothing while the
+ * customer went on reading it. What is on screen is what is saved.
  */
 type StaffRequest = ProductRequest & { customerName: string; customerEmail: string };
 
 const TABS: { label: string; status?: ProductRequest["status"] }[] = [
   { label: "With us", status: "asked" },
   { label: "Quoted", status: "quoted" },
+  // The customer has said yes to a price. This is the queue that costs money if
+  // it is ignored, so it sits next to the one you work from.
+  { label: "Accepted", status: "accepted" },
   { label: "Buying", status: "buying" },
   { label: "Fulfilled", status: "fulfilled" },
   { label: "Declined", status: "declined" },
+  { label: "Withdrawn", status: "withdrawn" },
   { label: "All" },
 ];
 
@@ -47,11 +56,26 @@ export default function AdminRequestsPage() {
   const [quotes, setQuotes] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     setIsLoading(true);
-    const { requests: fetched, error } = await getRequestsForStaff(status);
+
+    // The whole set as well as the filtered one, so the tabs can carry counts.
+    // A queue you have to click into to discover is empty is not a queue.
+    const [{ requests: fetched, error }, { requests: all }] = await Promise.all([
+      getRequestsForStaff(status),
+      getRequestsForStaff(),
+    ]);
     if (error) toast.error(error);
+
+    setCounts(
+      all.reduce<Record<string, number>>((tally, request) => {
+        tally[request.status] = (tally[request.status] ?? 0) + 1;
+        tally.all = (tally.all ?? 0) + 1;
+        return tally;
+      }, {})
+    );
 
     const staffRequests = fetched as StaffRequest[];
     setRequests(staffRequests);
@@ -78,21 +102,23 @@ export default function AdminRequestsPage() {
 
   const move = async (request: StaffRequest, next: ProductRequest["status"]) => {
     const raw = quotes[request.id]?.trim();
-    const quote = raw ? Number(raw) : null;
+    const parsed = raw ? Number(raw) : null;
+    const quote = parsed !== null && Number.isNaN(parsed) ? null : parsed;
 
-    if (next === "quoted") {
-      if (quote === null || Number.isNaN(quote) || quote <= 0) {
-        toast.error("Enter the quoted amount before sending it.");
-        return;
-      }
+    if (next === "quoted" && (quote === null || quote <= 0)) {
+      toast.error("Enter the quoted amount before sending it.");
+      return;
     }
 
     setBusyId(request.id);
+    // Both fields are sent as they appear, including empty — the seeded values
+    // mean what is on screen is what is stored, and it is the only way to take a
+    // note back.
     const { error } = await setRequestStatus(
       request.id,
       next,
-      Number.isNaN(quote as number) ? null : quote,
-      notes[request.id]?.trim() || null
+      quote,
+      notes[request.id] ?? null
     );
     setBusyId(null);
 
@@ -134,6 +160,14 @@ export default function AdminRequestsPage() {
             )}
           >
             {tab.label}
+            <span
+              className={cn(
+                "ml-2 font-body text-xs tabular-nums",
+                status === tab.status ? "text-background" : "text-ink-faint"
+              )}
+            >
+              {counts[tab.status ?? "all"] ?? 0}
+            </span>
           </button>
         ))}
       </div>
@@ -221,6 +255,14 @@ export default function AdminRequestsPage() {
                     <span title={formatDate(request.createdAt)}>
                       Asked {formatRelative(request.createdAt)}
                     </span>
+                    {request.status === "accepted" && (
+                      <span className="font-medium text-sage-deep">
+                        They accepted this price
+                      </span>
+                    )}
+                    {request.status === "withdrawn" && (
+                      <span className="text-ink-faint">They withdrew it</span>
+                    )}
                   </div>
                 </div>
 
@@ -261,7 +303,11 @@ export default function AdminRequestsPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => move(request, "quoted")} disabled={busy}>
+                    <Button
+                      size="sm"
+                      onClick={() => move(request, "quoted")}
+                      disabled={busy || request.status === "withdrawn"}
+                    >
                       {busy ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -309,8 +355,10 @@ export default function AdminRequestsPage() {
 
 const MOVED: Record<ProductRequest["status"], string> = {
   asked: "Moved back to the queue.",
-  quoted: "Quote sent — the customer can see it on their account now.",
+  quoted: "Quote sent — the customer can see it and answer on their account now.",
+  accepted: "Marked accepted.",
   buying: "Marked as being bought.",
   fulfilled: "Marked fulfilled.",
   declined: "Declined.",
+  withdrawn: "Marked withdrawn.",
 };

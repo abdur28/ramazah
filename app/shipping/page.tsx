@@ -1,42 +1,29 @@
 import PolicyPage from "@/components/PolicyPage";
+import { getContent, type PolicyContent } from "@/lib/content";
 
+/**
+ * The words on this page come from `site_content`, edited at
+ * /admin/pages/shipping. The eyebrow and the title stay here: they are the page's
+ * identity in the navigation rather than copy somebody rewrites week to week.
+ *
+ * `getContent` falls back to the literals in `lib/content.ts`, so an unedited
+ * shop renders exactly what it rendered before this existed.
+ */
 export const metadata = {
-  title: "Shipping & delivery · Ramazah Store",
-  description: "Delivery times, express shipping and coverage across Nigeria.",
+  title: "Shipping · Ramazah Store",
+  description: "How your order reaches you, and how long it takes.",
 };
 
-export default function ShippingPage() {
+export default async function ShippingPage() {
+  const content = await getContent<PolicyContent>("shipping");
+
   return (
     <PolicyPage
       eyebrow="Support"
       title="Shipping and delivery"
-      standfirst="Goods are bought in Egypt and brought in by the crate, so plan for weeks rather than days."
-      sections={[
-        {
-          heading: "Standard shipping — two to three weeks",
-          body: [
-            "The default. Your order joins the next consignment out of Egypt and is delivered to your address anywhere in Nigeria.",
-          ],
-        },
-        {
-          heading: "Express — faster, at extra cost",
-          body: [
-            "If you need something sooner, say so before ordering and we will quote the surcharge. Express is priced per order, because it depends on weight and destination.",
-          ],
-        },
-        {
-          heading: "Where we deliver",
-          body: [
-            "Anywhere in Nigeria. Delivery cost is shown at checkout, and larger orders ship free — the threshold is displayed in your cart as you add items.",
-          ],
-        },
-        {
-          heading: "Tracking your order",
-          body: [
-            "Order status is on your account under Orders, and we email you when the consignment lands and when your parcel goes out for delivery.",
-          ],
-        },
-      ]}
+      standfirst={content.standfirst}
+      awaitingCopy={content.awaitingCopy}
+      sections={content.sections}
     />
   );
 }

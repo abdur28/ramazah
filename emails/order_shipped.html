@@ -1,0 +1,29 @@
+<tr><td style="padding:26px 34px 0;">
+  <div style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:34px;font-weight:400;color:#2A2E24;line-height:1.12;">On its way.</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#6B7060;line-height:1.7;padding-top:12px;">
+    {{orderNumber}} left us{{#if carrier}} with {{carrier}}{{/if}}. Standard delivery runs {{leadTime}} from here.
+  </div>
+</td></tr>
+
+{{#if trackingNumber}}
+<tr><td style="padding:24px 34px 0;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EFF1E9;border-radius:4px;">
+    <tr><td style="padding:18px 22px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:#6B7060;">Tracking</div>
+      <div style="font-size:19px;color:#2A2E24;letter-spacing:.04em;padding-top:6px;">{{trackingNumber}}</div>
+      {{#if carrier}}<div style="font-size:13px;color:#6B7060;padding-top:4px;">{{carrier}}</div>{{/if}}
+    </td></tr>
+  </table>
+</td></tr>
+{{/if}}
+
+<tr><td style="padding:24px 34px 0;">{{> orderLines}}</td></tr>
+
+{{#if address}}
+<tr><td style="padding:24px 34px 0;">
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:#6B7060;">Going to</div>
+  <div style="font-family:Jost,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#2A2E24;line-height:1.6;padding-top:8px;">{{{address}}}</div>
+</td></tr>
+{{/if}}
+
+<tr><td style="padding:26px 34px 0;">{{> button url=orderUrl label="Follow your order"}}</td></tr>

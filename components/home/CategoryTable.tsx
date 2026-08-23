@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import TiltCard from "@/components/ui/tilt-card";
 import { tileImages } from "@/constants/demo";
+import type { HomeContent } from "@/lib/content-defaults";
 
 /**
  * The whole shelf: all six top-level categories, in the order they are seeded.
@@ -22,49 +23,37 @@ import { tileImages } from "@/constants/demo";
  *
  * Mobile is a separate composition on two columns, untouched by any of this.
  */
-const tiles = [
-  {
-    name: "Veils & Scarves",
-    href: "/categories/veils-scarves",
-    blurb: "Chiffon, jersey and embroidered, in the colours that sell.",
-    image: tileImages["veils-scarves"],
-    span: "col-span-2 md:col-span-5 md:row-span-2",
-    feature: true,
-  },
-  {
-    name: "Food & Pantry",
-    href: "/categories/food-pantry",
-    image: tileImages["food-pantry"],
-    span: "md:col-span-4",
-  },
-  {
-    name: "Beauty & Personal Care",
-    href: "/categories/beauty-personal-care",
-    blurb: "Oils, soaps and skincare.",
-    image: tileImages["beauty-personal-care"],
-    span: "md:col-span-3 md:row-span-2",
-  },
-  {
-    name: "Kitchen & Dining",
-    href: "/categories/kitchen-dining",
-    image: tileImages["kitchen-dining"],
-    span: "col-span-2 md:col-span-4",
-  },
-  {
-    name: "Home & Decor",
-    href: "/categories/home-decor",
-    image: tileImages["home-decor"],
-    span: "md:col-span-7",
-  },
-  {
-    name: "School & Stationery",
-    href: "/categories/school-stationery",
-    image: tileImages["school-stationery"],
-    span: "md:col-span-5",
-  },
-];
+/**
+ * How the six tiles are cut across the grid.
+ *
+ * Keyed by slug and kept in code on purpose: these spans are what hold the top
+ * half of the page together while the tiles between them change width, and an
+ * editor that could change them could break the composition. The words and the
+ * photographs come from `site_content`; the shape does not.
+ */
+const LAYOUT: Record<string, { span: string; feature?: boolean }> = {
+  'veils-scarves':        { span: "col-span-2 md:col-span-5 md:row-span-2", feature: true },
+  'food-pantry':          { span: "md:col-span-4" },
+  'beauty-personal-care': { span: "md:col-span-3 md:row-span-2" },
+  'kitchen-dining':       { span: "col-span-2 md:col-span-4" },
+  'home-decor':           { span: "md:col-span-7" },
+  'school-stationery':    { span: "md:col-span-5" },
+};
 
-export default function CategoryTable() {
+
+export default function CategoryTable({ content }: { content: HomeContent["tiles"] }) {
+  const tiles = content.map((tile) => ({
+    name: tile.name,
+    href: `/categories/${tile.slug}`,
+    blurb: tile.blurb || undefined,
+    // An unset photograph falls back to the placeholder rather than an empty
+    // frame, so a half-filled row still renders a page.
+    image: tile.imageUrl
+      ? { src: tile.imageUrl, alt: tile.imageAlt }
+      : tileImages[tile.slug],
+    ...(LAYOUT[tile.slug] ?? { span: "md:col-span-4" }),
+  })).filter((tile) => tile.image);
+
   return (
     /* The section pins and the product rail scrolls up over it.
     
