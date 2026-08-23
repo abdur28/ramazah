@@ -14,6 +14,7 @@ import { Order, OrderStatus } from "@/types/types";
 import { format } from "date-fns";
 import UserOrderDetailsDialog from "@/components/dashboard/UserOrderDetailsDialog";
 import { useCurrency } from '@/contexts/CurrencyContext';
+import Pager from "@/components/ui/Pager";
 
 const getOrderStatusConfig = (status: OrderStatus) => {
   const configs: Record<OrderStatus, { 
@@ -69,15 +70,17 @@ const formatDate = (timestamp: any) => {
 export default function DashboardOrdersPage() {
   const { user } = useAuth();
   const { formatPrice } = useCurrency();
-  const { fetchUserOrders, orders, isLoadingOrders, ordersError } = useDashboard();
+  const { fetchUserOrders, orders, ordersPage, ordersTotal, isLoadingOrders, ordersError } =
+    useDashboard();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (user?.id) {
-      fetchUserOrders(user.id);
+      fetchUserOrders(user.id, page);
     }
-  }, [user]);
+  }, [user, page]);
 
   const handleViewOrder = (order: Order) => {
     setSelectedOrder(order);
@@ -259,6 +262,16 @@ export default function DashboardOrdersPage() {
           );
         })}
       </div>
+
+      {orders.length > 0 && (
+        <Pager
+          page={ordersPage}
+          total={ordersTotal}
+          busy={isLoadingOrders}
+          onChange={setPage}
+          noun="orders"
+        />
+      )}
 
       <UserOrderDetailsDialog 
         open={detailsOpen}

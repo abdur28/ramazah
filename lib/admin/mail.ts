@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { fetchPage, rangeFor } from '@/lib/paging';
 
 /**
  * The outbox, for the admin.
@@ -41,36 +42,65 @@ const map = (row: any): OutboxEntry => ({
   createdAt: row.created_at,
 });
 
-export async function getOutbox(status?: string, limit = 200): Promise<{
+/**
+ * One page of the outbox.
+ *
+ * Was capped at 200 with no way past it, which was safe but meant the two
+ * hundred and first email did not exist as far as this screen was concerned.
+ * The counts above the list have always come from the database; now the list
+ * can reach everything they count.
+ */
+export async function getOutbox(status?: string, page = 1): Promise<{
   entries: OutboxEntry[];
+  total: number;
+  page: number;
   error: string | null;
 }> {
-  let query = createClient()
-    .from('email_outbox')
-    .select('id, template, to_email, to_name, status, send_after, sent_at, attempts, last_error, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error, count, page: landed } = await fetchPage(page, async (p) => {
+    const [first, last] = rangeFor(p);
 
-  if (status && status !== 'all') query = query.eq('status', status);
+    let query = createClient()
+      .from('email_outbox')
+      .select(
+        'id, template, to_email, to_name, status, send_after, sent_at, attempts, last_error, created_at',
+        { count: 'exact' }
+      )
+      .order('created_at', { ascending: false })
+      .range(first, last);
 
-  const { data, error } = await query;
-  if (error) return { entries: [], error: error.message };
-  return { entries: (data ?? []).map(map), error: null };
-}
-
-export async function getOutboxCounts(): Promise<OutboxCounts> {
-  const { data } = await createClient()
-    .from('email_outbox').select('status, send_after');
-
-  const counts: OutboxCounts = { queued: 0, sent: 0, failed: 0, cancelled: 0, due: 0 };
-  const now = Date.now();
-
-  (data ?? []).forEach((row: any) => {
-    counts[row.status as keyof OutboxCounts] += 1;
-    if (row.status === 'queued' && new Date(row.send_after).getTime() <= now) counts.due += 1;
+    if (status && status !== 'all') query = query.eq('status', status);
+    return query;
   });
 
-  return counts;
+  if (error) return { entries: [], total: 0, page: 1, error: error.message };
+
+  const entries = (data ?? []).map(map);
+  return { entries, total: count ?? entries.length, page: landed, error: null };
+}
+
+/**
+ * Counted in the database.
+ *
+ * This used to select every row and tally them in the browser, which looked like
+ * a performance problem and was a correctness one: **PostgREST caps an unbounded
+ * select at 1000 rows**, so past a thousand the counts silently stopped moving.
+ * Measured at 2,505 rows in the table and 1,000 reported — and it would have read
+ * 1,000 forever, on the screen whose whole job is answering "did we send it".
+ */
+export async function getOutboxCounts(): Promise<OutboxCounts> {
+  const empty: OutboxCounts = { queued: 0, sent: 0, failed: 0, cancelled: 0, due: 0 };
+
+  const { data, error } = await createClient().rpc('outbox_counts');
+  if (error || !data?.length) return empty;
+
+  const row = data[0] as any;
+  return {
+    queued: row.queued ?? 0,
+    sent: row.sent ?? 0,
+    failed: row.failed ?? 0,
+    cancelled: row.cancelled ?? 0,
+    due: row.due ?? 0,
+  };
 }
 
 /** Put a failed row back in the queue, due now. */

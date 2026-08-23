@@ -82,7 +82,7 @@ export default function AdminCollectionsPage() {
     resetCollections();
     try {
       const [, fetchedCounts] = await Promise.all([
-        fetchCollections({ limit: 100, orderByField: "name", orderDirection: "asc" }),
+        fetchCollections({ size: 200, orderByField: "name", orderDirection: "asc" }),
         getCollectionProductCounts(),
       ]);
       setCounts(fetchedCounts);

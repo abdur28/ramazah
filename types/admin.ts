@@ -22,9 +22,22 @@ export interface AdminErrorState {
   adminAction: string | null;
 }
 
+/**
+ * Where you are in a paged list.
+ *
+ * Was `{ lastDoc, hasMore }` — a cursor and a "there is more" flag, which is
+ * all a Load more button needs and nowhere near enough for a pager. `hasMore`
+ * cannot say how many pages there are, so the only way to find out how long a
+ * list was involved reaching the end of it.
+ *
+ * `total` is counted by the database as part of the same request that fetches
+ * the page, and it counts rows matching the filters currently applied, not rows
+ * in the table.
+ */
 export interface PaginationState {
-  lastDoc: any;
-  hasMore: boolean;
+  /** 1-based, as shown on screen. */
+  page: number;
+  total: number;
 }
 
 export interface AdminPaginationState {
@@ -37,16 +50,23 @@ export interface AdminPaginationState {
 
 // ============ FETCH OPTIONS ============
 
+/** An equality filter. `operator` is vestigial - these have only ever been `eq`. */
 export interface FilterOption {
   field: string;
-  operator: any; // Firestore operators
+  operator?: any;
   value: any;
 }
 
 export interface FetchOptions {
-  limit?: number;
-  startAfter?: any;
+  /** 1-based. Fetching a page replaces the rows in the store; it does not append. */
+  page?: number;
+  size?: number;
   filters?: FilterOption[];
+  /**
+   * Matched in the database, not in the browser. A search that filtered the
+   * loaded page would quietly search 50 rows out of however many there are.
+   */
+  search?: string;
   orderByField?: string;
   orderDirection?: 'asc' | 'desc';
 }

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Loader2, Star, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyReviews, type MyReview } from '@/lib/account';
+import Pager from '@/components/ui/Pager';
 
 /**
  * Reviews this customer has written.
@@ -35,14 +36,18 @@ const statusCopy: Record<string, { label: string; className: string; note: strin
 export default function MyReviewsPage() {
   const { user } = useAuth();
   const [reviews, setReviews] = useState<MyReview[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const { reviews: fetched } = await getMyReviews(user.id);
+    const { reviews: fetched, total: written, page: landed } = await getMyReviews(user.id, page);
     setReviews(fetched);
+    setTotal(written);
+    if (landed !== page) setPage(landed);
     setIsLoading(false);
-  }, [user?.id]);
+  }, [user?.id, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -121,6 +126,12 @@ export default function MyReviewsPage() {
             );
           })}
         </ul>
+      )}
+
+      {reviews.length > 0 && (
+        <div className="mt-8">
+          <Pager page={page} total={total} busy={isLoading} onChange={setPage} noun="reviews" />
+        </div>
       )}
     </div>
   );

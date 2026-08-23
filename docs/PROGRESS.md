@@ -5,6 +5,416 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-23 — Fifty a page, and counting where the rows are
+
+Asked to paginate every table at 50. Doing that alone would have put a wrong
+number on five screens, so it happened in three passes rather than one.
+
+**The counts moved into the database first.** Orders, Products, Customers,
+Payments, Reviews and Requests all tallied their own stat cards and tab chips
+with `rows.filter(...).length`. That is right exactly as long as `rows` is
+everything — the assumption pagination removes. Six functions now count in
+Postgres, all `security invoker` so RLS still decides the rows: a customer
+calling `order_summary()` gets a summary of their own orders. Verified — a demo
+customer sees 4 orders where the shop has 13, and `customer_stats` returns
+nothing at all for ids that are not theirs.
+
+**Search moved with them.** A search box filtering a loaded page searches the
+page. That needed an escaping helper more than it looks: PostgREST's `or=(...)`
+is one comma-separated string, so a customer named `Needle, Haystack (Ltd)` was
+spliced into the filter as extra conditions. Confirmed — the raw term returns
+*"failed to parse logic tree"*; escaped, it returns rows. `%` and `_` are escaped
+rather than dropped, so searching for `50%` no longer matches everything
+beginning "50".
+
+**Then the pager.** One control, `components/ui/Pager.tsx`, shared by the admin
+and the customer's own pages — buttons rather than the storefront's links,
+because these lists' filters are local state and a link restoring the page but
+not the filter is worse than no link. It always says what you are looking at:
+"51–100 of 1,284".
+
+Two filters could not be paged as they stood.
+
+- **Stock.** A product's on-hand figure is a sum over its variants, not a
+  column, so "low stock" could not be a query. `product_stock_status` makes it
+  one, and `product_summary()` reads the same view — one definition of the
+  buckets instead of two drifting apart.
+- **Category.** The dropdown was built from `new Set(products.map(...))`, the
+  categories that happened to be on screen. Paged, it would have listed this
+  page's categories and omitted the rest, so filtering could never find the
+  products that made a category disappear.
+
+Three more instances of the Mailer's bug turned up on the way:
+
+- **`getCustomerStats` fetched every order in the shop** to fill in two columns.
+  Past a thousand orders, lifetime spend would have quietly stopped counting —
+  the best customer in the shop showing as an average one.
+- **The star breakdown on a product page** was drawn from the loaded reviews.
+- **The customer detail panels** printed `Orders (${detail.orders.length})` over
+  an unbounded query. They now list the most recent hundred and say so, with the
+  heading carrying the true count.
+
+The admin Requests screen was fetching every request in the shop **twice per
+load** — once filtered, once entire, purely to count the tabs.
+
+One thing the testing caught that reasoning had not: **a page past the end is a
+416, not an empty list.** Narrow a filter while standing on page six and
+PostgREST answers "Requested range not satisfiable" — an error toast and a blank
+screen on a list that plainly still has rows. Every paged query now falls back
+to the first page when the one asked for has ceased to exist, and the screens
+follow the page that came back rather than the one they asked for.
+
+Verified against the live database: 5 checks on the summary maths inside a
+rolled-back transaction, then 11 through the REST layer with 200 seeded orders
+(pages disjoint, an order absent from page 1 still findable by search, filters
+changing the total the pager reports), then 11 more through a real admin session
+and a real customer session for the RLS guarantees. Every seeded row was
+removed; the database ended where it started at 13 orders, 5 profiles and 4
+outbox rows.
+
+Two cleanups that the test itself caused and would have been easy to miss: the
+insert trigger queued 200 `admin_new_order` emails to the real admin address,
+and creating the temporary admin queued a welcome email. Both removed — the
+next worker run would otherwise have sent all 201.
+
+---
+
+## 2026-08-23 — The Mailer's numbers were wrong past a thousand rows
+
+Asked whether the Mailer would cope once the shop was live. It would not, and the
+reason turned out to be worse than the one I predicted.
+
+`getOutboxCounts` selected `status, send_after` with no limit and tallied in the
+browser. I expected that to be a performance problem at volume. Measuring it
+showed a correctness one: **PostgREST caps an unbounded select at 1000 rows**, so
+past a thousand the tally silently stopped counting. With 2,505 rows in the table
+it reported 1,000 — and would have read 1,000 for ever, on the screen whose only
+job is answering "did we send it".
+
+`outbox_counts()` counts in the database, `security invoker` so a customer
+calling it gets zeroes rather than the shop's numbers. Measured at 715ms across
+12,005 rows.
+
+**Nothing ever removed a sent row**, either. Every order writes four or five,
+every campaign writes one per recipient, and the digest writes one per admin per
+day. `prune_email_outbox` clears settled rows older than ninety days, run once a
+day by the hourly job rather than on a second schedule.
+
+What it never deletes matters as much: anything still queued, whatever its age,
+and **anything that failed**. A failed row is a problem nobody has looked at yet,
+and quietly deleting it three months later is how a shop never finds out an
+address has been bouncing all along. Verified — 7,628 old settled rows removed,
+212 old failures and 160 old queued rows kept.
+
+The list itself was already capped at 200 and stayed at 196ms across 12,000 rows.
+
+[docs/launch.md](launch.md) now collects everything that needs a real value
+before the first real order — Vault, environment, Settings, Pages — and what to
+check in the first hour after deploying.
+
+---
+
+## 2026-08-23 — Queued, then nudged
+
+The queue works and nothing was draining it, so the obvious reaction is to send
+the important emails immediately instead. That is the wrong half of the idea: it
+is what the outbox replaced, and it fails the moment a tab closes.
+
+What is right is **queued, then nudged**. The row is written and durable first —
+unchanged — and then something asks the worker to run. If the nudge fails, the
+tab closed, SMTP was slow or the process died, the row is still `queued` and the
+schedule sends it. The nudge is an accelerator, not a second path, which is the
+difference between fragile and not.
+
+Two nudges. The customer's confirmation page calls `sendQueuedEmailsSoon()`
+through Next's `after()`, so the page streams first and the invoice goes out a
+moment later — measured at 1.1s to first byte, with SMTP entirely outside it. And
+the admin screens call `nudgeMailer()` after recording a payment, moving an order
+or sending a quote: the three messages somebody is actually sitting waiting for.
+
+That demotes the schedule to dated work and a safety net, so `vercel.json` drops
+from every five minutes to hourly — which matters, because **Vercel's Hobby plan
+allows two cron jobs and fires them once a day**, and its terms are
+non-commercial. `pg_cron` is the free alternative and both extensions are
+available in this project; hourly makes the choice much less urgent either way.
+
+Two of my own mistakes on the way, both found by the test rather than by reading.
+The nudge imported `server-only`, which is **not a dependency here** — it resolved
+by luck and would have broken on a clean install. And the first probe requested a
+non-existent order, which `notFound()`s before the nudge ever runs, so "nothing
+sent" was the test being wrong rather than the code.
+
+The swallowed error is now logged. Silently discarding a failure is how the
+original omission stayed invisible; the customer still never sees it.
+
+Three more were queued due-now with nothing to nudge them, and got one: the
+acknowledgement for a sourcing request somebody has just submitted, the welcome
+email, and a review going live. `account_suspended` deliberately did not — being
+locked out is not improved by hearing about it four seconds sooner — and
+campaigns deliberately did not, because three hundred sends inside a button click
+is how a tab hangs and a domain gets rate-limited.
+
+The customer-facing two needed a different door. A customer cannot call
+`/api/email/worker`: draining the whole queue on demand would let anyone mail
+every customer at once. `/api/email/nudge` reads the caller's own address from
+their session and sends only rows addressed to it, so the worst anybody can do is
+receive their own email sooner.
+
+**Verified**: a real order's invoice and the shop's notification both `sent` with
+nothing calling the worker, the two dated reminders still `queued`, and the
+confirmation page returning in 1.1s — plus 7 checks on the scoped nudge,
+including that one customer cannot send another's mail, that the shop's own copy
+of a request stays queued because it is not the customer's address, that signing
+out refuses it, and that it does not run the shop's schedule.
+
+---
+
+## 2026-08-23 — Nothing was running the worker
+
+An order was placed and no email arrived — not to the customer, not to the shop.
+
+The queue was faultless: four rows written the moment the order existed, right
+templates, right addresses, the two payment reminders dated three and seven days
+out. All of them `queued`, `attempts` zero, no errors.
+
+**Nothing called the worker.** The outbox design is deliberate — triggers write,
+a worker drains, and that is what buys the record, the retries and the dedupe —
+but a queue with nothing draining it is a queue. I built the worker and the
+manual button and never scheduled anything to run it.
+
+`vercel.json` now runs `/api/email/worker` every five minutes. Five, because the
+invoice is the first thing a customer waits for after ordering; anything slower
+and they are staring at a confirmation page wondering whether it worked. It needs
+`CRON_SECRET` set in the project's environment — Vercel then sends it as a bearer
+token automatically, and without it the route returns 401 rather than letting
+anyone on the internet drain the queue.
+
+In development there is no cron, so the Notifications tab now says so in
+terracotta whenever something is due, rather than leaving the button looking
+optional. [docs/email-worker.md](email-worker.md) covers both.
+
+Confirmed by running it: the customer's invoice and the shop's notification both
+delivered, and the two reminders correctly stayed queued for their dates.
+
+---
+
+## 2026-08-23 — Checkout, rebuilt
+
+Once it rendered at all, what was underneath was hoodskool's, and three things
+in it were wrong rather than merely dated.
+
+**The country dropdown offered exactly one option: Russia.** The form defaulted
+to `"RU"`. A Nigerian shop's checkout could not express a Nigerian address.
+
+**There was no state field.** For a courier that is most of the address —
+"Kaduna" and "Lagos" were indistinguishable on the packing slip. Thirty-six
+states and the FCT now, in `NIGERIAN_STATES`.
+
+**The empty-basket button linked to `/clothings`**, a route that has never
+existed in this project.
+
+The design follows from the payment model rather than from a template. There is
+no card step, so the page does not pretend to be a payment form: the padlock over
+"Secure checkout" is gone, and so is "Authenticity guaranteed" — a badge over a
+form that takes no card is theatre, and one that promises nothing specific is
+noise. What replaces them says something true and useful: no card details are
+ever seen because there is no card payment, and delivery runs the lead time from
+Settings.
+
+Numbered steps that fill in as they are completed, the summary pinned beside them
+on desktop so the total stays visible while the address is typed, and a line
+above the button saying nothing is charged now — because a customer expecting a
+card screen and not getting one assumes the order failed.
+
+One thing caught while building it: the new "anything we should know" field would
+have collected a landmark or a gate code and **thrown it away**. `create_order`
+has always taken `p_customer_notes` and `lib/orders.ts` passed `null`. It is
+wired through now — the same defect class as the product form that collected a
+price and discarded it.
+
+**Verified**: 11 checks — Russia gone, `/clothings` gone, no padlock and no
+authenticity badge, the profile prefilling the email, and a real order carrying
+the note, the state and Nigeria through to the packing slip.
+
+The "no card step" copy could not be checked over HTTP for the same reason as
+last time: the basket is a client store, so the server renders the empty branch.
+
+---
+
+## 2026-08-23 — Checkout had never worked
+
+Reported by trying to place an order:
+
+    Attempted to call getUserProfile() from the server but getUserProfile is on
+    the client.
+
+`app/checkout/page.tsx` is a server component and called `getUserProfile` from
+`lib/supabase/auth.ts`, which carries `'use client'`. Next refuses that across the
+boundary, so the page threw before rendering anything — **for every customer,
+since the Supabase migration**. Nobody had placed an order through the UI until
+now; every order in the database was seeded or raised from the admin.
+
+The profile is read through the request's own cookies instead —
+`getProfileForServer` in `lib/auth/server.ts`, alongside the other server-side
+auth helpers. It also falls back to the first saved address when none is flagged
+default, so somebody with a single unflagged address still gets checkout
+prefilled.
+
+The serialisation wrapper went with it. It called `createdAt?.toDate?.()`, a
+Firestore Timestamp method; Supabase returns ISO strings, so that branch had
+never once run.
+
+Swept for the same mistake elsewhere — no other server component imports from a
+`'use client'` module.
+
+**Verified**: signed out it redirects; signed in as a real customer over HTTP with
+real session cookies it returns 200, throws no boundary error, and prefills the
+contact fields from the profile.
+
+Four further assertions could not be observed over HTTP and were not failures:
+the basket comes from `useCart`, a client store, so the server always renders the
+empty-basket branch and hydration fills it in.
+
+---
+
+## 2026-08-23 — The constants became settings
+
+Everything that made this shop *this* shop was a literal: the registered company,
+the bank account customers transfer to, VAT, shipping, the delivery lead time,
+the WhatsApp number — and the reminder cadence, which was buried in `interval '3
+days'` inside a trigger function, the least reachable place in the system. Half
+were marked PLACEHOLDER. Changing an account number was a commit and a deploy.
+
+`site_settings` is six groups behind six tabs, on the same key-value shape as
+`site_content` and for the same reason: **every read falls back to the code**, so
+an empty table behaves exactly as the constants did and a malformed row cannot
+take the shop down.
+
+**The contact page hides what it has nothing to say about.** FOLLOW US, BUSINESS
+HOURS and the map each disappear when unset rather than rendering an empty
+heading. A half-filled hours row — a day with no time — does not count as a line
+worth printing.
+
+The map was four hundred pixels of grey reading "Map integration placeholder",
+live at the foot of the page. It now renders in one of three ways: an actual map
+when the setting holds a Google *embed* URL, an "Open in Maps" band when it holds
+an ordinary share link — those refuse to load in a frame, so pasting one and
+hoping produces an empty box — and nothing at all when there is neither a map nor
+an address.
+
+**The contact page was the urgent one.** It was live with `contact@ramazah.com`,
+the phone number **+7 977 600-01-46**, and "Leninsky Avenue, 146, Moscow, 117198"
+— hoodskool's Moscow office on a Nigerian shop's contact page — plus socials
+pointing at the bare `instagram.com` and `facebook.com` domains. It reads Settings
+now and shows *nothing* where a value is unset, which is honest; a placeholder is
+a number somebody will try to ring.
+
+Each tab saves on its own. One Save would mean a typo in the reminder cadence
+blocking a correction to the bank account, and those are edited at completely
+different times. "Back to the defaults" deletes the row rather than freezing a
+copy of today's values.
+
+Two deliberate absences. **SMTP credentials** stay in environment variables — a
+password in a database row turns up in backups, in screenshots and in any admin's
+devtools. And **currency**, because the shop is Naira-only: a toggle there would
+offer something the payment model cannot honour.
+
+The plumbing has three shapes, because the consumers do. Server code
+(`lib/email/*`) calls `getSettings()`. Client components read a context the root
+layout fills once — the `email` group is stripped before it crosses into the
+browser, since it holds operational detail no customer should receive in a page
+payload. And the triggers read `email_setting()`, which falls back to the same
+numbers that were hardcoded.
+
+One consumer needed a different answer: `useCart` is a zustand store and cannot
+read a React context, so VAT and shipping are passed into `checkout()` by the
+screen that already has them.
+
+**Verified**: 16 checks — the Moscow address and Russian number gone, a saved
+email and address reaching the contact page, unset socials not rendered, the
+free-shipping threshold reaching the product page, email settings invisible to an
+anonymous reader but visible to an admin, the trigger reading the saved cadence
+and falling back when a field is absent, a real order's reminders scheduled at
+the saved 1 and 4 days rather than the hardcoded 3 and 7, deleting a group
+falling back to the code, and a stranger refused.
+
+`Settings` is back in the admin sidebar. Both links that used to 404 are now real.
+
+---
+
+## 2026-08-23 — Naira only
+
+The shop offered NGN, USD and EGP behind a switcher. Two things were broken and
+neither was fixable by adding exchange rates.
+
+`product_prices` genuinely holds a price per variant per currency, and
+`create_order` refuses to sell in a currency a variant is not priced in — which
+is right. But only **2 of 20 variants** carried a non-Naira price, and both of
+those were `0.00`. So switching to USD showed ₦0 for ninety percent of the
+catalogue, because `getPrice` falls back to zero when the selected currency is
+missing.
+
+Everything that is *not* a product price — shipping, tax, order totals, request
+budgets and quotes — is a plain Naira number passed through `formatPrice`, which
+swapped the symbol and did no conversion at all. A ₦24,000 quote rendered as
+"$24,000". That one was already fixed for sourcing requests; the same latent bug
+sat anywhere else a raw number met the formatter.
+
+The deciding argument was neither. **The shop takes payment by transfer to a
+Naira account, so an order priced in dollars cannot be paid.** The switcher was
+offering something the payment model could not honour — the same class of problem
+as the discount-code field on the old campaign composer.
+
+Gone: `CurrencySwitcher` (already dead — mounted nowhere), the footer's currency
+pills, and the Currency card on account preferences. `formatPrice` is now Naira
+by definition rather than by luck, and the four zero-amount USD and EGP rows were
+deleted, leaving every variant with exactly one price.
+
+`product_prices` keeps its currency column and the variant editor keeps its
+"prices in other currencies" panel behind a `currencies.length > 1` guard, so it
+self-hides today and reappears the day the shop can actually take a second
+currency.
+
+**Verified**: 7 checks with the RSC payload stripped — no dollar or pound amounts
+on the category, product or home pages, every product tile carrying a real price,
+the only ₦0 being the price filter's own floor, and no switcher left anywhere.
+
+A note on the first run: three assertions failed and all three were the test's
+fault. `$10` and `$11` were React's own server-payload references inside a
+`<script>`, and the home page renders no prices server-side because the product
+rail hydrates on the client.
+
+---
+
+## 2026-08-23 — Staff mail goes to every admin
+
+`shop_notification_email()` returned one address: the first admin by
+`created_at`. With one administrator that is invisible; with two it means a new
+order, a new sourcing request and the morning digest all land in one inbox, and
+whoever is actually on shift may not be looking at it.
+
+`enqueue_staff_email()` writes one row per active admin instead. The address is
+part of the dedupe key — without it the second admin's row collides with the
+first and only one person is ever told. A suspended admin is skipped, since they
+cannot act on it anyway.
+
+**And it caught a bug I had shipped.** The internal enqueue functions carried
+`revoke all ... from public, anon, authenticated`, which removes the *default*
+PUBLIC execute grant and leaves only the owner — service_role included. So the
+worker's call to `enqueue_scheduled_emails` failed with "permission denied" every
+time, and because `drainOutbox` did not check that call's error, the run still
+reported success. The morning digest and the abandoned-basket email would never
+have been queued in production and nothing anywhere would have said so.
+
+Fixed both halves: execute granted to service_role only, and the worker now
+surfaces the scheduler's error rather than swallowing it.
+
+**Verified**: 11 checks — every active admin told about a new order and a new
+request, the suspended one skipped, one copy each rather than two, the digest
+reaching every admin, and running the scheduler twice in a day adding nothing.
+
+---
+
 ## 2026-08-23 — The words came out of the code
 
 Every sentence on the home page and the six support and legal pages was a string

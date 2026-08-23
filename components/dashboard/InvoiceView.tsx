@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Printer } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { COMPANY } from "@/constants";
+import { useSettings } from "@/contexts/SettingsContext";
 
 /**
  * The invoice, rebuilt from the printed Ramazah template.
@@ -70,6 +70,7 @@ export default function InvoiceView({
 }) {
   const order = JSON.parse(orderAsString);
   const { formatPrice } = useCurrency();
+  const { business } = useSettings();
 
   const issued = new Date(order.created_at).toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -259,9 +260,15 @@ export default function InvoiceView({
                 is a tax document and names the party issuing it — a customer
                 querying a payment months later needs to find a real entity. */}
             <div className="text-neutral-800">
-              <p className="font-semibold text-neutral-900">{COMPANY.legalName}</p>
-              <p>{COMPANY.address}.</p>
-              {COMPANY.rcNumber && <p>RC {COMPANY.rcNumber}</p>}
+              <p className="font-semibold text-neutral-900">{business.legalName}</p>
+              <p>
+                {[business.addressLine, business.city, business.country]
+                  .filter(Boolean)
+                  .join(", ")}
+                .
+              </p>
+              {business.rcNumber && <p>RC {business.rcNumber}</p>}
+              {business.tin && <p>TIN {business.tin}</p>}
             </div>
 
             {/* Not on the printed template, but this invoice is the payment

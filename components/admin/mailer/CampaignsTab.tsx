@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import SectionCard from "@/components/admin/ui/SectionCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
+import Pager from "@/components/ui/Pager";
 import useScrollLock from "@/hooks/useScrollLock";
 import {
   SEGMENTS, countAudience, getCampaigns, sendCampaign,
@@ -76,6 +77,9 @@ export default function CampaignsTab() {
   const [audience, setAudience] = useState<number | null>(null);
   const [counting, setCounting] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignResult[]>([]);
+  const [campaignPage, setCampaignPage] = useState(1);
+  const [campaignTotal, setCampaignTotal] = useState(0);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -85,9 +89,12 @@ export default function CampaignsTab() {
   useScrollLock(preview !== null);
 
   const load = useCallback(async () => {
-    const { campaigns: list } = await getCampaigns();
+    setLoadingCampaigns(true);
+    const { campaigns: list, total } = await getCampaigns(campaignPage);
     setCampaigns(list);
-  }, []);
+    setCampaignTotal(total);
+    setLoadingCampaigns(false);
+  }, [campaignPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -395,6 +402,18 @@ export default function CampaignsTab() {
               </li>
             ))}
           </ul>
+        )}
+
+        {campaigns.length > 0 && (
+          <div className="border-t border-rule px-5 py-3">
+            <Pager
+              page={campaignPage}
+              total={campaignTotal}
+              busy={loadingCampaigns}
+              onChange={setCampaignPage}
+              noun="campaigns"
+            />
+          </div>
         )}
       </SectionCard>
 

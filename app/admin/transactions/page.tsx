@@ -29,7 +29,10 @@ import PageHeader from "@/components/admin/ui/PageHeader";
 import StatCard from "@/components/admin/ui/StatCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill from "@/components/admin/ui/StatusPill";
-import { getPayments } from "@/lib/admin/payments";
+import Pager from "@/components/ui/Pager";
+import useDebounced from "@/hooks/useDebounced";
+import { getPayments, getPaymentsForExport } from "@/lib/admin/payments";
+import { getPaymentSummary, type PaymentSummary } from "@/lib/admin/summaries";
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/admin/format";
 import type { Transaction } from "@/types/admin";
 
@@ -45,7 +48,11 @@ import type { Transaction } from "@/types/admin";
  * Revenue means settled money. The old totals summed every row regardless of
  * status, so failed and unpaid orders counted as income.
  *
- * Export writes a real CSV. It used to be a button that did nothing.
+ * Export writes a real CSV. It used to be a button that did nothing — and now
+ * that the table is paged, it deliberately does not export the page: it re-runs
+ * the filters and exports everything they match. A CSV of the fifty rows you
+ * can already see would be a worse button than the one that did nothing,
+ * because the file looks complete.
  */
 const PAYMENT_VIEW: Record<string, { label: string; icon: any; tone: any }> = {
   success: { label: "Settled", icon: Check, tone: "done" },
@@ -56,58 +63,85 @@ const PAYMENT_VIEW: Record<string, { label: string; icon: any; tone: any }> = {
 
 export default function AdminPaymentsPage() {
   const [payments, setPayments] = useState<Transaction[]>([]);
+  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [summary, setSummary] = useState<PaymentSummary | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const search = useDebounced(searchQuery);
+
+  /** The filters as the query wants them, shared by the table and the export. */
+  const query = useMemo(
+    () => ({
+      status: statusFilter === "all" ? undefined : statusFilter,
+      since: startOf(dateFilter),
+      search,
+    }),
+    [statusFilter, dateFilter, search]
+  );
 
   const load = useCallback(async () => {
     setIsLoading(true);
-    const { payments: fetched, error } = await getPayments();
+    const { payments: fetched, total: matched, page: landed, error } =
+      await getPayments({ ...query, page });
+
     if (error) toast.error(error);
     setPayments(fetched);
+    setTotal(matched);
+    // The page that came back, not the one asked for: narrowing a filter while
+    // standing on page six asks for rows that are no longer there, and the
+    // query falls back to the first page rather than erroring.
+    if (landed !== page) setPage(landed);
     setIsLoading(false);
-  }, []);
+  }, [query, page, reloadKey]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const since = startOf(dateFilter);
-
-    return payments.filter((payment) => {
-      if (statusFilter !== "all" && payment.status !== statusFilter) return false;
-      if (since && payment.date < since) return false;
-
-      if (query) {
-        const haystack =
-          `${payment.orderNumber} ${payment.customer} ${payment.email}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
+  // The cards are about the shop, not the filter, so they are fetched once
+  // rather than on every page turn.
+  useEffect(() => {
+    getPaymentSummary().then(({ summary: totals, error: summaryError }) => {
+      if (summaryError) {
+        toast.error(summaryError);
+        return;
       }
-
-      return true;
+      setSummary(totals);
     });
-  }, [payments, statusFilter, dateFilter, searchQuery]);
+  }, [reloadKey]);
 
-  const settled = payments.filter((payment) => payment.status === "success");
-  const awaiting = payments.filter((payment) => payment.status === "pending");
-  const failed = payments.filter((payment) => payment.status === "failed");
-  const refunded = payments.filter((payment) => payment.status === "refunded");
+  const applyFilter = (set: (value: string) => void) => (value: string) => {
+    set(value);
+    setPage(1);
+  };
 
-  // Days the oldest unpaid order has been waiting; null when nothing is out.
-  const oldestWait =
-    awaiting.length === 0
-      ? null
-      : Math.max(
-          ...awaiting.map((payment) =>
-            Math.floor((Date.now() - (payment.placedAt ?? payment.date).getTime()) / 86_400_000)
-          )
-        );
+  const handleExport = async () => {
+    setExporting(true);
+    const { payments: rows, error } = await getPaymentsForExport(query);
+    setExporting(false);
 
-  const sum = (rows: Transaction[]) => rows.reduce((total, row) => total + row.amount, 0);
-  const currency = payments[0]?.currency ?? "ngn";
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    exportCsv(rows);
+  };
+
+  // The cards describe the shop, not the filter: how much money is outstanding
+  // does not change because you narrowed the table to last week.
+  const settledTotal = summary?.successTotal ?? 0;
+  const awaitingTotal = summary?.pendingTotal ?? 0;
+  const refundedTotal = summary?.refundedTotal ?? 0;
+  const awaitingCount = summary?.pending ?? 0;
+  const failedCount = summary?.failed ?? 0;
+  const oldestWait = summary?.oldestWait ?? null;
+  const currency = summary?.currency ?? "ngn";
 
   const hasFilters =
     statusFilter !== "all" || dateFilter !== "all" || Boolean(searchQuery);
@@ -116,6 +150,7 @@ export default function AdminPaymentsPage() {
     setStatusFilter("all");
     setDateFilter("all");
     setSearchQuery("");
+    setPage(1);
   };
 
   return (
@@ -126,14 +161,18 @@ export default function AdminPaymentsPage() {
         description="What each order was worth, whether the money arrived, and how."
         actions={
           <>
-            <Button variant="outline" onClick={load} disabled={isLoading}>
+            <Button
+              variant="outline"
+              onClick={() => setReloadKey((key) => key + 1)}
+              disabled={isLoading}
+            >
               <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
             <Button
               variant="outline"
-              onClick={() => exportCsv(filtered)}
-              disabled={filtered.length === 0}
+              onClick={handleExport}
+              disabled={exporting || total === 0}
             >
               <Download className="mr-2 h-4 w-4" />
               Export CSV
@@ -145,21 +184,21 @@ export default function AdminPaymentsPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Settled"
-          value={formatMoney(sum(settled), currency)}
-          hint={`${formatNumber(settled.length)} payments received`}
+          value={formatMoney(settledTotal, currency)}
+          hint={`${formatNumber(summary?.success ?? 0)} payments received`}
           icon={Coins}
         />
         <StatCard
           label="Awaiting payment"
-          value={formatMoney(sum(awaiting), currency)}
-          hint={`${formatNumber(awaiting.length)} orders unpaid`}
-          tone={awaiting.length > 0 ? "attention" : "default"}
+          value={formatMoney(awaitingTotal, currency)}
+          hint={`${formatNumber(awaitingCount)} orders unpaid`}
+          tone={awaitingCount > 0 ? "attention" : "default"}
           icon={Hourglass}
         />
         <StatCard
           label="Refunded"
-          value={formatMoney(sum(refunded), currency)}
-          hint={`${formatNumber(refunded.length)} refunds`}
+          value={formatMoney(refundedTotal, currency)}
+          hint={`${formatNumber(summary?.refunded ?? 0)} refunds`}
         />
         {/* Was a bare count of failed payments, which on a transfer shop is
             almost always zero. The actionable number is how long the oldest
@@ -170,8 +209,8 @@ export default function AdminPaymentsPage() {
           hint={
             oldestWait === null
               ? "nothing outstanding"
-              : failed.length > 0
-                ? `${formatNumber(failed.length)} failed as well`
+              : failedCount > 0
+                ? `${formatNumber(failedCount)} failed as well`
                 : "oldest unpaid order"
           }
           tone={oldestWait !== null && oldestWait >= 7 ? "attention" : "default"}
@@ -186,13 +225,13 @@ export default function AdminPaymentsPage() {
           <Input
             placeholder="Search by order number, customer or email…"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => applyFilter(setSearchQuery)(event.target.value)}
             className="pl-10"
           />
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Select value={dateFilter} onValueChange={setDateFilter}>
+          <Select value={dateFilter} onValueChange={applyFilter(setDateFilter)}>
             <SelectTrigger className="w-[150px]">
               <Calendar className="mr-2 h-4 w-4 shrink-0 text-ink-faint" />
               <SelectValue />
@@ -205,7 +244,7 @@ export default function AdminPaymentsPage() {
             </SelectContent>
           </Select>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={applyFilter(setStatusFilter)}>
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Any status" />
             </SelectTrigger>
@@ -232,7 +271,7 @@ export default function AdminPaymentsPage() {
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading payments…
         </div>
-      ) : filtered.length === 0 ? (
+      ) : payments.length === 0 ? (
         <EmptyState
           icon={Coins}
           title={hasFilters ? "No payments match those filters" : "No payments yet"}
@@ -263,7 +302,7 @@ export default function AdminPaymentsPage() {
           </div>
 
           <ul className="divide-y divide-rule">
-            {filtered.map((payment) => (
+            {payments.map((payment) => (
               <li key={`${payment.orderNumber}-${payment.id}`}>
                 <Link
                   href={`/admin/orders/${payment.orderId}`}
@@ -297,6 +336,10 @@ export default function AdminPaymentsPage() {
             ))}
           </ul>
         </div>
+      )}
+
+      {payments.length > 0 && (
+        <Pager page={page} total={total} busy={isLoading} onChange={setPage} noun="payments" />
       )}
     </div>
   );

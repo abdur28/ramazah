@@ -1,35 +1,66 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Mail, Phone, MapPin, Instagram, Facebook, Twitter } from "lucide-react"
+import { Mail, Phone, MapPin, MessageCircle, Instagram, Facebook, Twitter } from "lucide-react"
+import { useSettings } from "@/contexts/SettingsContext"
 
+/**
+ * How to reach the shop.
+ *
+ * Every detail on this page was hoodskool's, and live: `contact@ramazah.com`,
+ * the phone number **+7 977 600-01-46**, and "Leninsky Avenue, 146, Moscow,
+ * 117198" — a Moscow address on a Nigerian shop's contact page. The socials
+ * pointed at instagram.com and facebook.com, the bare domains.
+ *
+ * It reads Settings now, and shows nothing rather than something wrong: an
+ * unset phone number is simply absent, which is honest, where a placeholder is
+ * a number somebody will try to ring.
+ */
 export default function ContactInfo() {
+  const { contact } = useSettings()
+
+  const location = [contact.addressLine, contact.city, contact.country]
+    .filter(Boolean)
+    .join(", ")
+
   const contactDetails = [
-    {
+    contact.email && {
       icon: Mail,
       label: "Email",
-      value: "contact@ramazah.com",
-      href: "mailto:contact@ramazah.com",
+      value: contact.email,
+      href: `mailto:${contact.email}`,
     },
-    {
+    contact.whatsapp && {
+      icon: MessageCircle,
+      label: "WhatsApp",
+      value: contact.phone || `+${contact.whatsapp}`,
+      href: `https://wa.me/${contact.whatsapp}`,
+    },
+    contact.phone && {
       icon: Phone,
       label: "Phone",
-      value: "+7 977 600-01-46",
-      href: "tel:+79776000146",
+      value: contact.phone,
+      href: `tel:${contact.phone.replace(/[^\d+]/g, "")}`,
     },
-    {
+    location && {
       icon: MapPin,
-      label: "Location",
-      value: "Leninsky Avenue, 146, Moscow, 117198",
-      href: "https://maps.google.com",
+      label: "Where we are",
+      value: location,
+      href: contact.mapUrl || undefined,
     },
-  ]
+  ].filter(Boolean) as {
+    icon: typeof Mail; label: string; value: string; href?: string
+  }[]
 
   const socialLinks = [
-    { icon: Instagram, href: "https://instagram.com", label: "Instagram" },
-    { icon: Facebook, href: "https://facebook.com", label: "Facebook" },
-    { icon: Twitter, href: "https://twitter.com", label: "Twitter" },
-  ]
+    contact.instagram && { icon: Instagram, href: contact.instagram, label: "Instagram" },
+    contact.facebook && { icon: Facebook, href: contact.facebook, label: "Facebook" },
+    contact.x && { icon: Twitter, href: contact.x, label: "X" },
+  ].filter(Boolean) as { icon: typeof Instagram; href: string; label: string }[]
+
+  // A row with only a day or only a time is half-filled rather than a line
+  // worth printing, so it does not count towards showing the block.
+  const hours = contact.openingHours.filter((row) => row.days.trim() && row.hours.trim())
 
   return (
     <div className="space-y-12">
@@ -65,6 +96,7 @@ export default function ContactInfo() {
       </motion.div>
 
       {/* Social Links */}
+      {socialLinks.length > 0 && (
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -89,8 +121,10 @@ export default function ContactInfo() {
           ))}
         </div>
       </motion.div>
+      )}
 
       {/* Business Hours */}
+      {hours.length > 0 && (
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -100,17 +134,16 @@ export default function ContactInfo() {
       >
         <h3 className="text-2xl font-heading tracking-wide mb-6">BUSINESS HOURS</h3>
 
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Monday - Saturday</span>
-            <span className="font-medium">9:00 AM - 10:00 PM</span>
+          <div className="space-y-2 text-sm">
+            {hours.map((row) => (
+              <div key={row.days} className="flex justify-between">
+                <span className="text-muted-foreground">{row.days}</span>
+                <span className="font-medium">{row.hours}</span>
+              </div>
+            ))}
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Sunday</span>
-            <span className="font-medium">9:00 AM - 9:00 PM</span>
-          </div>
-        </div>
       </motion.div>
+      )}
     </div>
   )
 }

@@ -111,6 +111,8 @@ Uppercase labels take +0.16em tracking. Running text stays near 65 characters.
 | 5 | Jost + Cormorant Garamond | Inter body · other serifs | Jost's geometry matches the wide tracking of the wordmark |
 | 6 | Radius 4px | Keep 0.625rem | Fine-lined logo; soft cards clash |
 | 7 | `--success` aliases sage-deep | A separate success green | Two greens on a sage brand read as a mistake |
+| 8 | Two pagers, not one | One shared control | A shelf's page belongs in the URL — shareable, crawlable, walkable with the back button. An admin list's filters are local state, and a link that restores the page but not the filter is worse than no link. `CategoryPagination` is links; `components/ui/Pager.tsx` is buttons. They share the page-number window and nothing else |
+| 9 | The pager states the range | Page numbers alone | "51–100 of 1,284" answers how long the list is without walking to the end of it. It stays visible on a single page, because knowing there are eleven orders is useful even when they all fit |
 
 ## Migration (done)
 

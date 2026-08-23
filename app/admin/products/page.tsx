@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -53,7 +53,11 @@ import StatusPill, {
   STOCK_STATUS,
   stockBucket,
 } from "@/components/admin/ui/StatusPill";
+import Pager from "@/components/ui/Pager";
 import useAdmin from "@/hooks/admin/useAdmin";
+import useDebounced from "@/hooks/useDebounced";
+import { flattenCategories } from "@/lib/categories";
+import { getProductSummary, type ProductSummary } from "@/lib/admin/summaries";
 import { formatMoney, formatNumber } from "@/lib/admin/format";
 import { availableCurrencies } from "@/constants";
 import type { Product } from "@/types/types";
@@ -71,6 +75,13 @@ import { describeError } from "@/lib/admin/errors";
  * showed no trace of it. A product could be saved, sit in this table looking
  * exactly like its published neighbours, and be invisible to every shopper.
  *
+ * Fifty a page. Every filter on it — search, state, stock bucket and category
+ * — runs in the database, which the stock one in particular required work to
+ * make possible: stock is a sum over a product's variants, not a column. See
+ * `product_stock_status` in migration 20260830000036. Filtering "low stock"
+ * over the loaded page would have answered "which of these fifty need
+ * reordering" on a screen whose entire job is answering it for the catalogue.
+ *
  * **Expiry.** Half this catalogue is food. `create_order()` refuses a variant
  * whose expiry date has passed, so expired stock silently stops being sellable
  * while still reading "In stock" here.
@@ -84,7 +95,8 @@ export default function AdminProductsPage() {
     loading,
     error,
     pagination,
-    resetProducts,
+    fetchCategories,
+    categories: categoryTree,
   } = useAdmin();
 
   const defaultCurrency = availableCurrencies.find((c) => c.isDefault) || availableCurrencies[0];
@@ -97,49 +109,84 @@ export default function AdminProductsPage() {
   const [currency, setCurrency] = useState<CurrencyCode>(defaultCurrency.code);
   const [processing, setProcessing] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [page, setPage] = useState(1);
+  const [summary, setSummary] = useState<ProductSummary | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const search = useDebounced(searchQuery);
 
-  const loadProducts = async () => {
-    setRefreshing(true);
-    resetProducts();
+  const load = useCallback(async () => {
+    const filters = [];
+    if (statusFilter !== "all") filters.push({ field: "status", value: statusFilter });
+    if (stockFilter !== "all") filters.push({ field: "stock", value: stockFilter });
+    if (categoryFilter !== "all") filters.push({ field: "category_id", value: categoryFilter });
+
     try {
-      await fetchProducts({ limit: 50, orderByField: "createdAt", orderDirection: "desc" });
+      await fetchProducts({ page, search, filters });
     } catch (err) {
       console.error("Error loading products:", err);
       toast.error(describeError(err, "Could not load the catalogue."));
-    } finally {
-      setRefreshing(false);
     }
-  };
+  }, [fetchProducts, page, search, statusFilter, stockFilter, categoryFilter, reloadKey]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Counts the whole catalogue, so it is deliberately not tied to the page or
+  // the filters — turning a page should not re-scan every product.
+  useEffect(() => {
+    getProductSummary().then(({ summary: totals, error: summaryError }) => {
+      if (summaryError) {
+        toast.error("Could not work out the catalogue totals.");
+        return;
+      }
+      setSummary(totals);
+    });
+  }, [reloadKey]);
+
+  /**
+   * The category list comes from the categories, not from the products.
+   *
+   * It used to be `new Set(products.map(p => p.categoryPath))` — the categories
+   * that happened to appear in the loaded rows. Paged, that dropdown would list
+   * the categories on this page and silently omit the rest, so filtering by a
+   * category could never find the products that made it disappear from the list
+   * in the first place.
+   */
+  useEffect(() => {
+    fetchCategories({ size: 200, orderByField: "name", orderDirection: "asc" });
+  }, [fetchCategories]);
 
   const categories = useMemo(
-    () => Array.from(new Set(products.map((p) => p.categoryPath))).filter(Boolean).sort(),
-    [products]
+    () => flattenCategories(categoryTree ?? []).map(({ category, depth }) => ({
+      id: category.id,
+      label: `${"\u00a0\u00a0".repeat(depth)}${category.name}`,
+    })),
+    [categoryTree]
   );
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+  /**
+   * The store is the authority on which page is actually showing. Asking for a
+   * page that no longer exists falls back to the first one, and the local state
+   * has to follow or the next refresh asks for the missing page all over again.
+   */
+  useEffect(() => {
+    if (pagination.products.page !== page) setPage(pagination.products.page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.products.page]);
 
-    return products.filter((product) => {
-      if (categoryFilter !== "all" && product.categoryPath !== categoryFilter) return false;
-      if (statusFilter !== "all" && (product.status ?? "draft") !== statusFilter) return false;
+  const refresh = async () => {
+    setRefreshing(true);
+    setReloadKey((key) => key + 1);
+    await load();
+    setRefreshing(false);
+  };
 
-      if (stockFilter !== "all") {
-        const bucket = stockBucket(product.inStock, product.totalStock, product.lowStockAlert || 10);
-        if (stockFilter !== bucket) return false;
-      }
-
-      if (query) {
-        const haystack = `${product.name} ${product.sku} ${product.categoryPath}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-
-      return true;
-    });
-  }, [products, categoryFilter, statusFilter, stockFilter, searchQuery]);
+  const applyFilter = (set: (value: string) => void) => (value: string) => {
+    set(value);
+    setPage(1);
+  };
 
   const hasFilters =
     categoryFilter !== "all" || stockFilter !== "all" || statusFilter !== "all" || Boolean(searchQuery);
@@ -149,6 +196,7 @@ export default function AdminProductsPage() {
     setStockFilter("all");
     setStatusFilter("all");
     setSearchQuery("");
+    setPage(1);
   };
 
   const handleDelete = async () => {
@@ -165,13 +213,10 @@ export default function AdminProductsPage() {
     }
   };
 
-  const liveCount = products.filter((p) => (p.status ?? "draft") === "active").length;
-  const lowCount = products.filter(
-    (p) => stockBucket(p.inStock, p.totalStock, p.lowStockAlert || 10) === "low"
-  ).length;
-  const outCount = products.filter(
-    (p) => stockBucket(p.inStock, p.totalStock, p.lowStockAlert || 10) === "out"
-  ).length;
+  const totalCount = summary?.total ?? 0;
+  const liveCount = summary?.live ?? 0;
+  const lowCount = summary?.low ?? 0;
+  const outCount = summary?.out ?? 0;
 
   return (
     <div className="space-y-8">
@@ -181,7 +226,7 @@ export default function AdminProductsPage() {
         description="Everything you sell, and everything you have drafted but not published."
         actions={
           <>
-            <Button variant="outline" onClick={loadProducts} disabled={refreshing || loading.products}>
+            <Button variant="outline" onClick={refresh} disabled={refreshing || loading.products}>
               <RefreshCcw
                 className={`mr-2 h-4 w-4 ${refreshing || loading.products ? "animate-spin" : ""}`}
               />
@@ -198,13 +243,13 @@ export default function AdminProductsPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="In the catalogue" value={formatNumber(products.length)} icon={Package} />
+        <StatCard label="In the catalogue" value={formatNumber(totalCount)} icon={Package} />
         <StatCard
           label="Live on the shop"
           value={formatNumber(liveCount)}
           hint={
-            products.length - liveCount > 0
-              ? `${products.length - liveCount} draft or archived`
+            totalCount - liveCount > 0
+              ? `${totalCount - liveCount} draft or archived`
               : "all published"
           }
         />
@@ -230,13 +275,13 @@ export default function AdminProductsPage() {
           <Input
             placeholder="Search by name, SKU or category…"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => applyFilter(setSearchQuery)(event.target.value)}
             className="pl-10"
           />
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={applyFilter(setStatusFilter)}>
             <SelectTrigger className="w-[145px]">
               <SelectValue placeholder="All states" />
             </SelectTrigger>
@@ -248,7 +293,7 @@ export default function AdminProductsPage() {
             </SelectContent>
           </Select>
 
-          <Select value={stockFilter} onValueChange={setStockFilter}>
+          <Select value={stockFilter} onValueChange={applyFilter(setStockFilter)}>
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="All stock" />
             </SelectTrigger>
@@ -260,15 +305,15 @@ export default function AdminProductsPage() {
             </SelectContent>
           </Select>
 
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={categoryFilter} onValueChange={applyFilter(setCategoryFilter)}>
             <SelectTrigger className="w-[190px]">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
               {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
+                <SelectItem key={category.id} value={category.id}>
+                  {category.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -304,7 +349,7 @@ export default function AdminProductsPage() {
           title="Could not load the catalogue"
           description={error.products}
           action={
-            <Button variant="outline" onClick={loadProducts}>
+            <Button variant="outline" onClick={refresh}>
               Try again
             </Button>
           }
@@ -314,7 +359,7 @@ export default function AdminProductsPage() {
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading the catalogue…
         </div>
-      ) : filtered.length === 0 ? (
+      ) : products.length === 0 ? (
         <EmptyState
           icon={Package}
           title={hasFilters ? "Nothing matches those filters" : "The catalogue is empty"}
@@ -340,10 +385,6 @@ export default function AdminProductsPage() {
         />
       ) : (
         <>
-          <p className="font-body text-xs text-ink-muted">
-            {formatNumber(filtered.length)} of {formatNumber(products.length)} products
-          </p>
-
           <div className="overflow-hidden rounded-sm border border-rule bg-card">
             {/* One row per product. A grid rather than a <table> so the same
                 markup can stack on a phone, where seven columns cannot fit. */}
@@ -357,7 +398,7 @@ export default function AdminProductsPage() {
             </div>
 
             <ul className="divide-y divide-rule">
-              {filtered.map((product) => (
+              {products.map((product) => (
                 <ProductRow
                   key={product.id}
                   product={product}
@@ -369,18 +410,13 @@ export default function AdminProductsPage() {
             </ul>
           </div>
 
-          {pagination.products.hasMore && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                onClick={() => fetchProducts({ startAfter: pagination.products.lastDoc })}
-                disabled={loading.products}
-              >
-                {loading.products && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Load more
-              </Button>
-            </div>
-          )}
+          <Pager
+            page={pagination.products.page}
+            total={pagination.products.total}
+            busy={loading.products}
+            onChange={setPage}
+            noun="products"
+          />
         </>
       )}
 

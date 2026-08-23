@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
 import { EMAILS, type RenderContext } from './templates';
-import { COMPANY, SUPPORT_WHATSAPP } from '@/constants';
+import { getSettings } from '@/lib/settings';
 
 /**
  * Turning an outbox row into an email.
@@ -74,6 +74,7 @@ export async function renderEmail(
   registerPartials();
 
   const site = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const settings = await getSettings();
 
   const model = {
     ...data,
@@ -82,11 +83,12 @@ export async function renderEmail(
     eyebrow: definition.eyebrow,
     websiteUrl: (data as any).websiteUrl ?? site,
     websiteHost: site.replace(/^https?:\/\//, ''),
-    supportWhatsapp: SUPPORT_WHATSAPP,
+    supportWhatsapp: settings.contact.whatsapp,
     // The registered company in the footer, the trading name in the header —
     // see the note in partials/layout.html.
-    companyName: COMPANY.legalName,
-    companyAddress: COMPANY.address,
+    companyName: settings.business.legalName,
+    companyAddress: [settings.business.city, settings.business.country]
+      .filter(Boolean).join(', '),
     // Only marketing carries one. Transactional mail has nothing to unsubscribe
     // from, and offering it there invites somebody to switch off their own
     // invoices.

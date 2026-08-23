@@ -365,6 +365,8 @@ export interface CheckoutData {
   email: string;
   phone: string;
   fullName: string;
+  /** A landmark, a gate code, a time that suits. Lands on `orders.customer_notes`. */
+  note?: string;
   shippingAddress?: {
     street: string;
     city: string;
@@ -377,6 +379,8 @@ export interface CheckoutData {
 export interface CreateOrderData {
   userId: string;
   deliveryType: DeliveryType;
+  /** Whatever the customer typed at checkout. `p_customer_notes` on the RPC. */
+  customerNotes?: string;
   items: OrderItem[];
   currency: CurrencyCode;
   subtotal: number;

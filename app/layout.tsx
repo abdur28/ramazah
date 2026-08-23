@@ -10,6 +10,8 @@ import { Toaster } from 'sonner'
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { NavigationProvider } from "@/contexts/NavigationContext";
 import { getStoreNavigation } from "@/lib/navigation";
+import { getSettings } from "@/lib/settings";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 
 
 // Display face — never used below 28px; see docs/design-system.md
@@ -41,9 +43,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Resolved once here rather than in each of the five components that show a
-  // menu. Falls back to the curated constants if the query fails.
-  const navigation = await getStoreNavigation();
+  // Both resolved once here rather than per component, and in parallel — the
+  // page renders alongside this, so the second query is effectively free.
+  //
+  // `email` settings are stripped before they cross into the browser: they hold
+  // where staff notifications go and the reminder cadence, which no storefront
+  // component needs and no customer should receive in a page payload.
+  const [navigation, settings] = await Promise.all([
+    getStoreNavigation(),
+    getSettings(),
+  ]);
+  const { email: _staffOnly, ...publicSettings } = settings;
        
   //     </body>
   //   </html>
@@ -55,6 +65,7 @@ export default async function RootLayout({
         className={`${cormorant.variable} ${jost.variable} antialiased`}
       >
         <NavigationProvider navigationAsString={JSON.stringify(navigation)}>
+        <SettingsProvider settingsAsString={JSON.stringify(publicSettings)}>
         <CurrencyProvider>
           <AuthProvider>
             <CartInitializerContext />
@@ -68,6 +79,7 @@ export default async function RootLayout({
             </SmoothScrollProvider>
           </AuthProvider>
         </CurrencyProvider>
+        </SettingsProvider>
         </NavigationProvider>
       </body>
     </html>

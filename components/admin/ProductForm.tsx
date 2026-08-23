@@ -108,10 +108,10 @@ export default function ProductForm({
 
   useEffect(() => {
     if (categories.length === 0) {
-      fetchCategories({ limit: 100, orderByField: "name", orderDirection: "asc" });
+      fetchCategories({ size: 200, orderByField: "name", orderDirection: "asc" });
     }
     if (collections.length === 0) {
-      fetchCollections({ limit: 100, orderByField: "name", orderDirection: "asc" });
+      fetchCollections({ size: 200, orderByField: "name", orderDirection: "asc" });
     }
   }, []);
 

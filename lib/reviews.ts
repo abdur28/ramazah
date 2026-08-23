@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { fetchPage, rangeFor } from '@/lib/paging';
 
 /**
  * Reviews.
@@ -29,15 +30,19 @@ export interface ReviewEligibility {
   existingReview: { id: string; rating: number; status: string } | null;
 }
 
-/** Approved reviews for a product, newest first. */
-export async function getProductReviews(productId: string) {
-  const { data, error } = await createClient()
-    .from('review_public')
-    .select('*')
-    .eq('product_id', productId)
-    .order('created_at', { ascending: false });
+/** Approved reviews for a product, newest first, a page at a time. */
+export async function getProductReviews(productId: string, page = 1) {
+  const { data, error, count, page: landed } = await fetchPage(page, (p) => {
+    const [first, last] = rangeFor(p);
+    return createClient()
+      .from('review_public')
+      .select('*', { count: 'exact' })
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false })
+      .range(first, last);
+  });
 
-  if (error) return { reviews: [], error: error.message };
+  if (error) return { reviews: [], total: 0, page: 1, error: error.message };
 
   const reviews: PublicReview[] = (data ?? []).map((row: any) => ({
     id: row.id,
@@ -50,7 +55,30 @@ export async function getProductReviews(productId: string) {
     createdAt: row.created_at,
   }));
 
-  return { reviews, error: null };
+  return { reviews, total: count ?? reviews.length, page: landed, error: null };
+}
+
+/**
+ * The star breakdown, counted in the database.
+ *
+ * Drawn from the loaded reviews before, which was every review only because the
+ * query had no limit. Now that the list is paged, the bars would otherwise
+ * describe the fifty on screen — see migration 20260830000038.
+ */
+export async function getReviewDistribution(productId: string) {
+  const { data, error } = await createClient()
+    .rpc('review_distribution', { p_product: productId });
+
+  const tally: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  if (error) return { distribution: tally, total: 0, error: error.message };
+
+  let total = 0;
+  for (const row of (data ?? []) as { rating: number; tally: number }[]) {
+    tally[row.rating] = row.tally;
+    total += row.tally;
+  }
+
+  return { distribution: tally, total, error: null };
 }
 
 /**
@@ -141,14 +169,29 @@ export interface PendingReview {
 }
 
 /** Everything awaiting a decision. Admin-only by RLS, not by this function. */
-export async function getReviewsForModeration(status = 'pending') {
-  const { data, error } = await createClient()
-    .from('reviews')
-    .select('id, rating, title, body, status, created_at, products ( name, slug )')
-    .eq('status', status)
-    .order('created_at', { ascending: false });
+/**
+ * One page of the moderation queue.
+ *
+ * Was unbounded. The waiting tab stays small if anyone is doing their job, but
+ * the published tab only ever grows, and an unbounded select is silently capped
+ * at 1000 rows by PostgREST — so a shop with a thousand approved reviews would
+ * have had a Published tab that stopped at a thousand and never said why.
+ */
+export async function getReviewsForModeration(status = 'pending', page = 1) {
+  const { data, error, count, page: landed } = await fetchPage(page, (p) => {
+    const [first, last] = rangeFor(p);
+    return createClient()
+      .from('reviews')
+      .select(
+        'id, rating, title, body, status, created_at, products ( name, slug )',
+        { count: 'exact' }
+      )
+      .eq('status', status)
+      .order('created_at', { ascending: false })
+      .range(first, last);
+  });
 
-  if (error) return { reviews: [], error: error.message };
+  if (error) return { reviews: [], total: 0, page: 1, error: error.message };
 
   const reviews: PendingReview[] = (data ?? []).map((row: any) => ({
     id: row.id,
@@ -161,7 +204,7 @@ export async function getReviewsForModeration(status = 'pending') {
     createdAt: row.created_at,
   }));
 
-  return { reviews, error: null };
+  return { reviews, total: count ?? reviews.length, page: landed, error: null };
 }
 
 /**

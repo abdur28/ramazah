@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { windowed } from "@/lib/paging"
 
 /**
  * Pages, as links.
@@ -89,26 +90,4 @@ export default function CategoryPagination({
       </Link>
     </nav>
   )
-}
-
-/** `1 … 4 5 6 … 20` — first, last, and the neighbours of where you are. */
-function windowed(page: number, totalPages: number): (number | "gap")[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const near = new Set([1, totalPages, page, page - 1, page + 1])
-  // Keep the control a steady width near the ends, where the window would
-  // otherwise have nothing on one side of it.
-  if (page <= 3) [2, 3, 4].forEach((n) => near.add(n))
-  if (page >= totalPages - 2) [totalPages - 3, totalPages - 2, totalPages - 1].forEach((n) => near.add(n))
-
-  const shown = [...near].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b)
-
-  const out: (number | "gap")[] = []
-  shown.forEach((n, index) => {
-    if (index > 0 && n - shown[index - 1] > 1) out.push("gap")
-    out.push(n)
-  })
-  return out
 }

@@ -14,6 +14,7 @@ import { ORDER_STATUS } from "@/components/admin/ui/StatusPill";
 import SectionCard from "@/components/admin/ui/SectionCard";
 import useAdmin from "@/hooks/admin/useAdmin";
 import { describeError } from "@/lib/admin/errors";
+import { nudgeMailer } from "@/lib/admin/nudge";
 import type { Order, OrderStatus } from "@/types/types";
 
 /**
@@ -87,6 +88,7 @@ export default function OrderFulfilment({
       }
       setNote("");
       toast.success(`${order.orderNumber} updated.`);
+      nudgeMailer();
       onChanged();
     } catch (err) {
       toast.error(describeError(err, "Could not update the order."));

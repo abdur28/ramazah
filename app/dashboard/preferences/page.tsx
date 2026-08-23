@@ -2,23 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, DollarSign } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboard, usePreferences } from '@/hooks/useDashboard';
 import { toast } from 'sonner';
-import { useCurrency } from '@/contexts/CurrencyContext';
-import { availableCurrencies } from '@/constants';
-import { CurrencyCode } from '@/types/types';
 
 export default function PreferencesPage() {
   const { user, refetch } = useAuth();
@@ -33,7 +23,6 @@ export default function PreferencesPage() {
     newsletter: true,
   });
 
-  const { selectedCurrency, setSelectedCurrency, currency } = useCurrency();
 
   // Load preferences when component mounts or preferences change
   useEffect(() => {
@@ -48,10 +37,6 @@ export default function PreferencesPage() {
       loadPreferences(user.id);
     }
   }, [user, storedPreferences, loadPreferences]);
-
-  const handleCurrencyChange = (currencyCode: CurrencyCode) => {
-    setSelectedCurrency(currencyCode);
-  };
 
   const handleSavePreferences = async () => {
     if (!user) return;
@@ -171,47 +156,6 @@ export default function PreferencesPage() {
 
         {/* Right Column - Regional Preferences & Save */}
         <div className="space-y-6">
-          {/* Currency Settings */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="p-6 bg-card border border-rule rounded-sm"
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-wash rounded-md">
-                <DollarSign className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-body font-semibold">Currency</h2>
-                <p className="font-body text-sm text-ink-muted">
-                  Choose your preferred currency
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="currency" className="text-sm font-medium">
-                Display Currency
-              </Label>
-              <Select value={currency.code} onValueChange={handleCurrencyChange}>
-                <SelectTrigger id="currency" className="w-full">
-                  <SelectValue placeholder="Select currency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCurrencies.map((currency) => (
-                    <SelectItem value={currency.code} key={currency.code}>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{currency.name}</p>
-                      <p className="text-xs text-muted-foreground">{currency.code}</p>  
-                    </div>
-                  </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </motion.div>
-
           {/* Save Button */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

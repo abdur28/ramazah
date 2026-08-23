@@ -143,6 +143,11 @@ PROGRESS.
 and ~~pagination~~ all done 2026-08-22 — see PROGRESS. Shelves page at twenty, with
 filters, sort and page all in the URL.
 
+Every other list in the site — admin and account alike — was paged at fifty on
+2026-08-23, with its totals moved into the database first. The shelves keep their
+twenty and their URL-addressed pages: a shelf is public and shareable, an admin list
+is neither.
+
 ~~A search results page~~ done 2026-08-22 — `/search`, on the same rails.
 
 **Item 5 is complete.**
@@ -192,17 +197,22 @@ Currently an unconfigured button that returns a raw `400`. Either enable the pro
 (Google Cloud OAuth client → Supabase → URL Configuration) or hide it.
 
 ### 8. Deployment
-Vercel. Needs the Supabase env vars, a production Site URL and redirect allowlist, and
-real values for `FREE_SHIPPING_THRESHOLD` / `STANDARD_SHIPPING` (currently placeholder
-Naira amounts).
+Vercel. [launch.md](launch.md) is the checklist — Vault secrets, environment variables,
+Admin → Settings, Admin → Pages, and what to check in the first hour. Shipping and VAT
+are no longer constants to edit before deploying; they are settings, and the ones still
+holding placeholders are flagged on the Settings screen itself.
+
+Still genuinely outstanding: a production Site URL and redirect allowlist, and a real
+sending domain with SPF/DKIM/DMARC.
 
 ---
 
 ## Later
 
-- **VAT and invoicing** — to be built properly, not hardcoded. `TAX_RATE` is currently
-  a constant (0.075); `orders.tax_rate` already records the rate applied per order so
-  historical orders stay correct.
+- **VAT and invoicing** — the rate is now a setting rather than a constant, and
+  `orders.tax_rate` records the rate applied per order so historical orders stay
+  correct whatever it is changed to. What is left is the invoicing side: the RC number
+  and registered address on the invoice are still blank.
 - **Payments** — a Nigerian PSP when the time comes. `orders` already carries
   `payment_status`, `payment_method` and `payment_intent_id`.
 - **Expo mobile app** — the architecture already supports it: RLS plus RPCs mean the

@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Package,
   Search,
+  Settings,
   ShoppingCart,
   Store,
   Users,
@@ -33,8 +34,8 @@ import useAdminQueues, { type QueueCounts } from "@/hooks/admin/useAdminQueues";
  *
  * It no longer lies about where it can go: `Pages` and `Settings` pointed at
  * `/admin/pages` and `/admin/settings`, neither of which existed, so two of the
- * thirteen links in the sidebar were 404s. `Pages` is back now that the route it
- * promised is real; `Settings` is still absent until it is.
+ * thirteen links in the sidebar were 404s. Both are back, now that the routes
+ * they promised exist.
  *
  * Thirteen flat links became five named groups. A flat list gives no clue that
  * Categories and Collections are two halves of the same job, and puts Analytics
@@ -88,6 +89,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       // Back after being removed for pointing at a 404. The route exists now.
       { name: "Pages", href: "/admin/pages", icon: FileText },
       { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+      // The last of the two links that used to 404. Both are real now.
+      { name: "Settings", href: "/admin/settings", icon: Settings },
     ],
   },
 ];

@@ -1,6 +1,7 @@
 // lib/auth/server.ts
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import type { UserProfile } from '@/types/types';
 import { UserRole } from '@/types/types';
 
 export interface AuthUser {
@@ -59,4 +60,64 @@ export async function isAdmin(): Promise<boolean> {
 
 export async function isAuthenticated(): Promise<boolean> {
   return (await getCurrentUser()) !== null;
+}
+
+/**
+ * The signed-in customer's profile, read on the server.
+ *
+ * `getUserProfile` in `lib/supabase/auth.ts` does the same job, but that module
+ * is `'use client'` — and `app/checkout/page.tsx`, a server component, called it
+ * anyway. Next refuses that across the boundary, so **checkout has thrown a
+ * runtime error for every customer since the Supabase migration**; nobody had
+ * placed an order through the UI until now.
+ *
+ * The client version reads the session through the browser client. This one goes
+ * through the request's own cookies, which is what a server component has.
+ */
+export async function getProfileForServer(userId: string): Promise<UserProfile | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*, addresses(full_name, phone, street, city, state, postal_code, country, is_default)')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.error('Server profile read failed:', error.message);
+    return null;
+  }
+
+  // The default one if there is one, otherwise the first — somebody with a
+  // single unflagged address should still have it filled in at checkout.
+  const addresses = data.addresses ?? [];
+  const address = addresses.find((row: any) => row.is_default) ?? addresses[0];
+
+  return {
+    uid: data.id,
+    email: data.email,
+    displayName: data.display_name ?? undefined,
+    photoURL: data.photo_url ?? undefined,
+    phone: data.phone ?? undefined,
+    role: data.role,
+    status: data.status,
+    emailOptIn: data.email_opt_in,
+    preferences: data.preferences ?? undefined,
+    // Reaching auth.users for `email_confirmed_at` would be a second round trip
+    // for a field checkout does not read.
+    emailVerified: true,
+    address: address
+      ? {
+          fullName: address.full_name ?? '',
+          phone: address.phone ?? '',
+          street: address.street ?? '',
+          city: address.city ?? '',
+          state: address.state ?? '',
+          zipCode: address.postal_code ?? '',
+          country: address.country ?? '',
+        }
+      : undefined,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  } as UserProfile;
 }

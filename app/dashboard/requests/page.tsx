@@ -6,6 +6,8 @@ import { AlertTriangle, Check, Loader2, Plus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { answerRequest, getMyRequests, submitRequest, type ProductRequest } from '@/lib/account';
+import Pager from '@/components/ui/Pager';
+import { nudgeMyMail } from '@/lib/nudge';
 // Not `formatPrice` from the currency context. That only swaps the symbol —
 // there are no exchange rates in this app — so a budget entered in Naira
 // rendered as "$24,000" for anyone who had switched the site to USD. Requests
@@ -40,6 +42,8 @@ export default function RequestsPage() {
   const { user } = useAuth();
 
   const [requests, setRequests] = useState<ProductRequest[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [answering, setAnswering] = useState<string | null>(null);
@@ -52,11 +56,14 @@ export default function RequestsPage() {
     // The error used to be dropped and the empty array rendered, so a dropped
     // connection told the customer they had never asked for anything — and they
     // would reasonably send the request again.
-    const { requests: fetched, error } = await getMyRequests(user.id);
+    const { requests: fetched, total: asked, page: landed, error } =
+      await getMyRequests(user.id, page);
     setLoadError(error);
     setRequests(fetched);
+    setTotal(asked);
+    if (landed !== page) setPage(landed);
     setIsLoading(false);
-  }, [user?.id]);
+  }, [user?.id, page]);
 
   const answer = async (request: ProductRequest, accept: boolean) => {
     setAnswering(request.id);
@@ -80,6 +87,8 @@ export default function RequestsPage() {
     if (error) { toast.error(error); return; }
 
     toast.success('Sent. We will come back to you with a price.');
+    // They just pressed send and are expecting an acknowledgement.
+    nudgeMyMail();
     setForm({ item: '', details: '', referenceUrl: '', quantity: 1, budget: '' });
     setIsOpen(false);
     load();
@@ -259,6 +268,12 @@ export default function RequestsPage() {
             );
           })}
         </ul>
+      )}
+
+      {requests.length > 0 && (
+        <div className="mt-8">
+          <Pager page={page} total={total} busy={isLoading} onChange={setPage} noun="requests" />
+        </div>
       )}
     </div>
   );

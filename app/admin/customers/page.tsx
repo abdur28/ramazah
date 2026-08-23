@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -27,7 +27,10 @@ import PageHeader from "@/components/admin/ui/PageHeader";
 import StatCard from "@/components/admin/ui/StatCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill, { ACCOUNT_STATUS, ROLE } from "@/components/admin/ui/StatusPill";
+import Pager from "@/components/ui/Pager";
 import useAdmin from "@/hooks/admin/useAdmin";
+import useDebounced from "@/hooks/useDebounced";
+import { getCustomerSummary, type CustomerSummary } from "@/lib/admin/summaries";
 import { useAuth } from "@/contexts/AuthContext";
 import { getCustomerStats, type CustomerStats } from "@/lib/admin/customers";
 import { formatDate, formatMoney, formatNumber } from "@/lib/admin/format";
@@ -48,6 +51,10 @@ import { describeError } from "@/lib/admin/errors";
  * carries real order counts and lifetime spend, which is what makes this a
  * customer list rather than a sign-up log.
  *
+ * Fifty a page. The search covers name, email and phone and runs in the
+ * database — searching the loaded page would have meant the search box worked
+ * on the customers you could already see.
+ *
  * Self-destructive actions are refused: an admin cannot demote or suspend their
  * own account, and the last admin cannot be demoted at all. Enforced in the
  * database — see `20260822000011_admin_self_guard.sql` — and reflected here so
@@ -56,63 +63,114 @@ import { describeError } from "@/lib/admin/errors";
 export default function AdminCustomersPage() {
   // Role and suspension moved to `/admin/customers/[id]`, where the order
   // history that ought to inform them is on the same screen.
-  const { fetchUsers, users, loading, error, pagination, resetUsers } = useAdmin();
+  const { fetchUsers, users, loading, error, pagination } = useAdmin();
   const { user: currentUser } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [stats, setStats] = useState<Map<string, CustomerStats>>(new Map());
+  const [summary, setSummary] = useState<CustomerSummary | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
+  const search = useDebounced(searchQuery);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  const load = useCallback(async () => {
+    const filters = [];
+    if (roleFilter !== "all") filters.push({ field: "role", value: roleFilter });
+    if (statusFilter !== "all") filters.push({ field: "status", value: statusFilter });
 
-  const loadUsers = async () => {
-    setRefreshing(true);
-    resetUsers();
     try {
-      const [, { stats: fetched, error: statsError }] = await Promise.all([
-        fetchUsers({ limit: 50 }),
-        getCustomerStats(),
-      ]);
-      if (statsError) throw new Error(statsError);
-      setStats(fetched);
+      await fetchUsers({ page, search, filters });
     } catch (err) {
       console.error("Error loading customers:", err);
       toast.error(describeError(err, "Could not load customers."));
-    } finally {
-      setRefreshing(false);
     }
+  }, [fetchUsers, page, search, roleFilter, statusFilter, reloadKey]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Counts every account, so it stays put while you page and filter.
+  useEffect(() => {
+    getCustomerSummary().then(({ summary: totals, error: summaryError }) => {
+      if (summaryError) {
+        toast.error(describeError(summaryError, "Could not count the accounts."));
+        return;
+      }
+      setSummary(totals);
+    });
+  }, [reloadKey]);
+
+  /**
+   * Spend and order counts for the page that just arrived, and only that page.
+   * A second pass rather than part of `load`, because it depends on which
+   * customers came back — and because a slow aggregate should not hold up the
+   * names and emails, which is the part you are usually here for.
+   */
+  useEffect(() => {
+    if (users.length === 0) {
+      setStats(new Map());
+      return;
+    }
+
+    let live = true;
+    getCustomerStats(users.map((user) => user.uid)).then(({ stats: fetched, error: statsError }) => {
+      // A page turned while this was in flight would otherwise write the
+      // previous page's numbers over the current page's rows.
+      if (!live) return;
+      if (statsError) toast.error(describeError(statsError, "Could not load order totals."));
+      setStats(fetched);
+    });
+
+    return () => {
+      live = false;
+    };
+  }, [users]);
+
+  /**
+   * The store is the authority on which page is actually showing. Asking for a
+   * page that no longer exists falls back to the first one, and the local state
+   * has to follow or the next refresh asks for the missing page all over again.
+   */
+  useEffect(() => {
+    if (pagination.users.page !== page) setPage(pagination.users.page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.users.page]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setReloadKey((key) => key + 1);
+    await load();
+    setRefreshing(false);
   };
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return users.filter((user) => {
-      if (roleFilter !== "all" && user.role !== roleFilter) return false;
-      if (statusFilter !== "all" && (user.status ?? "active") !== statusFilter) return false;
-
-      if (query) {
-        const haystack = `${user.displayName ?? ""} ${user.email ?? ""} ${user.phone ?? ""}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-
-      return true;
-    });
-  }, [users, roleFilter, statusFilter, searchQuery]);
+  const applyRole = (value: string) => {
+    setRoleFilter(value);
+    setPage(1);
+  };
+  const applyStatus = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+  const applySearch = (value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  };
 
   const hasFilters = roleFilter !== "all" || statusFilter !== "all" || Boolean(searchQuery);
   const clearFilters = () => {
     setRoleFilter("all");
     setStatusFilter("all");
     setSearchQuery("");
+    setPage(1);
   };
 
-  const adminCount = users.filter((user) => user.role === "admin").length;
-  const suspendedCount = users.filter((user) => (user.status ?? "active") === "inactive").length;
+  const adminCount = summary?.admins ?? 0;
+  const suspendedCount = summary?.suspended ?? 0;
 
 
 
@@ -123,7 +181,7 @@ export default function AdminCustomersPage() {
         title="Customers"
         description="Everyone with an account, what they have bought, and who can reach the admin."
         actions={
-          <Button variant="outline" onClick={loadUsers} disabled={refreshing || loading.users}>
+          <Button variant="outline" onClick={refresh} disabled={refreshing || loading.users}>
             <RefreshCcw
               className={`mr-2 h-4 w-4 ${refreshing || loading.users ? "animate-spin" : ""}`}
             />
@@ -133,7 +191,7 @@ export default function AdminCustomersPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Accounts" value={formatNumber(users.length)} icon={Users} />
+        <StatCard label="Accounts" value={formatNumber(summary?.total ?? 0)} icon={Users} />
         <StatCard
           label="Administrators"
           value={formatNumber(adminCount)}
@@ -155,12 +213,12 @@ export default function AdminCustomersPage() {
           <Input
             placeholder="Search by name, email or phone…"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => applySearch(event.target.value)}
             className="pl-10"
           />
         </div>
 
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
+        <Select value={roleFilter} onValueChange={applyRole}>
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Any role" />
           </SelectTrigger>
@@ -171,7 +229,7 @@ export default function AdminCustomersPage() {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={applyStatus}>
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Any status" />
           </SelectTrigger>
@@ -195,7 +253,7 @@ export default function AdminCustomersPage() {
           title="Could not load customers"
           description={error.users}
           action={
-            <Button variant="outline" onClick={loadUsers}>
+            <Button variant="outline" onClick={refresh}>
               Try again
             </Button>
           }
@@ -205,7 +263,7 @@ export default function AdminCustomersPage() {
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading customers…
         </div>
-      ) : filtered.length === 0 ? (
+      ) : users.length === 0 ? (
         <EmptyState
           icon={Users}
           title={hasFilters ? "Nobody matches those filters" : "No accounts yet"}
@@ -234,7 +292,7 @@ export default function AdminCustomersPage() {
           </div>
 
           <ul className="divide-y divide-rule">
-            {filtered.map((user) => {
+            {users.map((user) => {
               const stat = stats.get(user.uid);
               const isSelf = currentUser?.id === user.uid;
               const suspended = (user.status ?? "active") === "inactive";
@@ -302,17 +360,14 @@ export default function AdminCustomersPage() {
         </div>
       )}
 
-      {pagination.users.hasMore && (
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => fetchUsers({ limit: 50, startAfter: pagination.users.lastDoc })}
-            disabled={loading.users}
-          >
-            {loading.users && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Load more
-          </Button>
-        </div>
+      {users.length > 0 && (
+        <Pager
+          page={pagination.users.page}
+          total={pagination.users.total}
+          busy={loading.users}
+          onChange={setPage}
+          noun="accounts"
+        />
       )}
 
     </div>

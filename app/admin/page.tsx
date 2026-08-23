@@ -63,7 +63,7 @@ export default function AdminDashboardPage() {
     try {
       const [, , { payments: fetched, error: paymentsError }] = await Promise.all([
         fetchAnalytics(),
-        fetchOrders({ limit: 10, orderByField: "createdAt", orderDirection: "desc" }),
+        fetchOrders({ size: 10, orderByField: "createdAt", orderDirection: "desc" }),
         getPayments(),
       ]);
       if (paymentsError) throw new Error(paymentsError);

@@ -12,6 +12,9 @@ import StatusPill, { REQUEST_STATUS } from "@/components/admin/ui/StatusPill";
 import { cn } from "@/lib/utils";
 import { formatDate, formatMoney, formatRelative } from "@/lib/admin/format";
 import { getRequestsForStaff, setRequestStatus, type ProductRequest } from "@/lib/account";
+import Pager from "@/components/ui/Pager";
+import { nudgeMailer } from "@/lib/admin/nudge";
+import { getRequestCounts } from "@/lib/admin/summaries";
 
 /**
  * Sourcing requests, staff side.
@@ -57,25 +60,22 @@ export default function AdminRequestsPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setIsLoading(true);
 
-    // The whole set as well as the filtered one, so the tabs can carry counts.
-    // A queue you have to click into to discover is empty is not a queue.
-    const [{ requests: fetched, error }, { requests: all }] = await Promise.all([
-      getRequestsForStaff(status),
-      getRequestsForStaff(),
-    ]);
+    // The tabs still carry counts — a queue you have to click into to discover
+    // is empty is not a queue — but they are counted in the database now. This
+    // used to fetch every request in the shop a second time to work them out.
+    const [{ requests: fetched, total: matched, page: landed, error }, { counts: tallies }] =
+      await Promise.all([getRequestsForStaff(status, page), getRequestCounts()]);
     if (error) toast.error(error);
 
-    setCounts(
-      all.reduce<Record<string, number>>((tally, request) => {
-        tally[request.status] = (tally[request.status] ?? 0) + 1;
-        tally.all = (tally.all ?? 0) + 1;
-        return tally;
-      }, {})
-    );
+    setCounts(tallies);
+    setTotal(matched);
+    if (landed !== page) setPage(landed);
 
     const staffRequests = fetched as StaffRequest[];
     setRequests(staffRequests);
@@ -94,7 +94,7 @@ export default function AdminRequestsPage() {
     );
 
     setIsLoading(false);
-  }, [status]);
+  }, [status, page]);
 
   useEffect(() => {
     load();
@@ -128,6 +128,8 @@ export default function AdminRequestsPage() {
     }
 
     toast.success(MOVED[next]);
+    // A quote is the other message somebody is sitting waiting for.
+    nudgeMailer();
     load();
   };
 
@@ -150,7 +152,10 @@ export default function AdminRequestsPage() {
           <button
             key={tab.label}
             type="button"
-            onClick={() => setStatus(tab.status)}
+            onClick={() => {
+              setStatus(tab.status);
+              setPage(1);
+            }}
             aria-pressed={status === tab.status}
             className={cn(
               "rounded-sm border px-3 py-1.5 font-body text-sm transition-colors",
@@ -348,6 +353,10 @@ export default function AdminRequestsPage() {
             );
           })}
         </ul>
+      )}
+
+      {requests.length > 0 && (
+        <Pager page={page} total={total} busy={isLoading} onChange={setPage} noun="requests" />
       )}
     </div>
   );

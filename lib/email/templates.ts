@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { BANK_DETAILS, COMPANY, DELIVERY_LEAD_TIME, SUPPORT_WHATSAPP } from '@/constants';
+import { getSettings } from '@/lib/settings';
 
 /**
  * What each email is, and where its content comes from.
@@ -63,7 +63,18 @@ const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
 
 /** Order plus its lines, in the shape every order template expects. */
+/**
+ * Read once per render rather than per template.
+ *
+ * The bank details, the lead time and the company name all come from Settings
+ * now; they were constants, half of them marked PLACEHOLDER.
+ */
+async function shop() {
+  return getSettings();
+}
+
 async function loadOrder(context: RenderContext) {
+  const settings = await shop();
   const { data } = await context.db
     .from('orders')
     .select(`
@@ -117,12 +128,19 @@ async function loadOrder(context: RenderContext) {
     paidOn: data.paid_at
       ? new Date(data.paid_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'long' })
       : 'today',
-    leadTime: DELIVERY_LEAD_TIME,
+    leadTime: settings.money.deliveryLeadTime,
+    companyLine: [
+      settings.business.legalName,
+      settings.business.addressLine,
+      settings.business.city,
+      settings.business.country,
+    ].filter(Boolean).join(', '),
     bank: {
-      name: BANK_DETAILS.bankName,
-      accountName: BANK_DETAILS.accountName,
-      accountNumber: BANK_DETAILS.accountNumber,
-      swift: BANK_DETAILS.swift || null,
+      name: settings.payment.bankName,
+      accountName: settings.payment.accountName,
+      accountNumber: settings.payment.accountNumber,
+      swift: settings.payment.swift || null,
+      note: settings.payment.note,
     },
   };
 }
@@ -185,7 +203,7 @@ Quote the reference, or we cannot match your payment to this order.
 
 Your invoice: ${d.invoiceUrl}
 
-${COMPANY.legalName}, ${COMPANY.address}`,
+${d.companyLine}`,
   },
 
   payment_reminder: {
@@ -419,7 +437,7 @@ ${d.requestsUrl}`,
     preheader: () => 'Chosen in the souk rather than from a catalogue.',
     build: async (context) => ({
       firstName: firstNameOf(context.row.to_name),
-      leadTime: DELIVERY_LEAD_TIME,
+      leadTime: (await shop()).money.deliveryLeadTime,
       websiteUrl: site(),
     }),
     text: (d) => `Welcome, ${d.firstName}.

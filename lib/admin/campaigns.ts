@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { PAGE_SIZE, rangeFor } from '@/lib/paging';
 
 /**
  * Campaigns, from the admin's side.
@@ -32,9 +33,17 @@ export interface CampaignResult {
   sender?: string;
 }
 
-/** How many people a segment actually reaches, opt-out already applied. */
+/**
+ * How many people a segment actually reaches, opt-out already applied.
+ *
+ * Still fetches the rows rather than counting server-side, because the audience
+ * is bounded by the number of accounts and subscribers — thousands, not the
+ * hundreds of thousands the outbox can reach. Worth revisiting if the list ever
+ * gets big enough to notice.
+ */
 export async function countAudience(segment: Segment): Promise<number> {
-  const { data, error } = await createClient().rpc('campaign_audience', { p_segment: segment });
+  const { data, error } = await createClient()
+    .rpc('campaign_audience', { p_segment: segment });
   if (error) return 0;
   return (data ?? []).length;
 }
@@ -57,12 +66,22 @@ export async function sendCampaign(input: {
   return { recipients: row?.recipients ?? 0 };
 }
 
-export async function getCampaigns(): Promise<{ campaigns: CampaignResult[]; error: string | null }> {
-  const { data, error } = await createClient().rpc('campaign_results');
-  if (error) return { campaigns: [], error: error.message };
+export async function getCampaigns(page = 1): Promise<{
+  campaigns: CampaignResult[];
+  total: number;
+  error: string | null;
+}> {
+  const [first] = rangeFor(page);
+
+  const { data, error } = await createClient()
+    .rpc('campaign_results', { p_limit: PAGE_SIZE, p_offset: first });
+  if (error) return { campaigns: [], total: 0, error: error.message };
+
+  const rows = (data ?? []) as any[];
 
   return {
-    campaigns: (data ?? []).map((row: any) => ({
+    total: rows.length > 0 ? Number(rows[0].total) : 0,
+    campaigns: rows.map((row: any) => ({
       id: row.id,
       template: row.template,
       subject: row.subject,

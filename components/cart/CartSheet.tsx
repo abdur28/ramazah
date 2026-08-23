@@ -8,7 +8,7 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useNavigation } from '@/contexts/NavigationContext';
-import { FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING, TAX_RATE } from '@/constants';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface CartSheetProps {
   isOpen: boolean;
@@ -27,6 +27,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
   } = useCart();
 
   const { formatPrice, getPrice } = useCurrency();
+  const { money } = useSettings();
 
   // Which line is mid-request. The store's `isLoading` is global, so a full
   // panel spinner used to cover the cart every time a quantity ticked by one.
@@ -41,15 +42,15 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
       return sum + (price * item.quantity);
     }, 0);
 
-    const tax = subtotal * TAX_RATE;
-    const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
+    const tax = subtotal * money.taxRate;
+    const shipping = subtotal >= money.freeShippingThreshold ? 0 : money.standardShipping;
     const total = subtotal + tax + shipping;
 
     return { subtotal, tax, shipping, total };
   }, [items, getPrice]);
 
-  const freeShippingProgress = Math.min(1, cartTotals.subtotal / FREE_SHIPPING_THRESHOLD);
-  const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - cartTotals.subtotal);
+  const freeShippingProgress = Math.min(1, cartTotals.subtotal / money.freeShippingThreshold);
+  const remainingForFreeShipping = Math.max(0, money.freeShippingThreshold - cartTotals.subtotal);
   const hasUnavailableItems = items.some((item) => !item.inStock);
 
   // Handle quantity change
@@ -320,7 +321,7 @@ export default function CartSheet({ isOpen, onClose }: CartSheetProps) {
                     <span className="tabular-nums">{formatPrice(cartTotals.subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-ink-muted">VAT ({TAX_RATE * 100}%)</span>
+                    <span className="text-ink-muted">VAT ({money.taxRate * 100}%)</span>
                     <span className="tabular-nums">{formatPrice(cartTotals.tax)}</span>
                   </div>
                   <div className="flex items-center justify-between">

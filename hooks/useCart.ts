@@ -12,7 +12,6 @@ import {
 } from '@/lib/products';
 import { createOrder } from '@/lib/orders';
 import type { CartItem, CheckoutData, CreateOrderData, CurrencyCode, DeliveryType } from '@/types/types';
-import { FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING, TAX_RATE } from '@/constants';
 
 interface CartState {
   // State
@@ -31,7 +30,13 @@ interface CartState {
   clearCart: (userId?: string) => Promise<void>;
   syncWithFirebase: (userId: string) => Promise<void>;
   removeDuplicates: () => void;
-  checkout: (userId: string, checkoutData: CheckoutData, currency: CurrencyCode) => Promise<{ success: boolean; orderId?: string; error?: string }>;
+  /** `money` comes from Settings; a zustand store cannot read a React context. */
+  checkout: (
+    userId: string,
+    checkoutData: CheckoutData,
+    currency: CurrencyCode,
+    money: { taxRate: number; standardShipping: number; freeShippingThreshold: number }
+  ) => Promise<{ success: boolean; orderId?: string; error?: string }>;
   
   // Internal helpers
   calculateItemCount: () => void;
@@ -362,7 +367,19 @@ export const useCart = create<CartState>()(
       },
 
       // Checkout function - verify prices and create order
-      checkout: async (userId: string, checkoutData: CheckoutData, currency: CurrencyCode) => {
+      /**
+       * `money` is passed in rather than imported.
+       *
+       * VAT, shipping and the free-shipping threshold are settings now, and this
+       * is a zustand store — it cannot call the hook that reads them. The
+       * checkout screen has them already, so they come down with the call.
+       */
+      checkout: async (
+        userId: string,
+        checkoutData: CheckoutData,
+        currency: CurrencyCode,
+        money: { taxRate: number; standardShipping: number; freeShippingThreshold: number }
+      ) => {
         const { items } = get();
         
         if (items.length === 0) {
@@ -448,15 +465,16 @@ export const useCart = create<CartState>()(
 
           // Step 2: Calculate totals
           const subtotal = verifiedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-          const tax = subtotal * TAX_RATE; 
-          const shippingCost = checkoutData.deliveryType === 'delivery' 
-            ? (subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING) 
+          const tax = subtotal * money.taxRate;
+          const shippingCost = checkoutData.deliveryType === 'delivery'
+            ? (subtotal >= money.freeShippingThreshold ? 0 : money.standardShipping)
             : 0;
           const total = subtotal + tax + shippingCost;
 
           // Step 3: Create order
           const orderData = {
             userId,
+            customerNotes: checkoutData.note,
             deliveryType: checkoutData.deliveryType,
             items: verifiedItems,
             currency,

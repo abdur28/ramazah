@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/client';
 import { BannerImage, Collection } from '@/types/types';
 import { AdminCollectionDataStore, FetchOptions } from '@/types/admin';
 import { describeError } from '@/lib/admin/errors';
+import { rangeFor } from '@/lib/paging';
 
 const supabase = () => createClient();
 
@@ -62,41 +63,45 @@ const useAdminCollectionsData = create<AdminCollectionDataStore>((set, get) => (
   error: { users: null, orders: null, products: null, analytics: null,
            adminAction: null, collections: null, categories: null },
   pagination: {
-    users: { lastDoc: null, hasMore: false },
-    orders: { lastDoc: null, hasMore: false },
-    products: { lastDoc: null, hasMore: false },
-    categories: { lastDoc: null, hasMore: false },
-    collections: { lastDoc: null, hasMore: false },
+    users: { page: 1, total: 0 },
+    orders: { page: 1, total: 0 },
+    products: { page: 1, total: 0 },
+    categories: { page: 1, total: 0 },
+    collections: { page: 1, total: 0 },
   },
 
   resetCollections: () => set(state => ({
     collections: [],
-    pagination: { ...state.pagination, collections: { lastDoc: null, hasMore: false } }
+    pagination: { ...state.pagination, collections: { page: 1, total: 0 } }
   })),
 
   fetchCollections: async (options: FetchOptions = {}) => {
     set(state => ({ loading: { ...state.loading, collections: true },
                     error: { ...state.error, collections: null } }));
     try {
-      const { limit: limitCount = 50, startAfter: startOffset,
+      // Not paged on screen - a shop has a handful of collections, and a pager
+      // under two rows is furniture. The range is still here as a ceiling: an
+      // unbounded select is silently capped at 1000 rows by PostgREST, and a
+      // limit you chose beats a limit you inherited.
+      const { page = 1, size = 200,
               orderByField = 'created_at', orderDirection = 'desc' } = options;
-      const offset = (startOffset as number) ?? 0;
+      const [first, last] = rangeFor(page, size);
       const column = orderByField === 'createdAt' ? 'created_at' : orderByField;
 
-      const { data, error } = await supabase()
-        .from('collections').select('*')
+      const { data, error, count } = await supabase()
+        .from('collections').select('*', { count: 'exact' })
         .order(column, { ascending: orderDirection === 'asc' })
-        .range(offset, offset + limitCount - 1);
+        .range(first, last);
       if (error) throw new Error(error.message);
 
       const collections = (data ?? []).map(mapCollection);
 
       set(state => ({
-        collections: offset > 0 ? [...state.collections, ...collections] : collections,
+        collections,
         loading: { ...state.loading, collections: false },
         pagination: {
           ...state.pagination,
-          collections: { lastDoc: offset + collections.length, hasMore: collections.length === limitCount }
+          collections: { page, total: count ?? collections.length }
         }
       }));
     } catch (error) {

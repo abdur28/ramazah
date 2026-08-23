@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { BANK_DETAILS } from "@/constants";
+import { useSettings } from "@/contexts/SettingsContext";
 
 /**
  * How to pay for an order that has not been paid.
@@ -33,6 +33,7 @@ export default function PaymentInstructions({
   className?: string;
 }) {
   const { formatPrice } = useCurrency();
+  const { payment } = useSettings();
   const [copied, setCopied] = useState<string | null>(null);
 
   if (paymentStatus === "paid" || paymentStatus === "refunded") return null;
@@ -57,16 +58,16 @@ export default function PaymentInstructions({
       </p>
 
       <dl className="mt-5 space-y-3">
-        <Detail label="Bank" value={BANK_DETAILS.bankName} />
-        <Detail label="Account name" value={BANK_DETAILS.accountName} />
+        <Detail label="Bank" value={payment.bankName} />
+        <Detail label="Account name" value={payment.accountName} />
         <Detail
           label="Account number"
-          value={BANK_DETAILS.accountNumber}
+          value={payment.accountNumber}
           mono
-          onCopy={() => copy("Account number", BANK_DETAILS.accountNumber)}
+          onCopy={() => copy("Account number", payment.accountNumber)}
           copied={copied === "Account number"}
         />
-        {BANK_DETAILS.swift && <Detail label="SWIFT" value={BANK_DETAILS.swift} mono />}
+        {payment.swift && <Detail label="SWIFT" value={payment.swift} mono />}
         <Detail
           label="Reference"
           value={orderNumber}

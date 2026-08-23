@@ -15,6 +15,9 @@ import {
   setReviewStatus,
   type PendingReview,
 } from "@/lib/reviews";
+import Pager from "@/components/ui/Pager";
+import { nudgeMailer } from "@/lib/admin/nudge";
+import { getReviewCounts } from "@/lib/admin/summaries";
 
 /**
  * Review moderation.
@@ -26,6 +29,9 @@ import {
  * Approving goes through `set_review_status()`, a SECURITY DEFINER function
  * that checks `is_admin()`. The `status` column is deliberately not grantable
  * to `authenticated`, which is what stops a customer approving their own.
+ *
+ * Fifty a page, with the tab counts read from the database. The Published tab
+ * is the one that needed it: it only ever grows, and it was fetched whole.
  *
  * The design pass added the thing the queue was missing: how long each review
  * has been waiting. A moderation backlog is measured in days, not in rows.
@@ -39,20 +45,36 @@ const TABS = [
 export default function AdminReviewsPage() {
   const [status, setStatus] = useState<"pending" | "approved" | "rejected">("pending");
   const [reviews, setReviews] = useState<PendingReview[]>([]);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
-    const { reviews: fetched, error } = await getReviewsForModeration(status);
+
+    // The counts used to come from the rows: a tab could only say how many
+    // reviews were waiting once you were already looking at them.
+    const [{ reviews: fetched, total: matched, page: landed, error }, { counts: tallies }] =
+      await Promise.all([getReviewsForModeration(status, page), getReviewCounts()]);
+
     if (error) toast.error(error);
     setReviews(fetched);
+    setTotal(matched);
+    if (landed !== page) setPage(landed);
+    setCounts(tallies);
     setIsLoading(false);
-  }, [status]);
+  }, [status, page]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const applyStatus = (next: typeof status) => {
+    setStatus(next);
+    setPage(1);
+  };
 
   const decide = async (review: PendingReview, next: "approved" | "rejected") => {
     setBusyId(review.id);
@@ -64,12 +86,23 @@ export default function AdminReviewsPage() {
       return;
     }
 
+    // Only approving queues anything — rejecting is silent to the customer, so
+    // there would be nothing for the nudge to send.
+    if (next === "approved") nudgeMailer();
     toast.success(
       next === "approved"
         ? `Published — it is on ${review.productName} now.`
         : "Rejected. The customer is not told."
     );
+    // The row leaves this tab, so the tallies move with it rather than waiting
+    // for a refresh that may never come.
     setReviews((current) => current.filter((item) => item.id !== review.id));
+    setTotal((current) => Math.max(0, current - 1));
+    setCounts((current) => ({
+      ...current,
+      [status]: Math.max(0, (current[status] ?? 1) - 1),
+      [next]: (current[next] ?? 0) + 1,
+    }));
   };
 
   return (
@@ -91,16 +124,24 @@ export default function AdminReviewsPage() {
           <button
             key={tab.status}
             type="button"
-            onClick={() => setStatus(tab.status)}
+            onClick={() => applyStatus(tab.status)}
             aria-pressed={status === tab.status}
             className={cn(
-              "rounded-sm border px-3 py-1.5 font-body text-sm transition-colors",
+              "inline-flex items-center rounded-sm border px-3 py-1.5 font-body text-sm transition-colors",
               status === tab.status
                 ? "border-sage-deep bg-sage-deep text-background"
                 : "border-rule bg-card text-ink-muted hover:border-sage hover:text-foreground"
             )}
           >
             {tab.label}
+            <span
+              className={cn(
+                "ml-2 font-body text-xs tabular-nums",
+                status === tab.status ? "text-background" : "text-ink-muted"
+              )}
+            >
+              {counts[tab.status] ?? 0}
+            </span>
           </button>
         ))}
       </div>
@@ -192,6 +233,10 @@ export default function AdminReviewsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {reviews.length > 0 && (
+        <Pager page={page} total={total} busy={isLoading} onChange={setPage} noun="reviews" />
       )}
     </div>
   );

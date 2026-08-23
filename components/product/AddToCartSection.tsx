@@ -10,7 +10,7 @@ import { useDashboard, useIsInWishlist } from "@/hooks/useDashboard";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import type { Product, ProductVariant, CartItem } from "@/types/types";
 import { toast } from "sonner";
-import { FREE_SHIPPING_THRESHOLD } from "@/constants";
+import { useSettings } from "@/contexts/SettingsContext";
 
 interface AddToCartSectionProps {
   product: Product;
@@ -29,6 +29,7 @@ export default function AddToCartSection({
   const pathname = usePathname();
   const { user } = useAuth();
   const { getPrice, formatPrice } = useCurrency();
+  const { money } = useSettings();
   const addItem = useCart((state) => state.addItem);
   const isInCart = useIsInCart(product.id, selectedVariant?.id);
   const toggleWishlist = useDashboard((state) => state.toggleWishlist);
@@ -224,7 +225,7 @@ export default function AddToCartSection({
           threshold is read from the same constant checkout prices against. */}
       <ul className="space-y-1.5 font-body text-sm text-ink-muted">
         <li>Delivered in 2–3 weeks · express on request</li>
-        <li>Free delivery over {formatPrice(FREE_SHIPPING_THRESHOLD)}</li>
+        <li>Free delivery over {formatPrice(money.freeShippingThreshold)}</li>
         <li>Invoiced after ordering — no card payment</li>
       </ul>
     </motion.div>

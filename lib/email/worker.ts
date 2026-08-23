@@ -43,7 +43,7 @@ function admin() {
  */
 export async function drainOutbox(
   limit = 25,
-  options: { dryRun?: boolean } = {}
+  options: { dryRun?: boolean; onlyEmail?: string } = {}
 ): Promise<DrainResult> {
   const db = admin();
   const result: DrainResult = { claimed: 0, sent: 0, failed: 0, skipped: 0, errors: [] };
@@ -54,16 +54,34 @@ export async function drainOutbox(
   }
 
   // Anything scheduled rather than triggered — the abandoned basket, the daily
-  // digest — is enqueued first, so one pass does both jobs.
-  await db.rpc('enqueue_scheduled_emails');
+  // digest — is enqueued first, so one pass does both jobs. Skipped for a
+  // single-address nudge: that caller is hurrying their own mail, not running
+  // the shop's schedule.
+  //
+  // The error is surfaced rather than ignored. It was ignored, and a missing
+  // grant meant this call failed every time while the run reported success: the
+  // digest and the abandoned-basket email would never have gone out and nothing
+  // would have said so.
+  if (!options.onlyEmail) {
+    const { error: scheduleError } = await db.rpc('enqueue_scheduled_emails');
+    if (scheduleError) {
+      result.errors.push(`Scheduling: ${scheduleError.message}`);
+    }
+  }
 
-  const { data: rows, error } = await db
+  // `onlyEmail` is what lets a signed-in customer hurry along their own mail
+  // without being able to drain anybody else's — see `/api/email/nudge`.
+  let query = db
     .from('email_outbox')
     .select('*')
     .eq('status', 'queued')
     .lte('send_after', new Date().toISOString())
     .order('send_after', { ascending: true })
     .limit(limit);
+
+  if (options.onlyEmail) query = query.eq('to_email', options.onlyEmail);
+
+  const { data: rows, error } = await query;
 
   if (error) {
     result.errors.push(error.message);

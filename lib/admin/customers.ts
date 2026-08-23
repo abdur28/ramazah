@@ -10,8 +10,11 @@ import { createClient } from '@/lib/supabase/client';
  * a dozen orders behind them, and there was no way to tell a first-time buyer
  * from the best customer in the shop.
  *
- * One query over the orders, aggregated here. Cancelled and refunded orders
- * count toward the order tally but not toward what the customer has spent.
+ * It was then fixed by fetching every order in the shop and aggregating them
+ * here, which is right up to a thousand orders and quietly wrong after that —
+ * PostgREST caps an unbounded select at 1000 rows, so lifetime spend would have
+ * stopped counting without saying so. It now aggregates in the database, for
+ * the customers actually on screen. See migration 20260830000037.
  */
 export interface CustomerStats {
   orderCount: number;
@@ -20,34 +23,28 @@ export interface CustomerStats {
   lastOrderAt: string | null;
 }
 
-export async function getCustomerStats(): Promise<{
+export async function getCustomerStats(userIds: string[]): Promise<{
   stats: Map<string, CustomerStats>;
   error: string | null;
 }> {
-  const { data, error } = await createClient()
-    .from('orders')
-    .select('user_id, total, currency, status, payment_status, created_at')
-    .order('created_at', { ascending: false });
-
   const stats = new Map<string, CustomerStats>();
+  // Orders raised by staff for someone with no account carry a null `user_id`,
+  // and `= any(null)` matches nothing, so they are filtered out before the call
+  // rather than sent as a null the function has to defend against.
+  const ids = userIds.filter(Boolean);
+  if (ids.length === 0) return { stats, error: null };
+
+  const { data, error } = await createClient().rpc('customer_stats', { p_ids: ids });
   if (error) return { stats, error: error.message };
 
-  (data ?? []).forEach((row: any) => {
-    const existing = stats.get(row.user_id) ?? {
-      orderCount: 0,
-      spend: 0,
+  for (const row of (data ?? []) as any[]) {
+    stats.set(row.user_id, {
+      orderCount: row.order_count ?? 0,
+      spend: Number(row.spend ?? 0),
       currency: String(row.currency ?? 'NGN').toLowerCase(),
-      // Rows arrive newest first, so the first one seen is the latest.
-      lastOrderAt: row.created_at,
-    };
-
-    existing.orderCount += 1;
-    if (row.payment_status === 'paid' && row.status !== 'refunded') {
-      existing.spend += Number(row.total ?? 0);
-    }
-
-    stats.set(row.user_id, existing);
-  });
+      lastOrderAt: row.last_order_at ?? null,
+    });
+  }
 
   return { stats, error: null };
 }
@@ -106,6 +103,12 @@ export interface CustomerDetail {
   requests: CustomerRequest[];
   /** Whether this email is on the newsletter, and still active on it. */
   newsletter: boolean;
+  /**
+   * How many there are altogether, which is not always how many are listed.
+   * The panels show the most recent `DETAIL_LIMIT`; these counts are the real
+   * ones, so a heading never claims a customer has fewer orders than they do.
+   */
+  counts: { orders: number; reviews: number; requests: number };
 }
 
 /**
@@ -126,10 +129,18 @@ export interface CustomerDetail {
  * what staff need is what this person actually said, and whether any of it is
  * still sitting unapproved.
  *
+ * Each panel is capped at the most recent hundred, with the true totals
+ * alongside. An uncapped select is capped anyway — PostgREST stops at 1000 and
+ * says nothing — so the choice is between a limit you set and a limit you
+ * inherit, and only one of them can be reported honestly on screen.
+ *
  * Wishlists are deliberately absent. `wishlist_items` is owner-only in RLS with
  * no admin clause, unlike orders and addresses, and that is the right line to
  * hold: staff need to see what someone bought, not what they are considering.
  */
+/** How many rows each panel on the customer page lists. */
+export const DETAIL_LIMIT = 100;
+
 export async function getCustomerDetail(
   userId: string,
   email?: string
@@ -140,29 +151,40 @@ export async function getCustomerDetail(
   const supabase = createClient();
   const empty: CustomerDetail = {
     orders: [], addresses: [], reviews: [], requests: [], newsletter: false,
+    counts: { orders: 0, reviews: 0, requests: 0 },
   };
 
   const [orders, addresses, reviews, requests, newsletter] = await Promise.all([
     supabase
       .from('orders')
-      .select('id, order_number, total, currency, status, payment_status, created_at, order_items(id)')
+      .select(
+        'id, order_number, total, currency, status, payment_status, created_at, order_items(id)',
+        { count: 'exact' }
+      )
       .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(DETAIL_LIMIT),
     supabase
       .from('addresses')
       .select('id, full_name, phone, street, city, state, postal_code, country, is_default')
       .eq('user_id', userId)
-      .order('is_default', { ascending: false }),
+      .order('is_default', { ascending: false })
+      .limit(DETAIL_LIMIT),
     supabase
       .from('reviews')
-      .select('id, rating, title, body, status, created_at, products ( id, name, slug )')
+      .select(
+        'id, rating, title, body, status, created_at, products ( id, name, slug )',
+        { count: 'exact' }
+      )
       .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(DETAIL_LIMIT),
     supabase
       .from('product_requests')
-      .select('id, item, quantity, budget, status, quoted_amount, created_at')
+      .select('id, item, quantity, budget, status, quoted_amount, created_at', { count: 'exact' })
       .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(DETAIL_LIMIT),
     // Keyed by email, not by user id — anyone can subscribe from the footer
     // without an account, so the table has no user_id to join on.
     email
@@ -179,6 +201,11 @@ export async function getCustomerDetail(
 
   return {
     detail: {
+      counts: {
+        orders: orders.count ?? (orders.data ?? []).length,
+        reviews: reviews.count ?? (reviews.data ?? []).length,
+        requests: requests.count ?? (requests.data ?? []).length,
+      },
       orders: (orders.data ?? []).map((row: any) => ({
         id: row.id,
         orderNumber: row.order_number,

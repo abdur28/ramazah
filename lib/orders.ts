@@ -1,5 +1,6 @@
 // lib/orders.ts
 import { createClient } from '@/lib/supabase/client';
+import { fetchPage, rangeFor } from '@/lib/paging';
 import type { Order, OrderItem, CreateOrderData, CurrencyCode } from '@/types/types';
 
 const supabase = () => createClient();
@@ -130,7 +131,7 @@ export async function createOrder(orderData: CreateOrderData): Promise<{
       p_shipping_cost: orderData.shippingCost,
       p_tax_amount: orderData.tax,
       p_tax_rate: null,
-      p_customer_notes: null,
+      p_customer_notes: orderData.customerNotes?.trim() || null,
       p_idempotency_key:
         orderData.idempotencyKey ??
         (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`),
@@ -249,17 +250,32 @@ export async function getOrderById(orderId: string): Promise<{
 }
 
 /** RLS already limits this to the caller's own orders (admins see all). */
-export async function getUserOrders(userId: string): Promise<{
+/**
+ * A customer's own orders, a page at a time.
+ *
+ * Paged for the same reason as everything else, though the risk here is
+ * different in size: no shopper has a thousand orders, so this was never going
+ * to hit the PostgREST cap. It is bounded anyway because an unbounded query
+ * with a limit you did not choose is a limit you will not remember.
+ */
+export async function getUserOrders(userId: string, page = 1): Promise<{
   orders?: Order[];
+  total?: number;
+  page?: number;
   error?: string;
 }> {
-  const { data, error } = await supabase()
-    .from('orders').select(ORDER_SELECT)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  const { data, error, count, page: landed } = await fetchPage(page, (p) => {
+    const [first, last] = rangeFor(p);
+    return supabase()
+      .from('orders').select(ORDER_SELECT, { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(first, last);
+  });
 
   if (error) return { error: error.message };
-  return { orders: (data ?? []).map(mapOrder) };
+  const orders = (data ?? []).map(mapOrder);
+  return { orders, total: count ?? orders.length, page: landed };
 }
 
 /**

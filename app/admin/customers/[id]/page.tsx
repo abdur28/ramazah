@@ -171,7 +171,7 @@ export default function AdminCustomerPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Orders" value={formatNumber(detail.orders.length)} icon={Package} />
+        <StatCard label="Orders" value={formatNumber(detail.counts.orders)} icon={Package} />
         <StatCard
           label="Lifetime spend"
           value={formatMoney(spend, currency)}
@@ -194,7 +194,7 @@ export default function AdminCustomerPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
         {/* ------------------------------------------------------------ main */}
         <div className="space-y-6">
-          <SectionCard title={`Orders (${detail.orders.length})`} flush>
+          <SectionCard title={`Orders (${detail.counts.orders})`} flush>
             {detail.orders.length === 0 ? (
               <p className="px-5 py-10 text-center font-body text-sm text-ink-muted">
                 No orders yet.
@@ -227,11 +227,19 @@ export default function AdminCustomerPage() {
                 ))}
               </ul>
             )}
+            {/* The panel lists the most recent hundred; the heading counts them
+                all. Saying so is the difference between a capped list and a
+                list that is quietly wrong. */}
+            {detail.counts.orders > detail.orders.length && (
+              <p className="border-t border-rule px-5 py-2.5 font-body text-xs text-ink-muted">
+                Showing the most recent {detail.orders.length} of {detail.counts.orders}.
+              </p>
+            )}
           </SectionCard>
 
           {/* The sourcing service, which the dialog this replaced never showed. */}
           <SectionCard
-            title={`Sourcing requests (${detail.requests.length})`}
+            title={`Sourcing requests (${detail.counts.requests})`}
             description="What they have asked us to find."
             flush
           >
@@ -270,10 +278,15 @@ export default function AdminCustomerPage() {
                 ))}
               </ul>
             )}
+            {detail.counts.requests > detail.requests.length && (
+              <p className="border-t border-rule px-5 py-2.5 font-body text-xs text-ink-muted">
+                Showing the most recent {detail.requests.length} of {detail.counts.requests}.
+              </p>
+            )}
           </SectionCard>
 
           <SectionCard
-            title={`Reviews (${detail.reviews.length})`}
+            title={`Reviews (${detail.counts.reviews})`}
             description={
               pendingReviews > 0
                 ? `${formatNumber(pendingReviews)} still waiting on you.`
@@ -328,6 +341,11 @@ export default function AdminCustomerPage() {
                   </li>
                 ))}
               </ul>
+            )}
+            {detail.counts.reviews > detail.reviews.length && (
+              <p className="border-t border-rule px-5 py-2.5 font-body text-xs text-ink-muted">
+                Showing the most recent {detail.reviews.length} of {detail.counts.reviews}.
+              </p>
             )}
           </SectionCard>
         </div>

@@ -2,6 +2,7 @@
 import CategoryBanner from "@/components/category/CategoryBanner"
 import ContactForm from "@/components/contact/ContactForm"
 import ContactInfo from "@/components/contact/ContactInfo"
+import ContactMap from "@/components/contact/ContactMap"
 
 export default function ContactPage() {
   return (
@@ -27,12 +28,9 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* Map Section (Optional) */}
-      <section className="h-[400px] bg-muted">
-        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-          <p className="text-sm">Map integration placeholder</p>
-        </div>
-      </section>
+      {/* Renders nothing until there is a map to show — it was a 400px grey
+          band reading "Map integration placeholder" on the live page. */}
+      <ContactMap />
     </main>
   )
 }

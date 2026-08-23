@@ -1,38 +1,51 @@
-// components/checkout/CheckoutPage.tsx
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import {
-  Package,
-  Store,
-  Truck,
-  ChevronRight,
-  Check,
-  ShoppingBag,
+  ArrowLeft, Check, Loader2, Lock, MapPin, Package, ShoppingBag, Store, Truck,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { Button } from "@/components/ui/button";
+import { useSettings } from "@/contexts/SettingsContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
+import { NIGERIAN_STATES } from "@/constants";
+import { cn } from "@/lib/utils";
 import type { UserProfile } from "@/types/types";
-import { DELIVERY_LEAD_TIME, FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING, TAX_RATE } from "@/constants";
 
+/**
+ * Checkout, rebuilt.
+ *
+ * What was here was hoodskool's, and three things in it were wrong rather than
+ * merely dated. The country dropdown offered **exactly one option — Russia** —
+ * and the form defaulted to `"RU"`, so a Nigerian shop's checkout could not
+ * express a Nigerian address. There was no state field at all, which for a
+ * courier is most of the address. And the empty-basket button linked to
+ * `/clothings`, a route that has never existed here.
+ *
+ * The design follows from the payment model rather than from a template. There
+ * is no card step: placing the order raises an invoice and the shop packs when
+ * the transfer lands. So the page does not pretend to be a payment form — no
+ * "Secure checkout" padlock over a form that takes no card, no fake step
+ * counter through a card stage that does not exist. It says what will happen,
+ * in the order it happens, and the button says "Place order" rather than
+ * "Proceed to payment".
+ *
+ * Two columns on desktop: what we need from you on the left, what you are
+ * getting on the right, pinned so the total stays visible while the form is
+ * filled. One column on a phone, summary last — nobody fills in an address to
+ * re-read a list they just came from.
+ */
 interface CheckoutPageProps {
   userProfile: UserProfile | null;
 }
@@ -42,588 +55,453 @@ export default function CheckoutPage({ userProfile }: CheckoutPageProps) {
   const { user } = useAuth();
   const { items, itemCount, checkout } = useCart();
   const { formatPrice, getPrice, currency } = useCurrency();
+  const { money, contact } = useSettings();
 
-  // Form state
   const [deliveryType, setDeliveryType] = useState<"delivery" | "inStore">("delivery");
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Contact info
+
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  
-  // Shipping address
   const [fullName, setFullName] = useState("");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zipCode, setZipCode] = useState("");
-  const [country, setCountry] = useState("RU");
+  const [note, setNote] = useState("");
 
-  // Initialize form with user profile data
+  // Nigeria, not Russia. The old default was "RU" and the only option was Russia.
+  const country = "Nigeria";
+
   useEffect(() => {
-    if (userProfile) {
-      if (userProfile.email) setEmail(userProfile.email);
-      if (userProfile.displayName) setFullName(userProfile.displayName);
+    if (!userProfile) return;
+    if (userProfile.email) setEmail(userProfile.email);
+    if (userProfile.phone) setPhone(userProfile.phone);
+    if (userProfile.displayName) setFullName(userProfile.displayName);
 
-      if (userProfile.address) {
-        if (userProfile.address.fullName) setFullName(userProfile.address.fullName);
-        if (userProfile.address.phone) setPhone(userProfile.address.phone);
-        if (userProfile.address.street) setStreet(userProfile.address.street);
-        if (userProfile.address.city) setCity(userProfile.address.city);
-        if (userProfile.address.state) setState(userProfile.address.state);
-        if (userProfile.address.zipCode) setZipCode(userProfile.address.zipCode);
-        // if (userProfile.address.country) setCountry(userProfile.address.country);
-      }
+    const saved = userProfile.address;
+    if (saved) {
+      if (saved.fullName) setFullName(saved.fullName);
+      if (saved.phone) setPhone(saved.phone);
+      if (saved.street) setStreet(saved.street);
+      if (saved.city) setCity(saved.city);
+      if (saved.state) setState(saved.state);
+      if (saved.zipCode) setZipCode(saved.zipCode);
     }
   }, [userProfile]);
 
-  // Calculate totals
-  const cartTotals = useMemo(() => {
-    const subtotal = items.reduce((sum, item) => {
-      const price = getPrice(item.prices);
-      return sum + price * item.quantity;
-    }, 0);
-
-    const tax = subtotal * TAX_RATE;
+  const totals = useMemo(() => {
+    const subtotal = items.reduce(
+      (sum, item) => sum + getPrice(item.prices) * item.quantity, 0
+    );
+    const tax = subtotal * money.taxRate;
     const shipping =
       deliveryType === "delivery"
-        ? subtotal >= FREE_SHIPPING_THRESHOLD
-          ? 0
-          : STANDARD_SHIPPING
+        ? subtotal >= money.freeShippingThreshold ? 0 : money.standardShipping
         : 0;
-    const total = subtotal + tax + shipping;
 
-    return { subtotal, tax, shipping, total };
-  }, [items, getPrice, deliveryType]);
+    return { subtotal, tax, shipping, total: subtotal + tax + shipping };
+  }, [items, getPrice, deliveryType, money]);
 
-  const handlePlaceOrder = async () => {
-    // Validate form
-    if (!email || !phone || !fullName) {
-      toast.error("Please fill in all required contact fields");
-      return;
-    }
+  const awayFromFreeShipping = Math.max(0, money.freeShippingThreshold - totals.subtotal);
 
-    if (deliveryType === "delivery" && (!street || !city || !state || !zipCode || !country)) {
-      toast.error("Please fill in all required address fields");
-      return;
-    }
+  const contactDone = Boolean(email.trim() && phone.trim() && fullName.trim());
+  const addressDone =
+    deliveryType === "inStore" ||
+    Boolean(street.trim() && city.trim() && state.trim());
+  const ready = contactDone && addressDone && items.length > 0;
 
+  const placeOrder = async () => {
     if (!user?.id) {
-      toast.error("You must be logged in to place an order");
+      toast.error("Sign in again — your session has expired.");
+      return;
+    }
+    if (!ready) {
+      toast.error(
+        !contactDone
+          ? "We need a name, an email and a phone number."
+          : "We need somewhere to deliver to."
+      );
       return;
     }
 
     setIsProcessing(true);
-
     try {
-      // Prepare checkout data
-      const checkoutData = {
-        deliveryType,
-        email,
-        phone,
-        fullName,
-        shippingAddress: deliveryType === "delivery" ? {
-          street,
-          city,
-          state,
-          zipCode,
-          country,
-        } : undefined,
-      };
-
-      // Call checkout function from useCart
-      const result = await checkout(user.id, checkoutData, currency.code);
+      const result = await checkout(
+        user.id,
+        {
+          deliveryType,
+          email: email.trim(),
+          phone: phone.trim(),
+          fullName: fullName.trim(),
+          note: note.trim() || undefined,
+          shippingAddress:
+            deliveryType === "delivery"
+              ? { street: street.trim(), city: city.trim(), state, zipCode: zipCode.trim(), country }
+              : undefined,
+        },
+        currency.code,
+        money
+      );
 
       if (!result.success) {
-        toast.error(result.error || "Failed to place order");
+        toast.error(result.error || "Could not place the order. Nothing has been charged.");
         setIsProcessing(false);
         return;
       }
 
-      // The confirmation carries the payment instructions, so the toast does
-      // not claim anything is finished — nothing is paid yet.
+      // Nothing is paid yet, so the toast does not congratulate anybody — the
+      // confirmation page carries the account details.
       toast.success("Order received.");
       router.push(`/checkout/success?orderId=${result.orderId}`);
-      
     } catch (error: any) {
-      console.error("Failed to place order:", error);
-      toast.error(error.message || "Failed to place order");
+      toast.error(error?.message || "Could not place the order. Nothing has been charged.");
       setIsProcessing(false);
     }
   };
 
-  const canPlaceOrder = () => {
-    if (!email || !phone || !fullName) return false;
-    if (deliveryType === "delivery") {
-      return street && city && state && zipCode && country;
-    }
-    return true;
-  };
-
-  // Redirect if cart is empty
-  if (itemCount === 0) {
+  // ─────────────────────────────────────────────────────── empty basket
+  if (items.length === 0 && !isProcessing) {
     return (
-      <div className="min-h-screen bg-background pt-20 flex items-center justify-center px-6">
-        <div className="text-center">
-          <Package className="h-16 w-16 text-foreground/20 mx-auto mb-4" />
-          <h2 className="font-heading uppercase text-2xl mb-2">Your cart is empty</h2>
-          <p className="text-foreground/60 mb-6">
-            Add some items to your cart before checking out
+      <main className="min-h-screen bg-background pt-16 md:pt-20">
+        <div className="mx-auto flex max-w-lg flex-col items-center px-6 py-28 text-center">
+          <ShoppingBag className="h-8 w-8 text-ink-faint" />
+          <h1 className="mt-6 font-heading text-4xl font-light text-foreground">
+            Nothing in your basket
+          </h1>
+          <p className="mt-3 max-w-[46ch] font-body text-base leading-relaxed text-ink-muted">
+            Add something and it will wait for you here. The basket is saved to your account,
+            so it survives closing the tab.
           </p>
-          <Button
-            onClick={() => router.push("/clothings")}
-            className="bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background rounded-none"
+          {/* Was /clothings — a hoodskool route that has never existed here. */}
+          <Link
+            href="/"
+            className="mt-8 inline-flex items-center gap-2 rounded-sm bg-sage-deep px-7 py-3.5 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-background transition-colors hover:bg-foreground"
           >
-            <ShoppingBag className="h-4 w-4 mr-2" />
-            Continue Shopping
-          </Button>
+            Have a look around
+          </Link>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background pt-24 md:pt-28 pb-12">
-      <div className="max-w-7xl mx-auto px-6 lg:px-12">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+    <main className="min-h-screen bg-background pt-16 md:pt-20">
+      <div className="mx-auto max-w-6xl px-5 py-10 md:px-8 md:py-16">
+        <Link
+          href="/cart"
+          className="inline-flex items-center gap-2 font-body text-sm text-ink-muted transition-colors hover:text-foreground"
         >
-          <h1 className="font-heading text-4xl md:text-5xl tracking-wide uppercase mb-2">
-            Checkout
-          </h1>
-        </motion.div>
+          <ArrowLeft className="h-4 w-4" />
+          Back to the basket
+        </Link>
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column - Checkout Form */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-2 space-y-6"
-          >
-            {/* Delivery Type */}
-            <Card className="rounded-none">
-              <CardContent className="p-6">
-                <h2 className="font-body text-lg font-medium uppercase tracking-wider mb-6">
-                  Delivery Method
-                </h2>
+        <h1 className="mt-5 font-heading text-4xl font-light leading-tight text-foreground md:text-5xl">
+          Checkout
+        </h1>
+        <p className="mt-3 max-w-[58ch] font-body text-base leading-relaxed text-ink-muted">
+          There is no card step. Placing the order raises an invoice, and we pack it as soon as
+          your transfer reaches us.
+        </p>
 
-                <RadioGroup
-                  value={deliveryType}
-                  onValueChange={(value: any) => setDeliveryType(value)}
-                >
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <label
-                      className={`relative flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${
-                        deliveryType === "delivery"
-                          ? "border-foreground bg-foreground/5"
-                          : "border-foreground/20 hover:border-foreground/40"
-                      }`}
-                    >
-                      <RadioGroupItem value="delivery" id="delivery" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Truck className="h-5 w-5" />
-                          <span className="font-body font-medium">
-                            Home Delivery
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground/60">
-                          Delivery in 3-7 business days
-                        </p>
-                      </div>
-                    </label>
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start lg:gap-14">
+          {/* ────────────────────────────────────────────────── the form */}
+          <div className="space-y-10">
+            <Step number={1} title="Who it is for" done={contactDone}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Full name" required className="sm:col-span-2">
+                  <Input value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Fatima Bello" autoComplete="name" />
+                </Field>
+                <Field label="Email" required hint="Your invoice goes here.">
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com" autoComplete="email" />
+                </Field>
+                <Field label="Phone" required hint="How the courier reaches you.">
+                  <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+234 803 000 0000" autoComplete="tel" className="tabular-nums" />
+                </Field>
+              </div>
+            </Step>
 
-                    <label
-                      className={`relative flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${
-                        deliveryType === "inStore"
-                          ? "border-foreground bg-foreground/5"
-                          : "border-foreground/20 hover:border-foreground/40"
-                      }`}
-                    >
-                      <RadioGroupItem value="inStore" id="inStore" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Store className="h-5 w-5" />
-                          <span className="font-body font-medium">
-                            Store Pickup
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground/60">
-                          Pick up in 1-2 business days
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-                </RadioGroup>
+            <Step number={2} title="How it reaches you" done>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Choice
+                  active={deliveryType === "delivery"}
+                  onClick={() => setDeliveryType("delivery")}
+                  icon={Truck}
+                  title="Delivery"
+                  note={`Anywhere in Nigeria, ${money.deliveryLeadTime} from dispatch.`}
+                  price={
+                    totals.subtotal >= money.freeShippingThreshold
+                      ? "Free"
+                      : formatPrice(money.standardShipping)
+                  }
+                />
+                <Choice
+                  active={deliveryType === "inStore"}
+                  onClick={() => setDeliveryType("inStore")}
+                  icon={Store}
+                  title="Collect in store"
+                  note={
+                    [contact.addressLine, contact.city].filter(Boolean).join(", ") ||
+                    "We will message you when it is ready."
+                  }
+                  price="Free"
+                />
+              </div>
 
-                {deliveryType === "inStore" && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 p-4 bg-terra-deep/10 border border-sage/20 rounded"
-                  >
-                    <p className="text-sm font-body">
-                      <strong>Ramazah Store</strong>
-                      <br />
-                      Leninsky Avenue, 146
-                      <br />
-                      Moscow, 117198
-                      <br />
-                      Mon-Sun: 10AM - 9PM
-                    </p>
-                  </motion.div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Contact & Shipping Information */}
-            <Card className="rounded-none">
-              <CardContent className="p-6">
-                <h2 className="font-body text-lg font-medium uppercase tracking-wider mb-6">
-                  Contact Information
-                </h2>
-
-                <div className="space-y-4">
-                  {/* Email */}
-                  <div>
-                    <Label htmlFor="email" className="font-body text-sm">
-                      Email Address *
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="your@email.com"
-                      className="mt-1.5 rounded-none"
-                      required
-                    />
-                  </div>
-
-                  {/* Phone */}
-                  <div>
-                    <Label htmlFor="phone" className="font-body text-sm">
-                      Phone Number *
-                    </Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+1 (555) 123-4567"
-                      className="mt-1.5 rounded-none"
-                      required
-                    />
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  {/* Shipping Address (only for delivery) */}
-                  {deliveryType === "delivery" && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="space-y-4"
-                    >
-                      <h3 className="font-body text-base font-medium">
-                        Shipping Address
-                      </h3>
-
-                      {/* Full Name */}
-                      <div>
-                        <Label htmlFor="fullName" className="font-body text-sm">
-                          Full Name *
-                        </Label>
-                        <Input
-                          id="fullName"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder="John Doe"
-                          className="mt-1.5 rounded-none"
-                          required
-                        />
-                      </div>
-
-                      {/* Street Address */}
-                      <div>
-                        <Label htmlFor="street" className="font-body text-sm">
-                          Street Address *
-                        </Label>
-                        <Input
-                          id="street"
-                          value={street}
-                          onChange={(e) => setStreet(e.target.value)}
-                          placeholder="123 Main Street, Apt 4B"
-                          className="mt-1.5 rounded-none"
-                          required
-                        />
-                      </div>
-
-                      {/* City & State */}
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="city" className="font-body text-sm">
-                            City *
-                          </Label>
-                          <Input
-                            id="city"
-                            value={city}
-                            onChange={(e) => setCity(e.target.value)}
-                            placeholder="New York"
-                            className="mt-1.5 rounded-none"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="state" className="font-body text-sm">
-                            State *
-                          </Label>
-                          <Input
-                            id="state"
-                            value={state}
-                            onChange={(e) => setState(e.target.value)}
-                            placeholder="NY"
-                            className="mt-1.5 rounded-none"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      {/* Zip & Country */}
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="zipCode" className="font-body text-sm">
-                            Zip Code *
-                          </Label>
-                          <Input
-                            id="zipCode"
-                            value={zipCode}
-                            onChange={(e) => setZipCode(e.target.value)}
-                            placeholder="10001"
-                            className="mt-1.5 rounded-none"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="country" className="font-body text-sm">
-                            Country *
-                          </Label>
-                          <Select value={country || "RU"} onValueChange={setCountry}>
-                            <SelectTrigger className="mt-1.5 rounded-none">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="RU">Russia</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {deliveryType === "inStore" && (
-                    <div>
-                      <Label htmlFor="pickupName" className="font-body text-sm">
-                        Pickup Name *
-                      </Label>
-                      <Input
-                        id="pickupName"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Who will pick up the order?"
-                        className="mt-1.5 rounded-none"
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/*
-              Said before the button, not after it. There is no card step: this
-              raises an invoice, and the shop packs when the transfer lands. A
-              customer who expects a payment screen and does not get one assumes
-              the order failed.
-            */}
-            <p className="mb-3 font-body text-sm leading-relaxed text-ink-muted">
-              No card payment — placing the order raises an invoice, and the next
-              screen has the account details to transfer to. Delivery runs{" "}
-              {DELIVERY_LEAD_TIME} once we have packed it.
-            </p>
-
-            <Button
-              onClick={handlePlaceOrder}
-              disabled={!canPlaceOrder() || isProcessing}
-              className="w-full rounded-none bg-sage-deep text-background hover:bg-sage-deep/90 hover:text-background py-6 text-base"
-            >
-              {isProcessing ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      duration: 1,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
-                    className="w-5 h-5 mr-2 border-2 border-background border-t-transparent rounded-full"
-                  />
-                  Processing Order...
-                </>
-              ) : (
-                <>
-                  Place order
-                </>
+              {deliveryType === "delivery" && awayFromFreeShipping > 0 && (
+                <p className="mt-3 font-body text-xs text-ink-muted">
+                  {formatPrice(awayFromFreeShipping)} more and delivery is free.
+                </p>
               )}
-            </Button>
-          </motion.div>
+            </Step>
 
-          {/* Right Column - Order Summary */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="lg:sticky lg:top-24 h-fit"
-          >
-            <Card className="rounded-none">
-              <CardContent className="p-6">
-                <h2 className="font-body text-lg font-medium uppercase tracking-wider mb-6">
-                  Order Summary
-                </h2>
-
-                {/* Cart Items */}
-                <div data-lenis-prevent className="space-y-4 mb-6 max-h-[400px] pt-2 overflow-y-auto">
-                  {items.map((item) => {
-                    const itemPrice = getPrice(item.prices);
-
-                    return (
-                      <div key={item.id} className="flex gap-4">
-                        <div className="relative w-20 h-20 bg-foreground/5 rounded flex-shrink-0">
-                          {item.image && (
-                            <Image
-                              src={item.image}
-                              alt={item.name}
-                              fill
-                              className="object-cover rounded"
-                            />
-                          )}
-                          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-body">
-                            {item.quantity}
-                          </div>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-body text-sm font-medium line-clamp-2 mb-1">
-                            {item.name}
-                          </h3>
-                          {item.size && (
-                            <p className="text-xs text-foreground/60">
-                              Size: {item.size}
-                            </p>
-                          )}
-                          {item.color && (
-                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
-                              <div
-                                className="w-3 h-3 rounded-full border border-foreground/20"
-                                style={{ backgroundColor: item.color.hex }}
-                              />
-                              <span>{item.color.name}</span>
-                            </div>
-                          )}
-                          <p className="font-body text-sm font-semibold mt-2">
-                            {formatPrice(itemPrice * item.quantity)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
+            {deliveryType === "delivery" && (
+              <Step number={3} title="Where to" done={addressDone}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Street address" required className="sm:col-span-2">
+                    <Input value={street} onChange={(e) => setStreet(e.target.value)}
+                      placeholder="14 Ahmadu Bello Way" autoComplete="street-address" />
+                  </Field>
+                  <Field label="City" required>
+                    <Input value={city} onChange={(e) => setCity(e.target.value)}
+                      placeholder="Kaduna" autoComplete="address-level2" />
+                  </Field>
+                  <Field label="State" required>
+                    {/* Thirty-six states and the FCT. There was no state field
+                        at all, which for a courier is most of the address. */}
+                    <Select value={state} onValueChange={setState}>
+                      <SelectTrigger><SelectValue placeholder="Choose a state" /></SelectTrigger>
+                      <SelectContent data-lenis-prevent className="max-h-64">
+                        {NIGERIAN_STATES.map((option) => (
+                          <SelectItem key={option} value={option}>{option}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Postcode" hint="Optional — most Nigerian addresses do without one.">
+                    <Input value={zipCode} onChange={(e) => setZipCode(e.target.value)}
+                      placeholder="800001" autoComplete="postal-code" className="tabular-nums" />
+                  </Field>
+                  <Field label="Country">
+                    <Input value={country} readOnly disabled />
+                  </Field>
                 </div>
+              </Step>
+            )}
 
-                <Separator className="my-6" />
+            <Step number={deliveryType === "delivery" ? 4 : 3} title="Anything we should know" done>
+              <Textarea
+                rows={3}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="A landmark, a gate code, a time that suits — anything that helps it arrive."
+              />
+            </Step>
+          </div>
 
-                {/* Totals */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-foreground/60">Subtotal</span>
-                    <span className="font-body font-medium">
-                      {formatPrice(cartTotals.subtotal)}
-                    </span>
-                  </div>
+          {/* ──────────────────────────────────────────────── the summary */}
+          <div className="lg:sticky lg:top-28">
+            <div className="rounded-sm border border-rule bg-card p-6">
+              <h2 className="font-body text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
+              </h2>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-foreground/60">Tax (8%)</span>
-                    <span className="font-body font-medium">
-                      {formatPrice(cartTotals.tax)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-foreground/60">Shipping</span>
-                    <span className="font-body font-medium">
-                      {cartTotals.shipping === 0 ? (
-                        <span className="text-success">Free</span>
+              <ul data-lenis-prevent className="mt-4 max-h-72 space-y-4 overflow-y-auto pr-1">
+                {items.map((item) => (
+                  <li key={item.id} className="flex gap-3">
+                    <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-sm bg-wash">
+                      {item.image ? (
+                        <Image src={item.image} alt="" fill sizes="64px" className="object-cover" />
                       ) : (
-                        formatPrice(cartTotals.shipping)
+                        <span className="flex h-full w-full items-center justify-center">
+                          <Package className="h-4 w-4 text-ink-faint" />
+                        </span>
+                      )}
+                      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-sage-deep px-1 font-body text-[10px] tabular-nums text-background">
+                        {item.quantity}
+                      </span>
+                    </span>
+
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-body text-sm text-foreground">
+                        {item.name}
+                      </span>
+                      {(item.size || item.color) && (
+                        <span className="block truncate font-body text-xs text-ink-muted">
+                          {[item.color?.name, item.size].filter(Boolean).join(" · ")}
+                        </span>
                       )}
                     </span>
-                  </div>
 
-                  {deliveryType === "delivery" &&
-                    cartTotals.subtotal < FREE_SHIPPING_THRESHOLD &&
-                    cartTotals.shipping > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="p-3 bg-terra-deep/10 border border-sage/30 rounded"
-                      >
-                        <p className="text-xs text-foreground/70">
-                          Add{" "}
-                          {formatPrice(
-                            FREE_SHIPPING_THRESHOLD - cartTotals.subtotal
-                          )}{" "}
-                          more for free shipping
-                        </p>
-                      </motion.div>
-                    )}
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="font-body text-base font-medium">
-                      TOTAL
+                    <span className="shrink-0 font-body text-sm tabular-nums text-foreground">
+                      {formatPrice(getPrice(item.prices) * item.quantity)}
                     </span>
-                    <span className="font-body text-2xl font-semibold">
-                      {formatPrice(cartTotals.total)}
-                    </span>
-                  </div>
+                  </li>
+                ))}
+              </ul>
+
+              <dl className="mt-6 space-y-2 border-t border-rule pt-4 font-body text-sm">
+                <Row label="Subtotal" value={formatPrice(totals.subtotal)} />
+                {money.taxRate > 0 && (
+                  <Row
+                    label={`VAT (${(money.taxRate * 100).toFixed(1).replace(/\.0$/, "")}%)`}
+                    value={formatPrice(totals.tax)}
+                  />
+                )}
+                <Row
+                  label={deliveryType === "inStore" ? "Collection" : "Delivery"}
+                  value={totals.shipping === 0 ? "Free" : formatPrice(totals.shipping)}
+                />
+                <div className="flex items-baseline justify-between border-t border-rule pt-3">
+                  <dt className="font-body text-sm font-medium text-foreground">Total</dt>
+                  <dd className="font-body text-xl font-medium tabular-nums text-foreground">
+                    {formatPrice(totals.total)}
+                  </dd>
                 </div>
-              </CardContent>
-            </Card>
+              </dl>
 
-            {/* Benefits */}
-            <div className="mt-6 space-y-3 text-sm text-foreground/70 font-body">
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success" />
-                <span>Free returns within 30 days</span>
+              {/* Said before the button, not after it. A customer expecting a
+                  card screen and not getting one assumes the order failed. */}
+              <div className="mt-6 rounded-sm bg-wash/70 px-4 py-3.5">
+                <p className="font-body text-xs leading-relaxed text-ink-muted">
+                  <span className="text-foreground">Nothing is charged now.</span> Placing the
+                  order sends you an invoice with our account details. We pack it as soon as the
+                  transfer lands.
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success" />
-                <span>Secure checkout</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success" />
-                <span>Authenticity guaranteed</span>
-              </div>
+
+              <button
+                type="button"
+                onClick={placeOrder}
+                disabled={!ready || isProcessing}
+                className={cn(
+                  "mt-4 flex w-full items-center justify-center gap-2 rounded-sm px-6 py-4 font-body text-[11px] font-medium uppercase tracking-[0.16em] transition-colors",
+                  ready && !isProcessing
+                    ? "bg-sage-deep text-background hover:bg-foreground"
+                    : "cursor-not-allowed bg-wash text-ink-muted"
+                )}
+              >
+                {isProcessing ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Placing your order…</>
+                ) : (
+                  <>Place order<Check className="h-3.5 w-3.5" /></>
+                )}
+              </button>
+
+              {!ready && (
+                <p className="mt-3 font-body text-xs text-ink-muted">
+                  {!contactDone
+                    ? "Fill in your name, email and phone number."
+                    : "Choose a state and give us a street address."}
+                </p>
+              )}
+
+              {/* No padlock and no "authenticity guaranteed". There is no card to
+                  secure, and a badge that promises nothing specific is noise. */}
+              <ul className="mt-5 space-y-1.5 font-body text-xs text-ink-muted">
+                <li className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                  We never see or store card details — there is no card payment.
+                </li>
+                <li className="flex items-center gap-2">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                  Delivered anywhere in Nigeria, {money.deliveryLeadTime} from dispatch.
+                </li>
+              </ul>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </main>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────── pieces */
+
+function Step({
+  number, title, done, children,
+}: {
+  number: number; title: string; done?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-body text-xs tabular-nums transition-colors",
+            done ? "bg-sage-deep text-background" : "border border-rule text-ink-muted"
+          )}
+        >
+          {done ? <Check className="h-3.5 w-3.5" /> : number}
+        </span>
+        <h2 className="font-heading text-2xl font-light text-foreground md:text-[28px]">
+          {title}
+        </h2>
+      </div>
+      <div className="pl-0 sm:pl-10">{children}</div>
+    </motion.section>
+  );
+}
+
+function Field({
+  label, hint, required, className, children,
+}: {
+  label: string; hint?: string; required?: boolean;
+  className?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <Label className="font-body text-xs text-ink-muted">
+        {label}
+        {required && <span className="ml-1 text-terra-ink">*</span>}
+      </Label>
+      {children}
+      {hint && <p className="font-body text-xs text-ink-faint">{hint}</p>}
+    </div>
+  );
+}
+
+function Choice({
+  active, onClick, icon: Icon, title, note, price,
+}: {
+  active: boolean; onClick: () => void; icon: any;
+  title: string; note: string; price: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-sm border p-4 text-left transition-colors",
+        active ? "border-sage-deep bg-wash" : "border-rule hover:border-sage"
+      )}
+    >
+      <span className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 font-body text-sm text-foreground">
+          <Icon className="h-4 w-4 text-sage-deep" />
+          {title}
+        </span>
+        <span className="font-body text-sm tabular-nums text-foreground">{price}</span>
+      </span>
+      <span className="mt-1.5 block font-body text-xs leading-relaxed text-ink-muted">
+        {note}
+      </span>
+    </button>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <dt className="text-ink-muted">{label}</dt>
+      <dd className="tabular-nums text-foreground">{value}</dd>
+    </div>
   );
 }

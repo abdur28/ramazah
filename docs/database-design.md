@@ -229,7 +229,19 @@ Category URLs are built from slugs, not the stored display path —
 
 All seven `hooks/admin/*` stores run on Supabase. Their zustand shapes are unchanged,
 so the admin components were untouched; only the query internals moved. Firestore
-cursor pagination became `range()` offsets (`pagination.*.lastDoc` now holds a number).
+cursor pagination became `range()` offsets.
+
+`pagination.*` has since become `{ page, total }`. It was `{ lastDoc, hasMore }` —
+enough for a Load more button and not enough for a pager, because `hasMore`
+cannot say how long the list is. `total` comes back from the same request that
+fetches the page (`count: 'exact'`) and counts rows matching the filters
+currently applied, not rows in the table. See [PROGRESS](PROGRESS.md), 2026-08-23.
+
+The numbers **above** those lists are a separate matter and deliberately do not
+come from the loaded rows: `order_summary()`, `payment_summary()`,
+`product_summary()`, `customer_summary()`, `review_counts()`, `request_counts()`
+and `customer_stats()` count in the database. All are `security invoker`, so RLS
+decides the rows and a customer calling one summarises only their own.
 
 - **Users** — `profiles`. Role and status changes go through `set_user_role()` and
   `set_user_status()`, because those columns are not grantable to `authenticated`.

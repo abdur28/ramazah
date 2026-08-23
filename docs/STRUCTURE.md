@@ -1,7 +1,7 @@
 # Structure
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind 4 · Supabase (Postgres 17) ·
-Cloudinary · nodemailer. 110 components, 31 migrations.
+Cloudinary · nodemailer. 112 components, 40 migrations.
 
 ## Architecture
 
@@ -24,12 +24,14 @@ talks to Supabase directly under RLS, so the mobile app gets the same API for fr
 app/
 ├── admin/            Admin (products, categories, collections, customers,
 │                     orders (+ [id]/invoice, packing-slip, new), payments,
-│                     requests, reviews, mailer, pages, analytics)
+│                     requests, reviews, mailer, pages, settings, analytics)
 ├── api/
 │   ├── admin/users/  Privileged account deletion (verifies admin server-side)
 │   ├── auth/         Account deletion for the signed-in user
 │   ├── upload-images/, delete-image/   Cloudinary
-│   └── email/worker, email/preview     drains the outbox · renders a template
+│   └── email/worker, email/nudge, email/preview
+│                     drains the outbox · sends one person's queued mail now ·
+│                     renders a template
 ├── auth/             login · signup · reset-password · callback (OAuth/confirm)
 ├── categories/       [...slug] catch-all, slug-addressed
 ├── dashboard/        overview · orders (+ [id]/invoice) · wishlist · requests ·
@@ -38,17 +40,22 @@ app/
 │                     Support and Legal, linked from the footer
 ├── checkout/ (+ success), product/, contact/, unsubscribe/
 
-components/          ui/ (shadcn), admin/, home/, layout/, navbar/, footer/,
-                     cart/, checkout/, product/, category/, brand/
+components/          ui/ (shadcn + Pager), admin/, home/, layout/, navbar/,
+                     footer/, cart/, checkout/, product/, category/, brand/
 constants/
 ├── navigation.ts    The one navigation source — bar, menu sheet, search dialog
 ├── demo.ts          Placeholder imagery; swap for Cloudinary URLs in one file
-└── index.ts         Currencies, VAT rate, shipping thresholds
-contexts/            AuthContext · CartInitializer · Currency
+└── index.ts         Currency (Naira only) and the code-level defaults that
+                     Admin → Settings overrides
+contexts/            AuthContext · CartInitializer · Currency · Navigation ·
+                     Settings (shop-wide values; the email group is stripped
+                     before it crosses to the browser)
 hooks/
-├── admin/           7 zustand stores, one per admin domain
+├── admin/           7 zustand stores, one per admin domain, plus useAdminQueues
 ├── useCart.ts       Cart + checkout
-└── useDashboard.ts  Customer dashboard
+├── useDashboard.ts  Customer dashboard
+├── useDebounced.ts  Lets a search box settle before it hits the database
+└── useScrollLock.ts
 lib/
 ├── supabase/        client · server · admin · proxy · auth
 ├── auth/server.ts   getCurrentUser · requireAuth · requireAdmin
@@ -62,21 +69,28 @@ lib/
 ├── content.ts       Page copy, server-side reads
 ├── content-defaults.ts  The same copy as literals — every read falls back here,
 │                     and the admin editor imports it from the browser
+├── settings.ts, settings-defaults.ts   Shop-wide settings, same split and for
+│                     the same reason as content
+├── paging.ts        Fifty a page, the page-number window, the search-term
+│                     escaping, and the fallback for a page that no longer exists
+├── nudge.ts         Asks the server to send this person's queued mail now
 ├── categories.ts, navigation.ts, collections via products.ts
 ├── admin/           format · errors · payments · customers · catalogue ·
-│                     campaigns · mail · content
+│                     campaigns · mail · content · settings · summaries · nudge
 ├── cloudinary.ts, chartUtils.ts
-emails/              29 templates + partials/ (layout · button · order lines ·
+emails/              29 templates + 4 partials (layout · button · order lines ·
                      payment block). Tables and inline styles — Gmail strips
                      <style> and Outlook renders through Word.
 
 supabase/
-├── migrations/      31 migrations (see below)
+├── migrations/      40 migrations (see below)
 └── seed.sql         Sample catalog
 scripts/             make-admin.js · seed.js · seed-demo-reviews.js
                      (demo customers, orders and reviews; --clean removes them)
 types/               types.d.ts · admin.ts
 proxy.ts             Session refresh + route protection (Next 16 name)
+vercel.json          Deliberately carries no cron block — pg_cron owns the
+                     schedule. See docs/email-worker.md
 ```
 
 ## Migrations
@@ -107,6 +121,15 @@ proxy.ts             Session refresh + route protection (Next 16 name)
 | `...000026–28_email_*` | Outbox, triggers, preferences, unsubscribe |
 | `...000029_campaigns` | Campaigns queue through the same outbox |
 | `...000030_site_content` | Editable page copy, with the code as the fallback |
+| `...000031_staff_notifications` | Every admin is told, not one hardcoded address |
+| `...000032_site_settings` | Shop-wide settings; SMTP stays in the environment |
+| `...000033_email_schedule` | `pg_cron` + `pg_net` call the worker hourly |
+| `...000034_outbox_scale` | The Mailer's counts, and ninety-day retention |
+| `...000035_list_summaries` | Every list screen's totals, counted in the database |
+| `...000036_product_stock_status` | Stock buckets as a view, so the filter can be a query |
+| `...000037_customer_stats` | Spend per customer, for the customers on screen |
+| `...000038_review_distribution` | The star breakdown, over every approved review |
+| `...000039_campaign_paging` | `campaign_results()` takes a page |
 
 ## Key conventions
 
@@ -119,5 +142,15 @@ proxy.ts             Session refresh + route protection (Next 16 name)
 - **Products are archived, never deleted**, so order history keeps its references.
 - **Category URLs use slugs**; `categories.path` is a display string and is
   trigger-maintained.
+- **Lists are paged at fifty and counted in the database.** A total on screen never
+  comes from `rows.length` — an unbounded PostgREST select is silently capped at
+  1000 rows, so a tally over the loaded rows is a number that stops moving without
+  saying so. See `lib/paging.ts` and the `*_summary` functions.
+- **Anything a customer can type into a filter is escaped** before it reaches
+  PostgREST's `or=(...)`, which is one comma-separated string: `searchPattern()`
+  in `lib/paging.ts`.
+- **Settings and page copy fall back to code.** `lib/settings-defaults.ts` and
+  `lib/content-defaults.ts` hold literals, so an empty database renders a complete
+  shop and the admin editors can import the defaults from the browser.
 
 See [database-design.md](database-design.md) for the schema and decision log.

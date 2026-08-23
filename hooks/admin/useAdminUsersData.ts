@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '@/types/types';
 import { AdminUserDataStore, FetchOptions } from '@/types/admin';
 import { describeError } from '@/lib/admin/errors';
+import { PAGE_SIZE, fetchPage, ilikeAny, rangeFor } from '@/lib/paging';
 
 const supabase = () => createClient();
 
@@ -71,11 +72,11 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     categories: null
   },
   pagination: {
-    users: { lastDoc: null, hasMore: false },
-    orders: { lastDoc: null, hasMore: false },
-    products: { lastDoc: null, hasMore: false },
-    categories: { lastDoc: null, hasMore: false },
-    collections: { lastDoc: null, hasMore: false },
+    users: { page: 1, total: 0 },
+    orders: { page: 1, total: 0 },
+    products: { page: 1, total: 0 },
+    categories: { page: 1, total: 0 },
+    collections: { page: 1, total: 0 },
   },
   
   // Reset methods
@@ -83,12 +84,17 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     users: [], 
     pagination: { 
       ...get().pagination, 
-      users: { lastDoc: null, hasMore: false } 
+      users: { page: 1, total: 0 } 
     } 
   }),
   
   /**
-   * Fetch users with optional pagination and filtering
+   * One page of customers, filtered and searched in the database.
+   *
+   * The search covers name, email and phone - the three things you have when
+   * somebody messages the shop asking about an order. Doing it here rather than
+   * over the loaded rows is what makes it find the customer who signed up two
+   * thousand accounts ago.
    */
   fetchUsers: async (options: FetchOptions = {}) => {
     set(state => ({ 
@@ -98,39 +104,38 @@ const useAdminUsersData = create<AdminUserDataStore>((set, get) => ({
     
     try {
       const {
-        limit: limitCount = 20,
-        startAfter: startAfterOffset,
+        page = 1,
+        size = PAGE_SIZE,
         filters = [],
+        search = '',
         orderByField = 'created_at',
         orderDirection = 'desc',
       } = options;
 
-      const offset = (startAfterOffset as number) ?? 0;
       const column = orderByField === 'createdAt' ? 'created_at' : orderByField;
 
-      let q = supabase().from('profiles').select('*');
-      for (const f of filters) {
-        q = q.eq(f.field === 'role' ? 'role' : f.field, f.value);
-      }
+      const { data, error, count, page: landed } = await fetchPage(page, async (p) => {
+        const [first, last] = rangeFor(p, size);
 
-      const { data, error } = await q
-        .order(column, { ascending: orderDirection === 'asc' })
-        .range(offset, offset + limitCount - 1);
+        let q = supabase().from('profiles').select('*', { count: 'exact' });
+        for (const f of filters) q = q.eq(f.field, f.value);
+
+        const term = search.trim();
+        if (term) q = q.or(ilikeAny(['display_name', 'email', 'phone'], term));
+
+        return q
+          .order(column, { ascending: orderDirection === 'asc' })
+          .range(first, last);
+      });
 
       if (error) throw new Error(error.message);
 
       const users = (data ?? []).map(mapUser);
 
       set(state => ({
-        users: offset > 0 ? [...state.users, ...users] : users,
+        users,
         loading: { ...state.loading, users: false },
-        pagination: {
-          ...state.pagination,
-          users: {
-            lastDoc: offset + users.length,
-            hasMore: users.length === limitCount
-          }
-        }
+        pagination: { ...state.pagination, users: { page: landed, total: count ?? users.length } }
       }));
     } catch (error) {
       console.error('Error fetching users:', error);

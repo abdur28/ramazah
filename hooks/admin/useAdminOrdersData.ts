@@ -4,6 +4,8 @@ import { getOrderById as fetchOrder, mapOrder, updateOrderStatus as setOrderStat
          updatePaymentStatus as setPaymentStatus } from '@/lib/orders';
 import { Order, OrderStatus, PaymentStatus } from '@/types/types';
 import { describeError } from '@/lib/admin/errors';
+import type { FetchOptions } from '@/types/admin';
+import { PAGE_SIZE, fetchPage, ilikeAny, rangeFor } from '@/lib/paging';
 
 interface AdminOrderDataStore {
   orders: Order[];
@@ -17,11 +19,11 @@ interface AdminOrderDataStore {
     analytics: string | null; adminAction: string | null;
   };
   pagination: {
-    users: { lastDoc: any; hasMore: boolean };
-    orders: { lastDoc: any; hasMore: boolean };
-    products: { lastDoc: any; hasMore: boolean };
-    categories: { lastDoc: any; hasMore: boolean };
-    collections: { lastDoc: any; hasMore: boolean };
+    users: { page: number; total: number };
+    orders: { page: number; total: number };
+    products: { page: number; total: number };
+    categories: { page: number; total: number };
+    collections: { page: number; total: number };
   };
 
   fetchOrders: (options?: FetchOptions) => Promise<void>;
@@ -32,15 +34,6 @@ interface AdminOrderDataStore {
   resetOrders: () => void;
 }
 
-interface FetchOptions {
-  limit?: number;
-  startAfter?: any;
-  filters?: FilterOption[];
-  orderByField?: string;
-  orderDirection?: 'asc' | 'desc';
-}
-
-interface FilterOption { field: string; operator: any; value: any; }
 
 const supabase = () => createClient();
 
@@ -70,19 +63,34 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
   error: { users: null, orders: null, products: null, categories: null,
            collections: null, analytics: null, adminAction: null },
   pagination: {
-    users: { lastDoc: null, hasMore: false },
-    orders: { lastDoc: null, hasMore: false },
-    products: { lastDoc: null, hasMore: false },
-    categories: { lastDoc: null, hasMore: false },
-    collections: { lastDoc: null, hasMore: false },
+    users: { page: 1, total: 0 },
+    orders: { page: 1, total: 0 },
+    products: { page: 1, total: 0 },
+    categories: { page: 1, total: 0 },
+    collections: { page: 1, total: 0 },
   },
 
   resetOrders: () => set({
     orders: [],
-    pagination: { ...get().pagination, orders: { lastDoc: null, hasMore: false } }
+    pagination: { ...get().pagination, orders: { page: 1, total: 0 } }
   }),
 
-  /** RLS gives admins every order; ordinary users would see only their own. */
+  /**
+   * One page of orders.
+   *
+   * RLS gives admins every order; ordinary users would see only their own.
+   *
+   * Status, payment state and the search box are all applied here rather than
+   * in the screen. They used to be a `useMemo` over whatever had been loaded,
+   * which was fine while the fetch asked for 100 and the shop had thirteen
+   * orders — and quietly wrong the moment it had a hundred and one, because
+   * searching for an order number the query had never fetched found nothing and
+   * said so.
+   *
+   * `count: 'exact'` rides along with the same request, so the total the pager
+   * shows is the number of orders matching these filters, not the number on
+   * this page.
+   */
   fetchOrders: async (options: FetchOptions = {}) => {
     set(state => ({
       loading: { ...state.loading, orders: true },
@@ -91,35 +99,46 @@ const useAdminOrdersData = create<AdminOrderDataStore>((set, get) => ({
 
     try {
       const {
-        limit: limitCount = 20,
-        startAfter: startOffset,
+        page = 1,
+        size = PAGE_SIZE,
         filters = [],
+        search = '',
         orderByField = 'createdAt',
         orderDirection = 'desc',
       } = options;
 
-      const offset = (startOffset as number) ?? 0;
+      const { data, error, count, page: landed } = await fetchPage(page, async (p) => {
+        const [first, last] = rangeFor(p, size);
 
-      let q = supabase().from('orders').select(`
-        *, order_items ( id, product_id, variant_id, name, sku, variant_label,
-                         options, image_url, unit_price, quantity, line_total )
-      `);
-      for (const f of filters) q = q.eq(col(f.field), f.value);
+        let q = supabase().from('orders').select(`
+          *, order_items ( id, product_id, variant_id, name, sku, variant_label,
+                           options, image_url, unit_price, quantity, line_total )
+        `, { count: 'exact' });
+        for (const f of filters) q = q.eq(col(f.field), f.value);
 
-      const { data, error } = await q
-        .order(col(orderByField), { ascending: orderDirection === 'asc' })
-        .range(offset, offset + limitCount - 1);
+        const term = search.trim();
+        if (term) {
+          q = q.or(ilikeAny(
+            ['order_number', 'customer_name', 'customer_email', 'customer_phone'],
+            term
+          ));
+        }
+
+        return q
+          .order(col(orderByField), { ascending: orderDirection === 'asc' })
+          .range(first, last);
+      });
 
       if (error) throw new Error(error.message);
 
       const orders = (data ?? []).map(mapOrder);
 
       set(state => ({
-        orders: offset > 0 ? [...state.orders, ...orders] : orders,
+        orders,
         loading: { ...state.loading, orders: false },
         pagination: {
           ...state.pagination,
-          orders: { lastDoc: offset + orders.length, hasMore: orders.length === limitCount }
+          orders: { page: landed, total: count ?? orders.length }
         }
       }));
     } catch (error) {

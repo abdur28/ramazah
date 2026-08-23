@@ -11,7 +11,7 @@ import {
   CurrencyRevenue
 } from '@/types/admin';
 import { UserProfile, Order, Product } from '@/types/types';
-import { getPayments } from '@/lib/admin/payments';
+import { EXPORT_LIMIT, getPayments } from '@/lib/admin/payments';
 import { describeError } from '@/lib/admin/errors';
 
 /**
@@ -586,7 +586,12 @@ const useAdminAnalyticsData = create<AdminAnalyticsDataStore>((set, get) => ({
    */
   fetchTransactionAnalytics: async (): Promise<TransactionAnalytics> => {
     try {
-      const { payments, error } = await getPayments();
+      // Analytics wants the ledger, not a page of it. The ceiling is explicit
+      // and generous: this used to inherit a limit of 500, which silently
+      // stopped being the whole ledger at the five-hundred-and-first order.
+      // Past ten thousand these charts should be aggregated in SQL rather than
+      // summed here, and this is where that will become obvious.
+      const { payments, error } = await getPayments({ size: EXPORT_LIMIT });
       if (error) throw new Error(error);
 
       set({ transactions: payments });

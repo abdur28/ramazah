@@ -60,7 +60,7 @@ export default function AdminCategoriesPage() {
     resetCategories();
     try {
       const [, fetchedCounts] = await Promise.all([
-        fetchCategories({ limit: 100, orderByField: "name", orderDirection: "asc" }),
+        fetchCategories({ size: 200, orderByField: "name", orderDirection: "asc" }),
         getCategoryProductCounts(),
       ]);
       setCounts(fetchedCounts);

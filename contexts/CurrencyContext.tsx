@@ -1,13 +1,38 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { CurrencyCode, Currency, ProductPrice } from '@/types/types';
-import { availableCurrencies } from '@/constants';
+import { createContext, useContext, ReactNode } from 'react';
+import { NAIRA } from '@/constants';
+import type { Currency, ProductPrice } from '@/types/types';
 
+/**
+ * Money, which is always Naira.
+ *
+ * This used to offer NGN, USD and EGP through a switcher. Two things were wrong
+ * with that, and neither was fixable by adding a rate table.
+ *
+ * `product_prices` genuinely holds a price per variant per currency, and
+ * `create_order` refuses to sell in a currency a variant is not priced in —
+ * which is correct. But only 2 of 20 variants had a non-Naira price, so
+ * switching to USD showed **₦0 for ninety percent of the catalogue**, because
+ * `getPrice` falls back to zero when the selected currency is missing.
+ *
+ * And everything that is not a product price — shipping, tax, order totals,
+ * request budgets and quotes — is a plain Naira number passed through
+ * `formatPrice`, which swapped the symbol and did no conversion at all. A
+ * ₦24,000 quote rendered as "$24,000".
+ *
+ * The deciding argument was not either of those. The shop takes payment by
+ * transfer to a Naira account, so an order priced in dollars cannot actually be
+ * paid — the switcher was offering something the payment model could not honour.
+ *
+ * The hook keeps its name and its shape so the twenty-odd call sites did not
+ * have to churn. `product_prices` keeps its currency column too: the schema can
+ * carry a second currency the day the shop can actually take one.
+ */
 interface CurrencyContextType {
-  selectedCurrency: CurrencyCode;
-  setSelectedCurrency: (currency: CurrencyCode) => void;
   currency: Currency;
+  /** Always 'ngn'. Kept so callers that pass it through still compile. */
+  selectedCurrency: 'ngn';
   formatPrice: (amount: number) => string;
   getPrice: (prices: ProductPrice[] | undefined, fallbackAmount?: number) => number;
   getPriceWithCompare: (prices: ProductPrice[] | undefined) => {
@@ -19,79 +44,38 @@ interface CurrencyContextType {
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
-const CURRENCY_STORAGE_KEY = 'ramazah-selected-currency';
+/** Naira has no meaningful minor unit at these prices, so no decimals. */
+export const formatNaira = (amount: number): string =>
+  `${NAIRA.symbol}${Number(amount || 0).toLocaleString('en-NG', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  // Get default currency
-  const defaultCurrency = availableCurrencies.find(c => c.isDefault) || availableCurrencies[0];
-  
-  // Initialize state with default
-  const [selectedCurrency, setSelectedCurrencyState] = useState<CurrencyCode>(defaultCurrency.code);
-
-  // Load saved currency from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(CURRENCY_STORAGE_KEY);
-      if (saved && availableCurrencies.some(c => c.code === saved)) {
-        setSelectedCurrencyState(saved as CurrencyCode);
-      }
-    } catch (error) {
-      console.error('Failed to load saved currency:', error);
-    }
-  }, []);
-
-  // Save to localStorage when currency changes
-  const setSelectedCurrency = (currency: CurrencyCode) => {
-    try {
-      localStorage.setItem(CURRENCY_STORAGE_KEY, currency);
-      setSelectedCurrencyState(currency);
-    } catch (error) {
-      console.error('Failed to save currency:', error);
-      setSelectedCurrencyState(currency);
-    }
-  };
-
-  // Get current currency object
-  const currency = availableCurrencies.find(c => c.code === selectedCurrency) || defaultCurrency;
-
-  // Format price with currency symbol.
-  // Grouped, and without kobo on Naira: `₦100000.00` was both ungrouped and
-  // quoting a subunit no one prices in. The locale is pinned rather than left
-  // to the host, so the server and the browser render the same string.
-  const formatPrice = (amount: number): string => {
-    const fractionDigits = currency.code === 'ngn' ? 0 : 2;
-    return `${currency.symbol}${amount.toLocaleString('en-NG', {
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    })}`;
-  };
-
-  // Get price for selected currency from prices array
-  const getPrice = (prices: ProductPrice[] | undefined, fallbackAmount: number = 0): number => {
-    if (!prices || prices.length === 0) return fallbackAmount;
-    const priceObj = prices.find(p => p.currency === selectedCurrency);
-    return priceObj?.price || fallbackAmount;
-  };
-
-  // Get price with compare-at-price and discount
-  const getPriceWithCompare = (prices: ProductPrice[] | undefined) => {
-    const priceObj = prices?.find(p => p.currency === selectedCurrency);
-    return {
-      price: priceObj?.price || 0,
-      compareAtPrice: priceObj?.compareAtPrice || 0,
-      discountPercent: priceObj?.discountPercent || 0,
-    };
+  const priceOf = (prices: ProductPrice[] | undefined, fallback = 0): number => {
+    if (!prices?.length) return fallback;
+    // Naira, or the first price there is. A variant priced only in something
+    // else should still show a number rather than ₦0 — the admin can see it is
+    // wrong, where a zero reads as free.
+    const naira = prices.find((price) => price.currency === 'ngn');
+    return (naira ?? prices[0])?.price ?? fallback;
   };
 
   return (
     <CurrencyContext.Provider
       value={{
-        selectedCurrency,
-        setSelectedCurrency,
-        currency,
-        formatPrice,
-        getPrice,
-        getPriceWithCompare,
+        currency: NAIRA,
+        selectedCurrency: 'ngn',
+        formatPrice: formatNaira,
+        getPrice: priceOf,
+        getPriceWithCompare: (prices) => {
+          const naira = prices?.find((price) => price.currency === 'ngn') ?? prices?.[0];
+          return {
+            price: naira?.price ?? 0,
+            compareAtPrice: naira?.compareAtPrice ?? 0,
+            discountPercent: naira?.discountPercent ?? 0,
+          };
+        },
       }}
     >
       {children}
@@ -99,28 +83,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Custom hook to use currency context
 export function useCurrency() {
   const context = useContext(CurrencyContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useCurrency must be used within a CurrencyProvider');
   }
   return context;
-}
-
-// Utility hook for price display
-export function usePrice(prices: ProductPrice[] | undefined) {
-  const { getPrice, formatPrice, getPriceWithCompare, currency } = useCurrency();
-  
-  const priceData = getPriceWithCompare(prices);
-  
-  return {
-    price: priceData.price,
-    compareAtPrice: priceData.compareAtPrice,
-    discountPercent: priceData.discountPercent,
-    formattedPrice: formatPrice(priceData.price),
-    formattedComparePrice: priceData.compareAtPrice > 0 ? formatPrice(priceData.compareAtPrice) : null,
-    hasDiscount: priceData.discountPercent > 0,
-    currency,
-  };
 }

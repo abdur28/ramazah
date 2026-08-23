@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
-import { COMPANY } from "@/constants";
+import { useSettings } from "@/contexts/SettingsContext";
 
 /**
  * The slip that goes in the box.
@@ -24,6 +24,7 @@ import { COMPANY } from "@/constants";
  */
 export default function PackingSlip({ orderAsString }: { orderAsString: string }) {
   const order = JSON.parse(orderAsString);
+  const { business } = useSettings();
   const items = order.order_items ?? [];
 
   const placed = new Date(order.created_at).toLocaleDateString("en-GB", {
@@ -212,7 +213,9 @@ export default function PackingSlip({ orderAsString }: { orderAsString: string }
         )}
 
         <footer className="mt-auto pt-10 font-body text-[11px] leading-relaxed text-neutral-600">
-          <p className="font-semibold text-black">{COMPANY.legalName} · {COMPANY.address}</p>
+          <p className="font-semibold text-black">
+            {[business.legalName, business.city, business.country].filter(Boolean).join(" · ")}
+          </p>
           <p className="mt-1">
             {/* The slip has no prices on it, so it says where to find them
                 rather than leaving someone hunting. */}

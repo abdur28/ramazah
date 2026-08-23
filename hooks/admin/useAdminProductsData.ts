@@ -4,6 +4,7 @@ import { mapProduct, PRODUCT_SELECT } from '@/lib/products';
 import { Product, ProductImage, ProductOptionDef, ProductVariant } from '@/types/types';
 import { AdminProductDataStore, FetchOptions } from '@/types/admin';
 import { describeError } from '@/lib/admin/errors';
+import { PAGE_SIZE, rangeFor } from '@/lib/paging';
 
 const supabase = () => createClient();
 
@@ -271,45 +272,81 @@ const useAdminProductsData = create<AdminProductDataStore>((set, get) => ({
   error: { users: null, orders: null, products: null, analytics: null,
            adminAction: null, collections: null, categories: null },
   pagination: {
-    users: { lastDoc: null, hasMore: false },
-    orders: { lastDoc: null, hasMore: false },
-    products: { lastDoc: null, hasMore: false },
-    categories: { lastDoc: null, hasMore: false },
-    collections: { lastDoc: null, hasMore: false },
+    users: { page: 1, total: 0 },
+    orders: { page: 1, total: 0 },
+    products: { page: 1, total: 0 },
+    categories: { page: 1, total: 0 },
+    collections: { page: 1, total: 0 },
   },
 
   resetProducts: () => set(state => ({
     products: [],
-    pagination: { ...state.pagination, products: { lastDoc: null, hasMore: false } }
+    pagination: { ...state.pagination, products: { page: 1, total: 0 } }
   })),
 
-  /** Admins see drafts and archived products too, via RLS. */
+  /**
+   * One page of the catalogue. Admins see drafts and archived products too,
+   * via RLS.
+   *
+   * Two requests, because the catalogue asks for something PostgREST cannot do
+   * in one. The stock filter is not a column - a product's on-hand figure is a
+   * sum over its variants - so `admin_product_page` decides *which* products
+   * match and how many there are altogether, and then the rows come back
+   * through `PRODUCT_SELECT`, which already describes the nested shape this
+   * screen needs far better than a SQL function could.
+   *
+   * The order is the RPC's, not the second query's: `in()` returns rows in
+   * whatever order it likes, so the ids are re-sorted into the order they were
+   * asked for. Skipping that step sorts the catalogue at random - which looks
+   * exactly like a working page until you turn to the next one and find a
+   * product you already passed.
+   */
   fetchProducts: async (options: FetchOptions = {}) => {
     set(state => ({ loading: { ...state.loading, products: true },
                     error: { ...state.error, products: null } }));
     try {
-      const { limit: limitCount = 20, startAfter: startOffset, filters = [],
-              orderByField = 'created_at', orderDirection = 'desc' } = options;
-      const offset = (startOffset as number) ?? 0;
-      const column = orderByField === 'createdAt' ? 'created_at' : orderByField;
+      const { page = 1, size = PAGE_SIZE, filters = [], search = '' } = options;
+      const [first] = rangeFor(page, size);
 
-      let q = supabase().from('products').select(PRODUCT_SELECT);
-      for (const f of filters) q = q.eq(f.field, f.value);
+      const pick = (field: string) =>
+        filters.find(f => f.field === field)?.value ?? null;
 
-      const { data, error } = await q
-        .order(column, { ascending: orderDirection === 'asc' })
-        .range(offset, offset + limitCount - 1);
-      if (error) throw new Error(error.message);
+      const { data: keys, error: keyError } = await supabase().rpc('admin_product_page', {
+        p_search:   search.trim() || null,
+        p_status:   pick('status'),
+        p_category: pick('category_id'),
+        p_stock:    pick('stock'),
+        p_limit:    size,
+        p_offset:   first,
+      });
+      if (keyError) throw new Error(keyError.message);
 
-      const products = (data ?? []).map(mapProduct);
+      const rows = (keys ?? []) as { id: string; total: number }[];
+      const total = rows.length > 0 ? Number(rows[0].total) : 0;
+
+      // An offset past the end comes back empty rather than as an error here,
+      // because this is a function rather than a range. Same correction, though:
+      // narrowing a filter while standing on page six should show page one, not
+      // an empty screen with a pager that says there are rows.
+      if (rows.length === 0 && page > 1) {
+        return get().fetchProducts({ ...options, page: 1 });
+      }
+
+      let products: Product[] = [];
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        const { data, error } = await supabase()
+          .from('products').select(PRODUCT_SELECT).in('id', ids);
+        if (error) throw new Error(error.message);
+
+        const byId = new Map((data ?? []).map((row: any) => [row.id, mapProduct(row)]));
+        products = ids.map(id => byId.get(id)).filter(Boolean) as Product[];
+      }
 
       set(state => ({
-        products: offset > 0 ? [...state.products, ...products] : products,
+        products,
         loading: { ...state.loading, products: false },
-        pagination: {
-          ...state.pagination,
-          products: { lastDoc: offset + products.length, hasMore: products.length === limitCount }
-        }
+        pagination: { ...state.pagination, products: { page, total } }
       }));
     } catch (error) {
       console.error('Error fetching products:', error);

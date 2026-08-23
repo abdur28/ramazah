@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import SectionCard from "@/components/admin/ui/SectionCard";
+import Pager from "@/components/ui/Pager";
 import StatCard from "@/components/admin/ui/StatCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill from "@/components/admin/ui/StatusPill";
@@ -93,6 +94,8 @@ export default function NotificationsTab() {
   const [counts, setCounts] = useState<OutboxCounts>({ queued: 0, sent: 0, failed: 0, cancelled: 0, due: 0 });
   const [entries, setEntries] = useState<OutboxEntry[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [preview, setPreview] = useState<{ template: string; html: string } | null>(null);
@@ -103,11 +106,13 @@ export default function NotificationsTab() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [tally, list] = await Promise.all([getOutboxCounts(), getOutbox(statusFilter)]);
+    const [tally, list] = await Promise.all([getOutboxCounts(), getOutbox(statusFilter, page)]);
     setCounts(tally);
     setEntries(list.entries);
+    setTotal(list.total);
+    if (list.page !== page) setPage(list.page);
     setLoading(false);
-  }, [statusFilter]);
+  }, [statusFilter, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -241,7 +246,13 @@ export default function NotificationsTab() {
         title="The queue"
         description="Every email the shop has decided to send, and what became of it."
         action={
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}
+          >
             <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Everything</SelectItem>
@@ -320,7 +331,27 @@ export default function NotificationsTab() {
             ))}
           </ul>
         )}
+
+        {entries.length > 0 && (
+          <div className="border-t border-rule px-5 py-3">
+            <Pager page={page} total={total} busy={loading} onChange={setPage} noun="emails" />
+          </div>
+        )}
       </SectionCard>
+
+      {/* The thing that is easy to miss: a queued email sits there until
+          something runs the worker. In production that is a cron every five
+          minutes; in development it is this button. An order went out with four
+          rows queued correctly and nothing delivered, because nothing called
+          it. */}
+      {counts.due > 0 && (
+        <p className="flex items-start gap-2 font-body text-xs leading-relaxed text-terra-ink">
+          <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {formatNumber(counts.due)} {counts.due === 1 ? "email is" : "emails are"} waiting.
+          On the live site a scheduled job sends these every five minutes; here, nothing runs
+          until you press Send.
+        </p>
+      )}
 
       {failed.length > 0 && (
         <p className="font-body text-xs leading-relaxed text-ink-muted">

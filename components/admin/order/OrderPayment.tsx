@@ -13,6 +13,7 @@ import SectionCard from "@/components/admin/ui/SectionCard";
 import StatusPill, { PAYMENT_STATUS } from "@/components/admin/ui/StatusPill";
 import useScrollLock from "@/hooks/useScrollLock";
 import { updatePaymentStatus } from "@/lib/orders";
+import { nudgeMailer } from "@/lib/admin/nudge";
 import { formatDateTime, formatMoney } from "@/lib/admin/format";
 import { describeError } from "@/lib/admin/errors";
 import type { Order, PaymentStatus } from "@/types/types";
@@ -108,6 +109,9 @@ export default function OrderPayment({
       const { error } = await updatePaymentStatus(order.id, config.status, reason);
       if (error) throw new Error(error);
       toast.success(`${order.orderNumber} — payment updated.`);
+      // "We received your payment" is the message a customer is actually
+      // waiting for, so it does not sit until the next scheduled run.
+      nudgeMailer();
       setIntent(null);
       setReason("");
       onChanged();

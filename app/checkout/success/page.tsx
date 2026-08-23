@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 import OrderPlaced from "@/components/checkout/OrderPlaced";
+import { sendQueuedEmailsSoon } from "@/lib/email/nudge";
 
 /**
  * Where an order lands after it is placed.
@@ -38,6 +39,12 @@ export default async function CheckoutSuccessPage({ searchParams }: any) {
     .maybeSingle();
 
   if (error || !data) notFound();
+
+  // The invoice is the single most important email this shop sends — it is the
+  // request for payment — so it goes now rather than on the next scheduled run.
+  // Runs after the response is streamed, so the customer waits for nothing, and
+  // the row stays queued if it fails.
+  sendQueuedEmailsSoon();
 
   return <OrderPlaced orderAsString={JSON.stringify(data)} />;
 }

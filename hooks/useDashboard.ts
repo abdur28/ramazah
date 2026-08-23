@@ -16,6 +16,9 @@ interface DashboardState {
 
   // Orders state
   orders: Order[];
+  /** 1-based, and the count of the customer's orders altogether. */
+  ordersPage: number;
+  ordersTotal: number;
   isLoadingOrders: boolean;
   ordersError: string | null;
 
@@ -36,7 +39,7 @@ interface DashboardState {
   clearWishlist: () => void;
 
   // Orders actions
-  fetchUserOrders: (userId: string) => Promise<void>;
+  fetchUserOrders: (userId: string, page?: number) => Promise<void>;
   getOrderById: (orderId: string) => Order | undefined;
   clearOrders: () => void;
 
@@ -70,6 +73,8 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   wishlistProducts: [],
   isLoadingWishlist: false,
   orders: [],
+  ordersPage: 1,
+  ordersTotal: 0,
   isLoadingOrders: false,
   ordersError: null,
   preferences: null,
@@ -162,11 +167,11 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   },
 
   // ============ ORDERS ACTIONS ============
-  fetchUserOrders: async (userId: string) => {
+  fetchUserOrders: async (userId: string, page = 1) => {
     set({ isLoadingOrders: true, ordersError: null });
     
     try {
-      const { orders, error } = await getUserOrders(userId);
+      const { orders, total, page: landed, error } = await getUserOrders(userId, page);
       
       if (error) {
         console.error('Failed to fetch orders:', error);
@@ -179,6 +184,8 @@ export const useDashboard = create<DashboardState>((set, get) => ({
 
       set({ 
         orders: orders || [],
+        ordersPage: landed ?? page,
+        ordersTotal: total ?? 0,
         isLoadingOrders: false,
         ordersError: null
       });
@@ -198,6 +205,8 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   clearOrders: () => {
     set({ 
       orders: [],
+      ordersPage: 1,
+      ordersTotal: 0,
       isLoadingOrders: false,
       ordersError: null
     });
@@ -372,6 +381,8 @@ export const useCurrency = () => {
 export const useUserOrders = () => {
   return useDashboard(state => ({
     orders: state.orders,
+    page: state.ordersPage,
+    total: state.ordersTotal,
     isLoading: state.isLoadingOrders,
     error: state.ordersError
   }));

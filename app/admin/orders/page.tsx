@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -23,7 +23,10 @@ import PageHeader from "@/components/admin/ui/PageHeader";
 import StatCard from "@/components/admin/ui/StatCard";
 import EmptyState from "@/components/admin/ui/EmptyState";
 import StatusPill, { ORDER_STATUS, PAYMENT_STATUS } from "@/components/admin/ui/StatusPill";
+import Pager from "@/components/ui/Pager";
 import useAdmin from "@/hooks/admin/useAdmin";
+import useDebounced from "@/hooks/useDebounced";
+import { getOrderSummary, type OrderSummary } from "@/lib/admin/summaries";
 import { formatDateTime, formatMoney, formatNumber, formatRelative } from "@/lib/admin/format";
 import { cn } from "@/lib/utils";
 import type { OrderStatus } from "@/types/types";
@@ -42,6 +45,12 @@ import type { OrderStatus } from "@/types/types";
  * Orders raised by staff for someone with no account sit here alongside the
  * website's own — same list, same numbering, same invoice. They carry a channel
  * chip so it is obvious which is which.
+ *
+ * Fifty a page, filtered and searched in the database. The chips and the four
+ * cards above them are counted there too — they used to be tallies over the
+ * hundred orders the screen happened to have loaded, which meant the hundred
+ * and first order was not merely off the end of the list but missing from the
+ * count of how many orders there were.
  *
  * The whole row opens the order — at `/admin/orders/[id]`, a page rather than a
  * dialog. A dialog could not carry the audit history, the staff notes or the
@@ -65,7 +74,7 @@ const CHANNEL: Record<string, string> = {
 };
 
 export default function AdminOrdersPage() {
-  const { fetchOrders, orders, loading, error, resetOrders } = useAdmin();
+  const { fetchOrders, orders, loading, error, pagination } = useAdmin();
   const searchParams = useSearchParams();
   const [refreshing, setRefreshing] = useState(false);
   // The dashboard's latest-order rows link here with the order number attached,
@@ -73,58 +82,100 @@ export default function AdminOrdersPage() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [summary, setSummary] = useState<OrderSummary | null>(null);
+  // Bumped by Refresh. The rows reload on their own whenever a filter or the
+  // page changes; the summary has no reason to, so it needs a signal.
+  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
+  // Typing now costs a request, so the query settles before it is sent.
+  const search = useDebounced(searchQuery);
 
-  const loadOrders = async () => {
-    setRefreshing(true);
-    resetOrders();
+  const load = useCallback(async () => {
+    const filters = [];
+    if (statusFilter !== "all") filters.push({ field: "status", value: statusFilter });
+    if (paymentFilter !== "all") filters.push({ field: "paymentStatus", value: paymentFilter });
+
     try {
-      await fetchOrders({ limit: 100, orderByField: "createdAt", orderDirection: "desc" });
+      await fetchOrders({ page, search, filters, orderByField: "createdAt", orderDirection: "desc" });
     } catch {
       toast.error("Could not load orders. Check your connection and try again.");
-    } finally {
-      setRefreshing(false);
     }
+  }, [fetchOrders, page, search, statusFilter, paymentFilter, reloadKey]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  /**
+   * The summary counts every order in the shop, so it does not change when you
+   * turn a page or narrow a filter — and it is a full scan, which is exactly
+   * the query you do not want to repeat on every click of the pager.
+   */
+  useEffect(() => {
+    getOrderSummary().then(({ summary: totals, error: summaryError }) => {
+      if (summaryError) {
+        toast.error("Could not work out the order totals.");
+        return;
+      }
+      setSummary(totals);
+    });
+  }, [reloadKey]);
+
+  /**
+   * The store is the authority on which page is actually showing. Asking for a
+   * page that no longer exists falls back to the first one, and the local state
+   * has to follow or the next refresh asks for the missing page all over again.
+   */
+  useEffect(() => {
+    if (pagination.orders.page !== page) setPage(pagination.orders.page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.orders.page]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setReloadKey((key) => key + 1);
+    await load();
+    setRefreshing(false);
   };
 
-  const counts = useMemo(() => {
-    const result: Record<string, number> = { all: orders.length };
-    orders.forEach((order) => {
-      result[order.status] = (result[order.status] ?? 0) + 1;
-    });
-    return result;
-  }, [orders]);
+  /**
+   * Every filter change goes back to page one, in the same click that changes
+   * it. An effect watching the filters would fire a fetch for the old page
+   * first and the new one immediately after — two requests, and a flash of the
+   * wrong rows between them.
+   */
+  const applyStatus = (value: OrderStatus | "all") => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+  const applyPayment = (value: string) => {
+    setPaymentFilter(value);
+    setPage(1);
+  };
+  const applySearch = (value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  };
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return orders.filter((order) => {
-      if (statusFilter !== "all" && order.status !== statusFilter) return false;
-      if (paymentFilter !== "all" && order.paymentStatus !== paymentFilter) return false;
-
-      if (query) {
-        const haystack =
-          `${order.orderNumber} ${order.customerName} ${order.customerEmail} ${order.customerPhone ?? ""}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-
-      return true;
-    });
-  }, [orders, statusFilter, paymentFilter, searchQuery]);
-
-  const awaitingFulfilment = orders.filter(
-    (order) => order.status === "pending" || order.status === "processing"
-  ).length;
-  const unpaid = orders.filter((order) => order.paymentStatus === "pending");
-  const unpaidTotal = unpaid.reduce((sum, order) => sum + order.total, 0);
-  const settledTotal = orders
-    .filter((order) => order.paymentStatus === "paid")
-    .reduce((sum, order) => sum + order.total, 0);
+  const counts: Record<string, number> = {
+    all: summary?.total ?? 0,
+    pending: summary?.pending ?? 0,
+    processing: summary?.processing ?? 0,
+    shipped: summary?.shipped ?? 0,
+    delivered: summary?.delivered ?? 0,
+    cancelled: summary?.cancelled ?? 0,
+    refunded: summary?.refunded ?? 0,
+  };
 
   const hasFilters = statusFilter !== "all" || paymentFilter !== "all" || Boolean(searchQuery);
+
+  const clearFilters = () => {
+    setStatusFilter("all");
+    setPaymentFilter("all");
+    setSearchQuery("");
+    setPage(1);
+  };
 
   return (
     <div className="space-y-8">
@@ -134,7 +185,7 @@ export default function AdminOrdersPage() {
         description="Every order placed, and where each one has got to."
         actions={
           <>
-            <Button variant="outline" onClick={loadOrders} disabled={refreshing}>
+            <Button variant="outline" onClick={refresh} disabled={refreshing}>
               <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </Button>
@@ -151,23 +202,23 @@ export default function AdminOrdersPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Orders" value={formatNumber(orders.length)} icon={ShoppingBag} />
+        <StatCard label="Orders" value={formatNumber(summary?.total ?? 0)} icon={ShoppingBag} />
         <StatCard
           label="Awaiting fulfilment"
-          value={formatNumber(awaitingFulfilment)}
+          value={formatNumber(summary?.awaitingFulfilment ?? 0)}
           hint="pending or being packed"
-          tone={awaitingFulfilment > 0 ? "attention" : "default"}
+          tone={(summary?.awaitingFulfilment ?? 0) > 0 ? "attention" : "default"}
           icon={Truck}
         />
         <StatCard
           label="Unpaid"
-          value={formatMoney(unpaidTotal, orders[0]?.currency)}
-          hint={`${formatNumber(unpaid.length)} orders`}
-          tone={unpaid.length > 0 ? "attention" : "default"}
+          value={formatMoney(summary?.unpaidTotal ?? 0, summary?.currency)}
+          hint={`${formatNumber(summary?.unpaidCount ?? 0)} orders`}
+          tone={(summary?.unpaidCount ?? 0) > 0 ? "attention" : "default"}
         />
         <StatCard
           label="Settled"
-          value={formatMoney(settledTotal, orders[0]?.currency)}
+          value={formatMoney(summary?.settledTotal ?? 0, summary?.currency)}
           hint="money received"
         />
       </div>
@@ -182,7 +233,7 @@ export default function AdminOrdersPage() {
             <button
               key={tab.value}
               type="button"
-              onClick={() => setStatusFilter(tab.value)}
+              onClick={() => applyStatus(tab.value)}
               aria-pressed={active}
               className={cn(
                 "inline-flex items-center gap-2 rounded-sm border px-3 py-1.5 font-body text-sm transition-colors",
@@ -211,12 +262,12 @@ export default function AdminOrdersPage() {
           <Input
             placeholder="Search by order number, name, email or phone…"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => applySearch(event.target.value)}
             className="pl-10"
           />
         </div>
 
-        <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+        <Select value={paymentFilter} onValueChange={applyPayment}>
           <SelectTrigger className="w-full sm:w-[170px]">
             <SelectValue placeholder="Any payment" />
           </SelectTrigger>
@@ -234,11 +285,7 @@ export default function AdminOrdersPage() {
             variant="ghost"
             size="icon"
             title="Clear filters"
-            onClick={() => {
-              setStatusFilter("all");
-              setPaymentFilter("all");
-              setSearchQuery("");
-            }}
+            onClick={clearFilters}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -251,7 +298,7 @@ export default function AdminOrdersPage() {
           title="Could not load orders"
           description={error.orders}
           action={
-            <Button variant="outline" onClick={loadOrders}>
+            <Button variant="outline" onClick={refresh}>
               Try again
             </Button>
           }
@@ -261,7 +308,7 @@ export default function AdminOrdersPage() {
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading orders…
         </div>
-      ) : filtered.length === 0 ? (
+      ) : orders.length === 0 ? (
         <EmptyState
           icon={ShoppingBag}
           title={hasFilters ? "No orders match those filters" : "No orders yet"}
@@ -272,14 +319,7 @@ export default function AdminOrdersPage() {
           }
           action={
             hasFilters ? (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStatusFilter("all");
-                  setPaymentFilter("all");
-                  setSearchQuery("");
-                }}
-              >
+              <Button variant="outline" onClick={clearFilters}>
                 Clear filters
               </Button>
             ) : undefined
@@ -296,7 +336,7 @@ export default function AdminOrdersPage() {
           </div>
 
           <ul className="divide-y divide-rule">
-            {filtered.map((order) => (
+            {orders.map((order) => (
               <li key={order.id}>
                 <Link
                   href={`/admin/orders/${order.id}`}
@@ -355,6 +395,16 @@ export default function AdminOrdersPage() {
             ))}
           </ul>
         </div>
+      )}
+
+      {orders.length > 0 && (
+        <Pager
+          page={pagination.orders.page}
+          total={pagination.orders.total}
+          busy={loading.orders}
+          onChange={setPage}
+          noun="orders"
+        />
       )}
     </div>
   );

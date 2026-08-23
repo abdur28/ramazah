@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { fetchPage, rangeFor } from '@/lib/paging';
 import type { CartItem } from '@/types/types';
 
 /**
@@ -201,14 +202,21 @@ export interface MyReview {
 }
 
 /** Reviews this customer wrote, at any status — theirs to see by RLS. */
-export async function getMyReviews(userId: string) {
-  const { data, error } = await createClient()
-    .from('reviews')
-    .select('id, rating, title, body, status, created_at, products ( name, slug )')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+export async function getMyReviews(userId: string, page = 1) {
+  const { data, error, count, page: landed } = await fetchPage(page, (p) => {
+    const [first, last] = rangeFor(p);
+    return createClient()
+      .from('reviews')
+      .select(
+        'id, rating, title, body, status, created_at, products ( name, slug )',
+        { count: 'exact' }
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(first, last);
+  });
 
-  if (error) return { reviews: [], error: error.message };
+  if (error) return { reviews: [], total: 0, page: 1, error: error.message };
 
   const reviews: MyReview[] = (data ?? []).map((row: any) => ({
     id: row.id,
@@ -221,7 +229,7 @@ export async function getMyReviews(userId: string) {
     createdAt: row.created_at,
   }));
 
-  return { reviews, error: null };
+  return { reviews, total: count ?? reviews.length, page: landed, error: null };
 }
 
 // ---------------------------------------------------------------- requests
@@ -260,15 +268,20 @@ const mapRequest = (row: any): ProductRequest => ({
  * array, so a dropped connection told a customer they had never asked for
  * anything.
  */
-export async function getMyRequests(userId: string) {
-  const { data, error } = await createClient()
-    .from('product_requests')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+export async function getMyRequests(userId: string, page = 1) {
+  const { data, error, count, page: landed } = await fetchPage(page, (p) => {
+    const [first, last] = rangeFor(p);
+    return createClient()
+      .from('product_requests')
+      .select('*', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(first, last);
+  });
 
-  if (error) return { requests: [], error: error.message };
-  return { requests: (data ?? []).map(mapRequest), error: null };
+  if (error) return { requests: [], total: 0, page: 1, error: error.message };
+  const requests = (data ?? []).map(mapRequest);
+  return { requests, total: count ?? requests.length, page: landed, error: null };
 }
 
 /**
@@ -343,16 +356,34 @@ export async function answerRequest(requestId: string, accept: boolean) {
 }
 
 /** Admin queue. Admin-only by RLS, not by this function. */
-export async function getRequestsForStaff(status?: ProductRequest['status']) {
-  let query = createClient()
-    .from('product_requests')
-    .select('*, profiles ( display_name, email )')
-    .order('created_at', { ascending: false });
+/**
+ * One page of the sourcing queue.
+ *
+ * This had no limit at all, and the screen fetched it twice on every load —
+ * once filtered to the tab, once entire, purely so the tabs could carry counts.
+ * On the service this business leads with, that is the table most likely to
+ * grow, and PostgREST silently caps an unbounded select at 1000 rows.
+ *
+ * The counts now come from `request_counts()`, so this fetches a page of one
+ * tab and nothing else.
+ */
+export async function getRequestsForStaff(
+  status?: ProductRequest['status'],
+  page = 1
+) {
+  const { data, error, count, page: landed } = await fetchPage(page, (p) => {
+    const [first, last] = rangeFor(p);
 
-  if (status) query = query.eq('status', status);
+    let query = createClient()
+      .from('product_requests')
+      .select('*, profiles ( display_name, email )', { count: 'exact' })
+      .order('created_at', { ascending: false });
 
-  const { data, error } = await query;
-  if (error) return { requests: [], error: error.message };
+    if (status) query = query.eq('status', status);
+    return query.range(first, last);
+  });
+
+  if (error) return { requests: [], total: 0, page: 1, error: error.message };
 
   const requests = (data ?? []).map((row: any) => ({
     ...mapRequest(row),
@@ -360,7 +391,7 @@ export async function getRequestsForStaff(status?: ProductRequest['status']) {
     customerEmail: row.profiles?.email ?? '',
   }));
 
-  return { requests, error: null };
+  return { requests, total: count ?? requests.length, page: landed, error: null };
 }
 
 /**

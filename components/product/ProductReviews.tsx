@@ -7,8 +7,10 @@ import { Star, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import Stars from "@/components/product/Stars";
 import { useAuth } from "@/contexts/AuthContext";
+import Pager from "@/components/ui/Pager";
 import {
   getProductReviews,
+  getReviewDistribution,
   getReviewEligibility,
   submitReview,
   type PublicReview,
@@ -45,6 +47,9 @@ export default function ProductReviews({
   const { user } = useAuth();
 
   const [reviews, setReviews] = useState<PublicReview[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [distribution, setDistribution] = useState<Record<number, number>>({});
   const [eligibility, setEligibility] = useState<ReviewEligibility | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,15 +61,23 @@ export default function ProductReviews({
   const [isSaving, setIsSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ reviews: fetched }, eligibilityResult] = await Promise.all([
-      getProductReviews(productId),
+    const [
+      { reviews: fetched, total: written, page: landed },
+      { distribution: bars },
+      eligibilityResult,
+    ] = await Promise.all([
+      getProductReviews(productId, page),
+      getReviewDistribution(productId),
       user ? getReviewEligibility(productId, user.id) : Promise.resolve(null),
     ]);
 
     setReviews(fetched);
+    setTotal(written);
+    if (landed !== page) setPage(landed);
+    setDistribution(bars);
     setEligibility(eligibilityResult);
     setIsLoading(false);
-  }, [productId, user]);
+  }, [productId, page, user]);
 
   useEffect(() => {
     load();
@@ -102,9 +115,11 @@ export default function ProductReviews({
     !isLoading && reviews.length === 0 && !eligibility?.canReview && !eligibility?.existingReview;
   if (isLoading || hasNothingToShow) return null;
 
-  const distribution = [5, 4, 3, 2, 1].map((star) => ({
+  // Counted in the database. Reading it off the loaded reviews would have made
+  // the bars describe this page rather than the product.
+  const bars = [5, 4, 3, 2, 1].map((star) => ({
     star,
-    count: reviews.filter((review) => review.rating === star).length,
+    count: distribution[star] ?? 0,
   }));
 
   return (
@@ -136,7 +151,7 @@ export default function ProductReviews({
                 </div>
 
                 <div className="mt-6 max-w-sm space-y-1.5">
-                  {distribution.map(({ star, count }) => (
+                  {bars.map(({ star, count }) => (
                     <div key={star} className="flex items-center gap-3">
                       <span className="w-3 font-body text-xs tabular-nums text-ink-muted">
                         {star}
@@ -145,7 +160,7 @@ export default function ProductReviews({
                         <div
                           className="h-full bg-terra"
                           style={{
-                            width: `${reviews.length ? (count / reviews.length) * 100 : 0}%`,
+                            width: `${total ? (count / total) * 100 : 0}%`,
                           }}
                         />
                       </div>
@@ -320,6 +335,18 @@ export default function ProductReviews({
                 ))}
               </ul>
             ) : null}
+
+            {total > reviews.length && (
+              <div className="mt-8">
+                <Pager
+                  page={page}
+                  total={total}
+                  busy={isLoading}
+                  onChange={setPage}
+                  noun="reviews"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

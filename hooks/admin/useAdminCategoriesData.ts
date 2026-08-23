@@ -48,16 +48,16 @@ const useAdminCategoriesData = create<AdminCategoryDataStore>((set, get) => ({
   error: { users: null, orders: null, products: null, analytics: null,
            adminAction: null, collections: null, categories: null },
   pagination: {
-    users: { lastDoc: null, hasMore: false },
-    orders: { lastDoc: null, hasMore: false },
-    products: { lastDoc: null, hasMore: false },
-    categories: { lastDoc: null, hasMore: false },
-    collections: { lastDoc: null, hasMore: false },
+    users: { page: 1, total: 0 },
+    orders: { page: 1, total: 0 },
+    products: { page: 1, total: 0 },
+    categories: { page: 1, total: 0 },
+    collections: { page: 1, total: 0 },
   },
 
   resetCategories: () => set(state => ({
     categories: [],
-    pagination: { ...state.pagination, categories: { lastDoc: null, hasMore: false } }
+    pagination: { ...state.pagination, categories: { page: 1, total: 0 } }
   })),
 
   /**
@@ -92,7 +92,10 @@ const useAdminCategoriesData = create<AdminCategoryDataStore>((set, get) => ({
       set(state => ({
         categories: roots,
         loading: { ...state.loading, categories: false },
-        pagination: { ...state.pagination, categories: { lastDoc: null, hasMore: false } }
+        // The tree is fetched whole and always will be: it is nested, so a page
+        // of it would cut children away from parents. `total` counts the rows,
+        // not the roots.
+        pagination: { ...state.pagination, categories: { page: 1, total: rows.length } }
       }));
     } catch (error) {
       console.error('Error fetching categories:', error);

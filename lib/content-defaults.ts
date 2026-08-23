@@ -1,4 +1,3 @@
-import { COMPANY } from '@/constants';
 
 /**
  * Editable copy, with the code as the fallback.
@@ -187,9 +186,10 @@ export const DEFAULTS: Record<ContentKey, any> = {
       {
         heading: 'Who you are dealing with',
         body: [
-          `Ramazah Store is a trading name of ${COMPANY.legalName}${
-            COMPANY.rcNumber ? `, registered in Nigeria as RC ${COMPANY.rcNumber}` : ''
-          }. Your contract is with that company.`,
+          // The registered company is a setting now, so this default is the
+          // shape of the sentence rather than the sentence itself — the Terms
+          // page is editable and the entity is in Settings.
+          'Ramazah Store is a trading name of RAMAZAH GLOBAL EMPORIUM LIMITED. Your contract is with that company.',
         ],
       },
       {

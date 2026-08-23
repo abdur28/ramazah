@@ -8,8 +8,6 @@ import { motion } from "framer-motion";
 import { Mail, ArrowRight, Check, MessageCircle, Instagram, Facebook } from "lucide-react";
 import { socialLinks } from "@/constants/navigation";
 import { useNavigation } from "@/contexts/NavigationContext";
-import { availableCurrencies } from "@/constants";
-import { useCurrency } from "@/contexts/CurrencyContext";
 import { subscribeToNewsletter } from "@/lib/newsletter";
 
 /**
@@ -20,6 +18,11 @@ import { subscribeToNewsletter } from "@/lib/newsletter";
  * /cookies — plus /clothings and hoodhub.ru, and a Visa / Mastercard / PayPal /
  * Apple Pay row for payments Ramazah does not take. Support and Legal now point
  * at real pages; Shop is generated from the same source as the bar and the menu.
+ *
+ * The currency pills are gone. The shop takes payment by transfer to a Naira
+ * account, so an order priced in dollars could not be paid — and only 2 of 20
+ * variants carried a non-Naira price, so switching showed ₦0 for most of the
+ * catalogue. See `contexts/CurrencyContext`.
  *
  * The subscribe form is real too: it writes to `newsletter_subscribers`, where
  * anonymous visitors may insert and nothing else. It used to call `console.log`
@@ -57,7 +60,6 @@ export default function Footer() {
   // Full names in the footer: there is a column of width here, unlike the bar.
   const { items } = useNavigation();
   const shopLinks = items.filter((item) => item.href.startsWith("/categories"));
-  const { selectedCurrency, setSelectedCurrency } = useCurrency();
 
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done">("idle");
@@ -205,30 +207,6 @@ export default function Footer() {
               </div>
             )}
 
-            {/* Inline pills rather than the dropdown, which rendered its ink
-                label on this ink ground and could not be read. */}
-            <div className="mt-8">
-              <h3 className={columnHeading}>Currency</h3>
-              <div className="mt-3 flex gap-2">
-                {availableCurrencies.map((option) => {
-                  const isSelected = option.code === selectedCurrency;
-                  return (
-                    <button
-                      key={option.code}
-                      onClick={() => setSelectedCurrency(option.code)}
-                      aria-pressed={isSelected}
-                      className={`rounded-sm border px-3 py-1.5 font-body text-xs transition-colors ${
-                        isSelected
-                          ? "border-background bg-background text-foreground"
-                          : "border-background/20 text-background/70 hover:border-background hover:text-background"
-                      }`}
-                    >
-                      {option.symbol} {option.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
 
           {/* Shop */}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Check, FileText, MessageCircle, Package } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import PaymentInstructions from "@/components/checkout/PaymentInstructions";
-import { DELIVERY_LEAD_TIME, SUPPORT_WHATSAPP } from "@/constants";
+import { useSettings } from "@/contexts/SettingsContext";
 
 /**
  * The confirmation, and the payment instructions — one page, because they are
@@ -24,6 +24,7 @@ import { DELIVERY_LEAD_TIME, SUPPORT_WHATSAPP } from "@/constants";
 export default function OrderPlaced({ orderAsString }: { orderAsString: string }) {
   const order = JSON.parse(orderAsString);
   const { formatPrice } = useCurrency();
+  const { money, contact } = useSettings();
   const items = order.order_items ?? [];
   const units = items.reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
   const collection = order.delivery_type === "in_store";
@@ -75,7 +76,7 @@ export default function OrderPlaced({ orderAsString }: { orderAsString: string }
             <Step n={2} title="We pack it">
               {collection
                 ? "We will message you when it is ready to collect from the store."
-                : `Onto the next consignment. Delivery runs ${DELIVERY_LEAD_TIME} from dispatch.`}
+                : `Onto the next consignment. Delivery runs ${money.deliveryLeadTime} from dispatch.`}
             </Step>
             <Step n={3} title="You can follow it">
               Every stage shows on your order page, with the courier and tracking number once it
@@ -102,7 +103,7 @@ export default function OrderPlaced({ orderAsString }: { orderAsString: string }
           </Link>
 
           <a
-            href={`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(`Hello, about my order ${order.order_number}:`)}`}
+            href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(`Hello, about my order ${order.order_number}:`)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-sm px-4 py-3 font-body text-[11px] font-medium uppercase tracking-[0.16em] text-ink-muted transition-colors hover:text-sage-deep"
