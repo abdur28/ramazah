@@ -88,10 +88,14 @@ export function senderFor(category: EmailCategory, settings: Settings): Sender {
     );
   }
 
+  // A Reply-To identical to the From is a header that says nothing. It earns
+  // its place on marketing, where the sending address has no inbox behind it.
+  const replyTo = email.replyTo?.trim();
+
   return {
     name: email.fromName?.trim() || 'Ramazah Store',
     address: usable,
-    replyTo: email.replyTo?.trim() || undefined,
+    replyTo: replyTo && replyTo.toLowerCase() !== usable.toLowerCase() ? replyTo : undefined,
   };
 }
 

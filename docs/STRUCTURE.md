@@ -160,9 +160,10 @@ vercel.json          Deliberately carries no cron block — pg_cron owns the
   campaign is spread across days on a budget rather than sent in one burst. An
   invoice must never wait behind an advertisement, and a day's sending allowance
   is finite.
-- **Two sending addresses.** `orders@` for transactional, `news@` for marketing,
-  both replying to `contact@` — spam complaints attach to the sending identity,
-  and only `contact@` needs an inbox behind it.
+- **Two sending addresses.** `contact@` for transactional, `news@` for marketing
+  replying to `contact@` — spam complaints attach to the sending identity, so the
+  split that matters is marketing against everything else. Only `contact@` needs
+  an inbox behind it.
 - **Settings and page copy fall back to code.** `lib/settings-defaults.ts` and
   `lib/content-defaults.ts` hold literals, so an empty database renders a complete
   shop and the admin editors can import the defaults from the browser.

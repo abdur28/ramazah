@@ -24,13 +24,25 @@ receives, and it was going to bounce.
 
 | | sends | replies go to |
 |---|---|---|
-| `orders@` | invoices, codes, dispatch, account | `contact@` |
+| `contact@` | invoices, codes, dispatch, sourcing, account | itself |
 | `news@` | newsletters and promotions | `contact@` |
 
 Split because spam complaints attach to the sending identity, and people do
 mark newsletters as junk. Letting that land on the address invoices come from is
-how a promotion costs a payment. Only `contact@` needs a forwarding inbox — a
-sending address needs no mailbox at all, which is the part that makes this free.
+how a promotion costs a payment.
+
+Two and not three. The first attempt called the transactional sender `orders@`,
+which named eleven of the twenty-eight templates it sends — nine of the rest are
+account mail, and somebody confirming their email address has never ordered
+anything. Splitting further would have been worse: reputation builds on volume
+at one identity, and order mail and account mail have the same complaint profile,
+so `orders@` and `account@` would be two weak senders bought for nothing. The
+split that pays is marketing against everything else.
+
+`contact@` is the transactional sender as well as the reply address, so From and
+Reply-To agree and a redundant Reply-To header is omitted. Only it needs a
+forwarding inbox — a sending address needs no mailbox at all, which is what
+makes `news@` free.
 
 `senderFor()` guards the obvious failure: Settings is a text box, a provider
 rejects any From on a domain it has not verified, and someone will eventually
