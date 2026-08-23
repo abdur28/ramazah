@@ -32,6 +32,7 @@
   --color-rule: var(--rule);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-danger-light: var(--danger-light);
 
   /* shadcn contract — names kept, values re-pointed at the palette */
   --color-background: var(--background);
@@ -102,6 +103,13 @@
   --success:     var(--sage-deep);
   --warning:     var(--terra-text);
   --danger:      #9B3B2E;   /*  6.52:1 */
+  /* Every colour above is measured against the cream ground, which makes all
+     of them dark. Put one on a dark surface and it disappears: the auth pages
+     sit on a photograph behind an ink scrim, and `--danger` there measured
+     1.13:1 — the sign-in error was invisible on a light photograph. This is the
+     danger equivalent of `--sage-light`, which already exists for the same
+     reason. */
+  --danger-light: #E39182;  /*  5.09:1 on the auth card, 7.24:1 on ink */
 
   --radius: 0.25rem;
 
@@ -210,6 +218,32 @@ h4, h5, h6 {
   ::selection {
     background: var(--wash);
     color: var(--ink);
+  }
+
+  /* ----------------------------------------------------------------
+     Autofill.
+
+     Chrome paints a filled field with its own near-white background and
+     its own text colour, and refuses to let either be overridden by
+     `background-color`. On the auth pages — cream text and cream icons on
+     a dark glass card — that turns a remembered email into dark-on-white
+     text with the mail icon vanishing into the block behind it, which is
+     exactly what it looked like.
+
+     The background cannot be set, but it can be *transitioned*, so it is
+     transitioned over a span long enough never to arrive. `currentColor`
+     rather than a fixed value because these inputs appear on both grounds:
+     ink on cream in the admin and the checkout, cream on ink here.
+     ---------------------------------------------------------------- */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: currentColor;
+    caret-color: currentColor;
+    transition: background-color 100000s ease-in-out 0s;
   }
 }
 

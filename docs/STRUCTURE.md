@@ -1,7 +1,7 @@
 # Structure
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind 4 · Supabase (Postgres 17) ·
-Cloudinary · nodemailer. 112 components, 40 migrations.
+Cloudinary · nodemailer. 111 components, 40 migrations.
 
 ## Architecture
 
@@ -87,6 +87,7 @@ supabase/
 └── seed.sql         Sample catalog
 scripts/             make-admin.js · seed.js · seed-demo-reviews.js
                      (demo customers, orders and reviews; --clean removes them)
+                     check-admin-contrast.mjs · check-auth-contrast.mjs
 types/               types.d.ts · admin.ts
 proxy.ts             Session refresh + route protection (Next 16 name)
 vercel.json          Deliberately carries no cron block — pg_cron owns the

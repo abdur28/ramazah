@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signUp, signInWithGoogle } from '@/lib/supabase/auth';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Mail, Lock, User, Chrome, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
-import CrossedLink from '@/components/ui/crossed-link';
+import Link from 'next/link';
+import { Mail, Lock, User, ArrowLeft, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { authImages as backgroundImages } from '@/constants/demo';
@@ -28,13 +28,20 @@ export default function SignupPage({redirect}: {redirect: string}) {
   const router = useRouter();
   const { refetch } = useAuth();
 
-  // Cycle background images
-  useState(() => {
+  /**
+   * Cycle the background.
+   *
+   * Was `useState(() => …)`, which runs its argument once to compute an initial
+   * value — so the interval was started during render and the cleanup it
+   * returned was stored as state rather than ever being called. It rotated the
+   * photographs correctly and leaked the timer on every unmount.
+   */
+  useEffect(() => {
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % backgroundImages.length);
     }, 5000);
     return () => clearInterval(interval);
-  });
+  }, []);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,7 +129,12 @@ export default function SignupPage({redirect}: {redirect: string}) {
             transition={{ duration: 1.5 }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-foreground/70" />
+        {/* The scrim and the card together decide whether anything on this
+            page is readable, because the photograph behind them is not fixed.
+            At /70 and /40 the card came out at rgb(80,84,75) over a light
+            photograph, where sage-light measured 3.24:1. At /80 and /70 it is
+            rgb(55,59,49) and the same colour measures 4.81:1. */}
+        <div className="absolute inset-0 bg-foreground/80" />
       </div>
 
       {/* Content */}
@@ -157,14 +169,14 @@ export default function SignupPage({redirect}: {redirect: string}) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-foreground/40 backdrop-blur-md border border-background/10 rounded-lg p-8"
+          className="bg-foreground/70 backdrop-blur-md border border-background/20 rounded-sm p-8"
         >
           {/* Error Message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-3 bg-destructive/10 border border-destructive/50 rounded-md flex items-center gap-2 text-destructive text-sm"
+              className="mb-6 p-3 bg-danger-light/10 border border-danger-light/40 rounded-sm flex items-center gap-2 text-danger-light text-sm"
             >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
@@ -176,7 +188,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-3 bg-success/10 border border-success/50 rounded-md flex items-center gap-2 text-success text-sm"
+              className="mb-6 p-3 bg-sage-light/10 border border-sage-light/40 rounded-sm flex items-center gap-2 text-sage-light text-sm"
             >
               <CheckCircle className="h-4 w-4 flex-shrink-0" />
               <span>
@@ -195,14 +207,14 @@ export default function SignupPage({redirect}: {redirect: string}) {
                 Display Name
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/60" />
                 <Input
                   id="displayName"
                   type="text"
                   placeholder="Your Name"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
+                  className="pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
@@ -213,7 +225,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
                 Email
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/60" />
                 <Input
                   id="email"
                   type="email"
@@ -221,7 +233,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
+                  className="pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
@@ -232,7 +244,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
                 Password
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/60" />
                 <Input
                   id="password"
                   type="password"
@@ -240,10 +252,10 @@ export default function SignupPage({redirect}: {redirect: string}) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
+                  className="pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
-              <p className="text-xs text-background/40 mt-1">
+              <p className="text-xs text-background/60 mt-1">
                 At least 6 characters
               </p>
             </div>
@@ -254,7 +266,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
                 Confirm Password
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/60" />
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -262,7 +274,7 @@ export default function SignupPage({redirect}: {redirect: string}) {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
+                  className="pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep h-12"
                 />
               </div>
             </div>
@@ -292,45 +304,52 @@ export default function SignupPage({redirect}: {redirect: string}) {
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-background/10" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-foreground/40 px-2 text-background/40">Or continue with</span>
-            </div>
+          {/* Two rules and a label, rather than one rule with a label painted
+              over it. The masking version needed the label's background to
+              match the card — but the card is a translucent ink layer over a
+              scrim over a photograph, so any solid value is wrong and any
+              translucent one darkens the patch it is meant to hide. */}
+          <div className="my-6 flex items-center gap-3">
+            <span className="h-px flex-1 bg-background/40" />
+            <span className="font-body text-xs uppercase tracking-[0.14em] text-background/60">
+              Or continue with
+            </span>
+            <span className="h-px flex-1 bg-background/40" />
           </div>
 
           {/* Google Sign Up */}
+          {/* See LoginPage: the outline variant carries `bg-background`. */}
           <Button
             type="button"
             onClick={handleGoogleSignUp}
             disabled={loading || success}
-            variant="outline"
-            className="w-full h-12 border-background/20 text-background font-body font-semibold hover:bg-card/5 disabled:opacity-50"
+            className="w-full h-12 rounded-sm border border-background/45 bg-transparent text-background font-body font-semibold transition-colors hover:bg-background/10 disabled:opacity-50"
           >
             <Image src="/google-icon.svg" alt="Google Logo" width={20} height={20} className="mr-2" />
             Sign up with Google
           </Button>
 
           {/* Terms */}
-          <p className="mt-4 text-xs text-background/40 text-center">
+          <p className="mt-4 text-xs text-background/60 text-center">
             By signing up, you agree to our{' '}
-            <a href="/terms" className="text-sage-light hover:underline">
+            <Link href="/terms" className="text-sage-light underline-offset-4 hover:underline">
               Terms
-            </a>{' '}
+            </Link>{' '}
             and{' '}
-            <a href="/privacy" className="text-sage-light hover:underline">
+            <Link href="/privacy" className="text-sage-light underline-offset-4 hover:underline">
               Privacy Policy
-            </a>
+            </Link>
           </p>
 
           {/* Login Link */}
-          <div className="mt-6 text-center text-sm text-background/60">
+          <div className="mt-6 text-center text-sm text-background/70">
             Already have an account?{' '}
-            <CrossedLink href={`/auth/login?redirect=${redirect}`} lineColor="#5C6647" lineWidth={1}>
-              <span className="text-sage-light font-medium">Login</span>
-            </CrossedLink>
+            <Link
+              href={`/auth/login?redirect=${redirect}`}
+              className="font-body font-medium text-sage-light underline-offset-4 transition-colors hover:text-background hover:underline"
+            >
+              Log in
+            </Link>
           </div>
         </motion.div>
 
@@ -341,11 +360,13 @@ export default function SignupPage({redirect}: {redirect: string}) {
           transition={{ delay: 0.6 }}
           className="text-center mt-6"
         >
-          <CrossedLink href="/" lineColor="gold" lineWidth={1}>
-            <span className="text-background/60 text-sm hover:text-background transition-colors">
-              ← Back to Home
-            </span>
-          </CrossedLink>
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-2 font-body text-sm text-background/85 transition-colors hover:text-background"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
+            Back to home
+          </Link>
         </motion.div>
       </motion.div>
     </div>

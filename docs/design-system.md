@@ -37,6 +37,7 @@ All ratios measured against `--ground` (`#FAF9F5`), target WCAG AA.
 | `--terra-deep` | `#AB5E3A` | Badge background with a light label | 4.54:1 |
 | `--terra-ink` | `#9C5433` | Terracotta text **on a terracotta tint** | 5.34:1 |
 | `--danger` | `#9B3B2E` | Errors | 6.52:1 |
+| `--danger-light` | `#E39182` | Error text **on dark surfaces** | 4.74:1 on the auth card |
 
 `--success` aliases `--sage-deep`. On a sage brand a separate success green is noise.
 `--warning` aliases `--terra-text`.
@@ -50,6 +51,29 @@ terracotta is `--terra-ink`.**
 
 The same trap catches `--ink-muted`, which reaches 4.48:1 on full `--wash`. Where muted
 text sits on a sage tint the tint is softened to `wash/60`.
+
+**Every ratio in the table above is measured against cream**, which is why every colour
+in it is dark. On a dark surface they invert into the same trap from the other side:
+`--danger` on the auth card measured **1.13:1** — the sign-in error was invisible on a
+light background photograph. `--sage-light` and `--danger-light` are the two exceptions,
+measured the other way round; they are the only accent colours to use on dark.
+
+### Dark surfaces
+
+Only one part of the site has them: the auth pages, where the card is an ink layer over
+an ink scrim over a photograph that changes every five seconds. Nothing about that stack
+is fixed, so it has to be sized for its **worst case — a white photograph**, which is
+what a bright market shot effectively is.
+
+At `bg-foreground/70` over `bg-foreground/40` the card came out at `rgb(80,84,75)`, where
+`--sage-light` measured 3.24:1. At `/80` over `/70` it is `rgb(55,59,49)` and the same
+colour measures 4.81:1. **The scrim is a contrast control, not a mood setting** — that is
+the number to check before lightening it.
+
+Borders on that card need 3:1 like any other non-text boundary: `background/20` measured
+1.82:1, `background/45` measures 3.58:1.
+
+`scripts/check-auth-contrast.mjs` measures the whole set.
 
 ## Brand mark
 
@@ -113,6 +137,8 @@ Uppercase labels take +0.16em tracking. Running text stays near 65 characters.
 | 7 | `--success` aliases sage-deep | A separate success green | Two greens on a sage brand read as a mistake |
 | 8 | Two pagers, not one | One shared control | A shelf's page belongs in the URL — shareable, crawlable, walkable with the back button. An admin list's filters are local state, and a link that restores the page but not the filter is worse than no link. `CategoryPagination` is links; `components/ui/Pager.tsx` is buttons. They share the page-number window and nothing else |
 | 9 | The pager states the range | Page numbers alone | "51–100 of 1,284" answers how long the list is without walking to the end of it. It stays visible on a single page, because knowing there are eleven orders is useful even when they all fit |
+| 10 | `--danger-light` for dark surfaces | Reuse `--danger` · drop the colour | The palette is measured against cream, so every semantic colour in it is dark. `--sage-light` already existed for this reason; errors needed the same treatment or they could not be read at all |
+| 11 | Links are underlined, never struck through | Keep `CrossedLink` | The inherited component drew an X across a link on hover — at the moment someone is deciding to click it. It was the last hoodskool component in the tree |
 
 ## Migration (done)
 

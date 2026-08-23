@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { resetPassword } from '@/lib/supabase/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Mail, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
-import CrossedLink from '@/components/ui/crossed-link';
+import Link from 'next/link';
+import { Mail, ArrowLeft, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { authImages as backgroundImages } from '@/constants/demo';
 
 
@@ -19,13 +19,20 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Cycle background images
-  useState(() => {
+  /**
+   * Cycle the background.
+   *
+   * Was `useState(() => …)`, which runs its argument once to compute an initial
+   * value — so the interval was started during render and the cleanup it
+   * returned was stored as state rather than ever being called. It rotated the
+   * photographs correctly and leaked the timer on every unmount.
+   */
+  useEffect(() => {
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % backgroundImages.length);
     }, 5000);
     return () => clearInterval(interval);
-  });
+  }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +74,12 @@ export default function ResetPasswordPage() {
             transition={{ duration: 1.5 }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-foreground/70" />
+        {/* The scrim and the card together decide whether anything on this
+            page is readable, because the photograph behind them is not fixed.
+            At /70 and /40 the card came out at rgb(80,84,75) over a light
+            photograph, where sage-light measured 3.24:1. At /80 and /70 it is
+            rgb(55,59,49) and the same colour measures 4.81:1. */}
+        <div className="absolute inset-0 bg-foreground/80" />
       </div>
 
       {/* Content */}
@@ -99,7 +111,7 @@ export default function ResetPasswordPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="mt-4 text-sm text-background/60"
+            className="mt-4 text-sm text-background/70"
           >
             Enter your email and we'll send you a link to reset your password
           </motion.p>
@@ -110,14 +122,14 @@ export default function ResetPasswordPage() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="bg-foreground/40 backdrop-blur-md border border-background/10 rounded-lg p-8"
+          className="bg-foreground/70 backdrop-blur-md border border-background/20 rounded-sm p-8"
         >
           {/* Error Message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-3 bg-destructive/10 border border-destructive/50 rounded-md flex items-center gap-2 text-destructive text-sm"
+              className="mb-6 p-3 bg-danger-light/10 border border-danger-light/40 rounded-sm flex items-center gap-2 text-danger-light text-sm"
             >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
@@ -131,16 +143,18 @@ export default function ResetPasswordPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="text-center py-4"
             >
-              <div className="mb-4 p-4 bg-success/10 border border-success/50 rounded-md">
-                <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
+              <div className="mb-4 p-4 bg-sage-light/10 border border-sage-light/40 rounded-sm">
+                <CheckCircle className="h-12 w-12 text-sage-light mx-auto mb-3" />
                 <h3 className="text-background font-body font-semibold mb-2">Check Your Email</h3>
-                <p className="text-sm text-background/60">
+                <p className="text-sm text-background/70">
                   We've sent a password reset link to <span className="text-background">{email}</span>
                 </p>
               </div>
+              {/* A primary action, so it is styled as one — it carried
+                  `variant="outline"` as well, which only worked because
+                  `bg-sage-deep` happened to win the merge. */}
               <Button
                 onClick={() => setSuccess(false)}
-                variant="outline"
                 className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send Another Email
@@ -154,7 +168,7 @@ export default function ResetPasswordPage() {
                   Email Address
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/40" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/60" />
                   <Input
                     id="email"
                     type="email"
@@ -162,7 +176,7 @@ export default function ResetPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="pl-10 bg-card/5 border-background/20 text-background placeholder:text-background/40 focus:border-sage focus:ring-sage-deep h-12"
+                    className="pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep h-12"
                   />
                 </div>
               </div>
@@ -193,11 +207,14 @@ export default function ResetPasswordPage() {
           )}
 
           {/* Back to Login */}
-          <div className="mt-6 text-center text-sm text-background/60">
+          <div className="mt-6 text-center text-sm text-background/70">
             Remember your password?{' '}
-            <CrossedLink href="/auth/login" lineColor="#5C6647" lineWidth={1}>
-              <span className="text-sage-light font-medium">Login</span>
-            </CrossedLink>
+            <Link
+              href="/auth/login"
+              className="font-body font-medium text-sage-light underline-offset-4 transition-colors hover:text-background hover:underline"
+            >
+              Log in
+            </Link>
           </div>
         </motion.div>
 
@@ -208,11 +225,13 @@ export default function ResetPasswordPage() {
           transition={{ delay: 0.7 }}
           className="text-center mt-6"
         >
-          <CrossedLink href="/" lineColor="gold" lineWidth={1}>
-            <span className="text-background/60 text-sm hover:text-background transition-colors">
-              ← Back to Home
-            </span>
-          </CrossedLink>
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-2 font-body text-sm text-background/85 transition-colors hover:text-background"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
+            Back to home
+          </Link>
         </motion.div>
       </motion.div>
     </div>

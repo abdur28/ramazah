@@ -5,6 +5,67 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-23 — The auth pages, and a sign-in error nobody could read
+
+Three reported problems on login, signup and reset; the third one led somewhere
+worse than reported.
+
+**The hoodskool links.** `CrossedLink` drew an animated X *through* a link on
+hover — at the moment someone is deciding to click it — in gold, a colour that
+is not in this palette at all. The home page had already replaced it and left a
+comment saying why; the auth pages were the last three users. They now use the
+underline and arrow treatments the rest of the site uses, and
+`components/ui/crossed-link.tsx` is deleted.
+
+**The white Google button.** `variant="outline"` carries `bg-background`, which
+on this cream-grounded theme is cream — so on a dark glass card it rendered as a
+white block with white-on-white text, the Google mark the only visible thing on
+it. It is now a transparent button with a real border.
+
+**The missing email icon.** Chrome paints an autofilled field with its own
+near-white background and refuses to let it be overridden by `background-color`.
+The mail icon is cream at 60%, so a remembered address made it disappear into
+the block behind it. The background cannot be set but it *can* be transitioned,
+so it is now transitioned over a span long enough never to arrive, with
+`-webkit-text-fill-color: currentColor` — `currentColor` because these inputs
+appear on both grounds, ink on cream in the admin and cream on ink here.
+
+Measuring that third one meant measuring the card, and the card was the real
+problem. **The error message was 1.13:1.** Every colour in the palette is
+measured against cream, which makes all of them dark; put `--danger` on a dark
+surface and it vanishes. A failed sign-in — the one message on the page that has
+to be read — was invisible whenever the rotating background photograph was a
+light one.
+
+- `--danger-light` joins `--sage-light`, which already existed for exactly this
+  reason. Errors measure 4.74:1.
+- The scrim and card go from `/70` and `/40` to `/80` and `/70`. That is not a
+  mood setting: at the old values the card was `rgb(80,84,75)` and `--sage-light`
+  measured 3.24:1; at the new ones it is `rgb(55,59,49)` and the same colour
+  measures 4.81:1.
+- Borders went from `background/20` (1.82:1) to `/45` (3.58:1).
+- The "or continue with" divider stopped masking a rule with a label painted
+  over it. The label's background had to match the card, but the card is a
+  translucent ink layer over a scrim over a photograph — no solid value is right
+  and any translucent one darkens the patch it is meant to hide. Two rules and a
+  label between them, instead.
+
+[scripts/check-auth-contrast.mjs](../scripts/check-auth-contrast.mjs) checks all
+fifteen, against a white photograph, because the background is not fixed and the
+worst case is the only one worth sizing for.
+
+Two things found while in there:
+
+- **The background carousel leaked its timer.** `useState(() => { … })` runs its
+  argument once to compute an initial value, so the interval was started during
+  render and the cleanup it returned was stored *as state* rather than ever
+  being called. It rotated the photographs correctly, which is why nobody
+  noticed. Now a `useEffect`.
+- **The show-password button was 16x16**, unlabelled to a screen reader, and
+  `variant="ghost"` painted a pale sage block on the dark card when hovered.
+
+---
+
 ## 2026-08-23 — Fifty a page, and counting where the rows are
 
 Asked to paginate every table at 50. Doing that alone would have put a wrong
