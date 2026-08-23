@@ -5,6 +5,109 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-23 — Auth email, and two flows that had no end
+
+Asked to set up signup verification, with a note that Supabase's own email
+carries branding that cannot be removed on the free tier.
+
+Half of that premise is wrong in a useful direction: **custom SMTP is free
+tier**, and so is editing the templates, so the branding could have gone today.
+The free-tier limit that actually bites is the built-in sender's rate cap, which
+is a testing allowance rather than a production one.
+
+But checking the project turned up something else first.
+
+```
+GET /auth/v1/settings  ->  "mailer_autoconfirm": true
+auth.users             ->  confirmation_sent_at: null  (all five)
+```
+
+**Nothing has ever been verified.** Everyone is auto-confirmed at signup, no
+confirmation email has ever been sent, and the `awaitingConfirmation` branch on
+the signup page was dead code for as long as it existed. Anyone could sign up as
+anyone — which matters more here than on most shops, because the invoice is how
+this one gets paid.
+
+**And the password reset had no end.** It sent an email whose link pointed back
+at `/auth/reset-password` — the request form that had just sent it — and no
+screen anywhere in the site set a new password. Anyone who forgot theirs was
+locked out permanently.
+
+## The hook
+
+Auth is the one place we cannot compose the mail: Supabase mints the code, sets
+its expiry, and is the thing that later verifies it. A code we invented would be
+a code nothing could check. What it does not have to own is the *email*.
+
+Supabase's **Send Email Hook** hands us the code instead of posting it, and
+`app/api/auth/email-hook/route.ts` renders one of five new templates in
+`emails/` and sends it through the same transport as everything else. One design
+system, one sender, previewable in the Mailer.
+
+Standard Webhooks signature verification is in the route rather than a
+dependency — twenty lines in the auth path, where the point is that it can be
+read. The body has to be the raw text, because re-serialising parsed JSON
+changes key order and the signature stops matching, and the timestamp is checked
+within five minutes so a captured request cannot be replayed for ever.
+
+Three deliberate choices, all of which look like omissions:
+
+- **Not through the outbox.** Everything else is queued because a delayed
+  invoice is still an invoice. A confirmation code that arrives after the queue
+  runs is a customer staring at a form. The hook is synchronous by contract too,
+  so queuing would report success for something that has not happened.
+- **The code is never logged.** It is the one payload in the shop that is a
+  credential.
+- **An unknown action type is accepted, not failed.** Failing the hook blocks
+  the auth operation itself, so an action with no template would stop someone
+  signing in over an email nobody needed.
+
+## A code, not a link
+
+The email is very often opened on a different device from the one that signed up
+— a laptop signup read on a phone — and a link cannot bridge that. Scanners in
+front of some inboxes also follow links, consuming a single-use one before the
+person sees it.
+
+One input rather than six boxes, which looks tidier and breaks everything that
+matters: pasting a code fills only the first box, a screen reader announces six
+unlabelled fields, and `autocomplete="one-time-code"` — what makes a phone offer
+the code above the keyboard — only works on a single field. `inputMode="numeric"`
+rather than `type="number"`, because a number input strips a leading zero and a
+code beginning 0 is an ordinary code.
+
+`/auth/verify` is new. Reset is now three steps on one page — ask, confirm,
+choose — and confirming the code leaves the live session that makes the password
+change legal.
+
+## The shell
+
+Four pages now shared the same carousel, scrim and card, which is how the
+contrast problem came to exist three times over. `AuthShell` holds it once,
+carrying the measured values and a comment saying the scrim is a contrast
+control rather than a mood setting.
+
+## Verified
+
+Eight checks on the signature — a tampered body, a wrong secret, a request
+replayed from an hour ago and one with no headers are all rejected; a stale
+signature alongside a valid one still passes, which is what makes rotation
+possible. Twenty-six on the templates: every one renders its code, states the
+expiry, leaves no unfilled `{{ }}`, carries no style Gmail would strip, and
+never puts the code inside a link. Including the one that would be worst to get
+wrong — the email addressed to a *new* address carries `token_new`, not the code
+for the address being left.
+
+One assertion of mine failed and was wrong, not the code: I checked for `<style>`
+blocks and found five, all of them the same Outlook-only conditional comment in
+the shared layout that all thirty-four templates carry.
+
+**Left running:** confirmation is still off, and the hook is not enabled, until
+both are switched on in the dashboard. [auth-email.md](auth-email.md) is the
+setup; nothing changes for customers until then.
+
+---
+
 ## 2026-08-23 — The auth pages, and a sign-in error nobody could read
 
 Three reported problems on login, signup and reset; the third one led somewhere

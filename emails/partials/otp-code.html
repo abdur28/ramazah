@@ -1,0 +1,21 @@
+{{!--
+  The code block.
+
+  Centred, large, and spaced — this is read off one screen and typed into
+  another, sometimes off a phone held next to a laptop, so the digits have to
+  survive being transcribed by hand. Letter-spacing rather than gaps between
+  characters, because a code split into separate table cells is copied with the
+  spacing still in it and then fails to paste.
+
+  A monospace stack so 0 and O, 1 and l are not the same shape. Georgia is not
+  a fallback here for that reason.
+--}}
+<tr><td style="padding:26px 34px 0;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EFF1E9;border-radius:4px;">
+    <tr><td align="center" style="padding:24px;font-family:Jost,'Helvetica Neue',Arial,sans-serif;">
+      <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#6B7060;">{{codeLabel}}</div>
+      <div style="font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:34px;font-weight:500;letter-spacing:0.2em;color:#2A2E24;line-height:1.2;padding-top:12px;">{{code}}</div>
+      <div style="font-size:13px;color:#6B7060;line-height:1.6;padding-top:12px;">Expires in {{expiryMinutes}} minutes. It can only be used once.</div>
+    </td></tr>
+  </table>
+</td></tr>

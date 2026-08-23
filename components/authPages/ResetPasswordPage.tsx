@@ -1,239 +1,316 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { resetPassword } from '@/lib/supabase/auth';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, ArrowLeft, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
-import { authImages as backgroundImages } from '@/constants/demo';
+import { AlertCircle, ArrowRight, CheckCircle, Eye, EyeClosed, Loader2, Lock, Mail } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AuthShell, { AuthNotice } from '@/components/authPages/AuthShell';
+import CodeInput from '@/components/authPages/CodeInput';
+import { resetPassword, updateUserPassword, verifyRecoveryCode } from '@/lib/supabase/auth';
 
+/**
+ * Resetting a password, end to end.
+ *
+ * It did not have an end before. The page sent an email whose link pointed back
+ * at this same page — the request form — so following it showed you the thing
+ * you had just done, and there was no screen anywhere in the site that set a new
+ * password. Anyone who forgot theirs was locked out permanently.
+ *
+ * Three steps now: ask, confirm, choose. Confirming the code leaves a live
+ * session, which is the thing that makes the password change legal — without it
+ * `updateUser` would be an anonymous request and refused.
+ */
+type Step = 'request' | 'code' | 'password' | 'done';
 
+const MIN_PASSWORD = 6;
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
+
+  const [step, setStep] = useState<Step>('request');
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  /**
-   * Cycle the background.
-   *
-   * Was `useState(() => …)`, which runs its argument once to compute an initial
-   * value — so the interval was started during render and the cleanup it
-   * returned was stored as state rather than ever being called. It rotated the
-   * photographs correctly and leaked the timer on every unmount.
-   */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % backgroundImages.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const request = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
     setLoading(true);
 
-    try {
-      const { error } = await resetPassword(email);
+    const { error: failed } = await resetPassword(email);
+    setLoading(false);
 
-      if (error) {
-        setError(error);
-      } else {
-        setSuccess(true);
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
-    } finally {
-      setLoading(false);
+    // Deliberately the same outcome whether or not the address has an account:
+    // saying "no such account" turns this form into a way of testing whether
+    // somebody shops here.
+    if (failed && !/not found/i.test(failed)) {
+      setError(failed);
+      return;
     }
+    setStep('code');
   };
 
+  const confirmCode = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    if (loading || code.length !== 6) return;
+
+    setError('');
+    setLoading(true);
+
+    const { error: failed } = await verifyRecoveryCode(email, code);
+    setLoading(false);
+
+    if (failed) {
+      setError(
+        /expired|invalid/i.test(failed)
+          ? 'That code is wrong or has expired. Ask for a new one.'
+          : failed
+      );
+      setCode('');
+      return;
+    }
+    setStep('password');
+  };
+
+  const choose = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    if (password.length < MIN_PASSWORD) {
+      setError(`Use at least ${MIN_PASSWORD} characters.`);
+      return;
+    }
+    if (password !== confirm) {
+      setError('Those two do not match.');
+      return;
+    }
+
+    setLoading(true);
+    const { error: failed } = await updateUserPassword(password);
+    setLoading(false);
+
+    if (failed) {
+      setError(failed);
+      return;
+    }
+    setStep('done');
+  };
+
+  const field =
+    'h-12 pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep';
+
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
-      {/* Animated Background */}
-      <div className="fixed h-screen inset-0 z-0">
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={currentImageIndex}
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url('${backgroundImages[currentImageIndex]}')`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-            }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.5 }}
-          />
-        </AnimatePresence>
-        {/* The scrim and the card together decide whether anything on this
-            page is readable, because the photograph behind them is not fixed.
-            At /70 and /40 the card came out at rgb(80,84,75) over a light
-            photograph, where sage-light measured 3.24:1. At /80 and /70 it is
-            rgb(55,59,49) and the same colour measures 4.81:1. */}
-        <div className="absolute inset-0 bg-foreground/80" />
-      </div>
-
-      {/* Content */}
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        className="relative z-10 w-full max-w-md mx-4"
-      >
-        {/* Header */}
-        <div className="text-center mb-8">
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="font-body text-xs tracking-[0.3em] text-sage-light mb-2 uppercase"
-          >
-            Password Recovery
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="font-heading text-4xl md:text-5xl tracking-wider text-background"
-          >
-            RESET PASSWORD
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="mt-4 text-sm text-background/70"
-          >
-            Enter your email and we'll send you a link to reset your password
-          </motion.p>
-        </div>
-
-        {/* Form Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-foreground/70 backdrop-blur-md border border-background/20 rounded-sm p-8"
-        >
-          {/* Error Message */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-3 bg-danger-light/10 border border-danger-light/40 rounded-sm flex items-center gap-2 text-danger-light text-sm"
-            >
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </motion.div>
-          )}
-
-          {/* Success Message */}
-          {success ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-4"
-            >
-              <div className="mb-4 p-4 bg-sage-light/10 border border-sage-light/40 rounded-sm">
-                <CheckCircle className="h-12 w-12 text-sage-light mx-auto mb-3" />
-                <h3 className="text-background font-body font-semibold mb-2">Check Your Email</h3>
-                <p className="text-sm text-background/70">
-                  We've sent a password reset link to <span className="text-background">{email}</span>
-                </p>
-              </div>
-              {/* A primary action, so it is styled as one — it carried
-                  `variant="outline"` as well, which only worked because
-                  `bg-sage-deep` happened to win the merge. */}
-              <Button
-                onClick={() => setSuccess(false)}
-                className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Send Another Email
-              </Button>
-            </motion.div>
-          ) : (
-            <form onSubmit={handleResetPassword} className="space-y-5">
-              {/* Email Field */}
-              <div>
-                <Label htmlFor="email" className="text-background/80 text-sm mb-2 block">
-                  Email Address
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-background/60" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="pl-10 bg-card/5 border-background/45 text-background placeholder:text-background/50 focus:border-sage focus:ring-sage-deep h-12"
-                  />
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full h-12 bg-sage-deep text-background font-body font-semibold hover:bg-sage-deep/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full"
-                    />
-                    Sending...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Send Reset Link
-                    <ArrowRight className="h-4 w-4" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          )}
-
-          {/* Back to Login */}
-          <div className="mt-6 text-center text-sm text-background/70">
-            Remember your password?{' '}
+    <AuthShell
+      eyebrow={step === 'done' ? 'All set' : 'Account recovery'}
+      title="RESET"
+      description={
+        step === 'request'
+          ? 'Enter your email and we will send you a six-digit code.'
+          : step === 'code'
+            ? `We sent a code to ${email}. Enter it below.`
+            : step === 'password'
+              ? 'Choose something you have not used here before.'
+              : undefined
+      }
+      footer={
+        step === 'done' ? undefined : (
+          <>
+            Remember it?{' '}
             <Link
               href="/auth/login"
               className="font-body font-medium text-sage-light underline-offset-4 transition-colors hover:text-background hover:underline"
             >
               Log in
             </Link>
-          </div>
-        </motion.div>
+          </>
+        )
+      }
+    >
+      {error && (
+        <AuthNotice tone="error" icon={AlertCircle}>
+          {error}
+        </AuthNotice>
+      )}
 
-        {/* Back to Home */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.7 }}
-          className="text-center mt-6"
-        >
-          <Link
-            href="/"
-            className="group inline-flex items-center gap-2 font-body text-sm text-background/85 transition-colors hover:text-background"
+      {step === 'request' && (
+        <form onSubmit={request} className="space-y-5">
+          <div>
+            <Label htmlFor="email" className="mb-2 block font-body text-sm text-background/80">
+              Email
+            </Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-background/60" />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                className={field}
+              />
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="h-12 w-full bg-sage-deep font-body font-semibold text-background transition-colors hover:bg-sage-deep/90 disabled:opacity-50"
           >
-            <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
-            Back to home
-          </Link>
-        </motion.div>
-      </motion.div>
-    </div>
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending…
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                Send the code
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            )}
+          </Button>
+        </form>
+      )}
+
+      {step === 'code' && (
+        <form onSubmit={confirmCode} className="space-y-5">
+          <CodeInput value={code} onChange={setCode} onComplete={confirmCode} disabled={loading} />
+
+          <Button
+            type="submit"
+            disabled={loading || code.length !== 6}
+            className="h-12 w-full bg-sage-deep font-body font-semibold text-background transition-colors hover:bg-sage-deep/90 disabled:opacity-50"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Checking…
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                Continue
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            )}
+          </Button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setCode('');
+              setError('');
+              setStep('request');
+            }}
+            className="w-full font-body text-xs text-background/70 underline-offset-4 transition-colors hover:text-background hover:underline"
+          >
+            Use a different email
+          </button>
+        </form>
+      )}
+
+      {step === 'password' && (
+        <form onSubmit={choose} className="space-y-5">
+          {/* Named for the account being changed, so a password manager offers
+              to update the right entry rather than saving a second one. */}
+          <input type="hidden" name="username" autoComplete="username" value={email} readOnly />
+
+          <div>
+            <Label htmlFor="password" className="mb-2 block font-body text-sm text-background/80">
+              New password
+            </Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-background/60" />
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className={`${field} pr-11`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-sm text-background/60 transition-colors hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sage-light"
+              >
+                {showPassword ? <Eye className="h-4 w-4" /> : <EyeClosed className="h-4 w-4" />}
+              </button>
+            </div>
+            <p className="mt-1 font-body text-xs text-background/60">
+              At least {MIN_PASSWORD} characters
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="confirm" className="mb-2 block font-body text-sm text-background/80">
+              Again
+            </Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-background/60" />
+              <Input
+                id="confirm"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                required
+                className={field}
+              />
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="h-12 w-full bg-sage-deep font-body font-semibold text-background transition-colors hover:bg-sage-deep/90 disabled:opacity-50"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                Save the new password
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            )}
+          </Button>
+        </form>
+      )}
+
+      {step === 'done' && (
+        <div className="text-center">
+          <AuthNotice tone="success" icon={CheckCircle}>
+            Your password is changed, and you are signed in.
+          </AuthNotice>
+          <Button
+            onClick={() => {
+              router.push('/dashboard');
+              router.refresh();
+            }}
+            className="h-12 w-full bg-sage-deep font-body font-semibold text-background transition-colors hover:bg-sage-deep/90"
+          >
+            <span className="flex items-center gap-2">
+              Go to your account
+              <ArrowRight className="h-4 w-4" />
+            </span>
+          </Button>
+        </div>
+      )}
+    </AuthShell>
   );
 }

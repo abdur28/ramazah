@@ -1,7 +1,7 @@
 # Structure
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind 4 · Supabase (Postgres 17) ·
-Cloudinary · nodemailer. 111 components, 40 migrations.
+Cloudinary · nodemailer. 114 components, 40 migrations.
 
 ## Architecture
 
@@ -27,12 +27,14 @@ app/
 │                     requests, reviews, mailer, pages, settings, analytics)
 ├── api/
 │   ├── admin/users/  Privileged account deletion (verifies admin server-side)
-│   ├── auth/         Account deletion for the signed-in user
+│   ├── auth/         Account deletion · email-hook (Supabase's Send Email Hook,
+│   │                 signature-verified; see docs/auth-email.md)
 │   ├── upload-images/, delete-image/   Cloudinary
 │   └── email/worker, email/nudge, email/preview
 │                     drains the outbox · sends one person's queued mail now ·
 │                     renders a template
-├── auth/             login · signup · reset-password · callback (OAuth/confirm)
+├── auth/             login · signup · verify (six-digit code) · reset-password ·
+│                     callback (OAuth)
 ├── categories/       [...slug] catch-all, slug-addressed
 ├── dashboard/        overview · orders (+ [id]/invoice) · wishlist · requests ·
 │                     reviews · addresses · preferences · settings
@@ -78,9 +80,11 @@ lib/
 ├── admin/           format · errors · payments · customers · catalogue ·
 │                     campaigns · mail · content · settings · summaries · nudge
 ├── cloudinary.ts, chartUtils.ts
-emails/              29 templates + 4 partials (layout · button · order lines ·
-                     payment block). Tables and inline styles — Gmail strips
-                     <style> and Outlook renders through Word.
+emails/              34 templates + 5 partials (layout · button · order lines ·
+                     payment block · otp code). Tables and inline styles — Gmail
+                     strips <style> and Outlook renders through Word. Five of
+                     them are auth codes, the only templates whose data does not
+                     come from this database.
 
 supabase/
 ├── migrations/      40 migrations (see below)

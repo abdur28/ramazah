@@ -3,14 +3,28 @@
 Everything that needs a real value before the shop takes a real order. Grouped by
 where it lives, because that is what makes it easy to miss one.
 
+**Deployed at https://ramazah.vercel.app** since 2026-08-23. The Vercel
+environment is set, the Vault holds `app_base_url` and `cron_secret`, and the
+hourly job has been proved end to end — pg_cron reaching the deployment and the
+worker sending. What is left is the dashboard column below, and real values in
+Settings.
+
 ## In Supabase Vault
 
 The hourly job reads both on every run, so rotating either needs no
 rescheduling. Until they exist it raises a warning and does nothing.
 
 ```sql
-select vault.create_secret('https://your-site.com', 'app_base_url');
+select vault.create_secret('https://ramazah.vercel.app', 'app_base_url');
 select vault.create_secret('<the same CRON_SECRET>', 'cron_secret');
+```
+
+Both are set. To check the chain rather than wait an hour for it:
+
+```sql
+select public.drain_email_queue();
+select status_code, left(coalesce(error_msg, content), 90), created
+  from net._http_response order by id desc limit 3;
 ```
 
 ## In the hosting environment
@@ -22,7 +36,28 @@ select vault.create_secret('<the same CRON_SECRET>', 'cron_secret');
 | `NEXT_PUBLIC_BASE_URL` | every link in every email is built from it |
 | `CRON_SECRET` | the worker refuses anything else |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | without these the worker refuses the whole run rather than half-sending |
+| `AUTH_EMAIL_HOOK_SECRET` | Supabase signs the auth-email hook with it; a wrong value rejects everything, which is fail-safe but silent |
 | `CLOUDINARY_*` | image upload |
+
+## In the Supabase dashboard
+
+- **Authentication → Emails → SMTP Settings.** Free tier, and it is what stops
+  auth mail going out under Supabase's sender.
+- **Authentication → Sign In / Providers → Email → Confirm email.** Currently
+  **off**, so no address has ever been verified. On a shop paid by invoice, an
+  unverified address is an order that cannot be settled.
+- **Authentication → URL Configuration.** Site URL `https://ramazah.vercel.app`,
+  and the same in Redirect URLs — without it the OAuth callback and any
+  auth redirect bounce.
+- **Authentication → Hooks → Send Email Hook** → `https://ramazah.vercel.app/api/auth/email-hook`,
+  and the generated secret into `AUTH_EMAIL_HOOK_SECRET` on Vercel, replacing
+  the placeholder currently there.
+- **Authentication → Emails → Email OTP Expiration.** Must match `OTP_MINUTES`
+  in the hook route, because the email states the number.
+- **Google sign-in** is still an unconfigured button that returns a raw 400.
+  Enable the provider or hide it.
+
+See [auth-email.md](auth-email.md).
 
 ## In Admin → Settings
 

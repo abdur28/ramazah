@@ -47,10 +47,43 @@ async function subjectFor(db: any, template: string) {
   return { subject_type: null, subject_id: null };
 }
 
+/**
+ * The auth templates have no record to preview against.
+ *
+ * Their content comes from Supabase at send time — the code is minted by the
+ * thing that will later verify it, so there is nothing in this database to read
+ * it from. A fixed sample stands in, and it is deliberately not a plausible
+ * code: seeing 123456 in a preview should never make anybody wonder whether a
+ * real one leaked into the admin.
+ */
+const AUTH_SAMPLE = {
+  code: '123456',
+  email: 'preview@ramazah.test',
+  expiryMinutes: 60,
+};
+
+const isAuthTemplate = (template: string) =>
+  ['verify_email', 'password_reset', 'magic_link', 'email_change', 'reauthentication']
+    .includes(template);
+
 async function build(template: string, payload: Record<string, any>, to: string) {
   if (!EMAILS[template]) throw new Error(`No such template: ${template}`);
 
   const db = service();
+
+  if (isAuthTemplate(template)) {
+    const rendered = await renderEmail({
+      db,
+      row: {
+        id: 'preview', template, to_email: to, to_name: 'Preview',
+        subject_type: 'auth', subject_id: null,
+        payload: { ...AUTH_SAMPLE, ...payload },
+      },
+    });
+    if (!rendered) throw new Error('This template rendered nothing.');
+    return rendered;
+  }
+
   const subject = await subjectFor(db, template);
   if (!subject) throw new Error('Nothing to preview this against yet.');
 

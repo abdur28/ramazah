@@ -25,6 +25,9 @@ const defaultPreferences: UserPreferences = {
  * caller must not query the database until the address is confirmed, or every
  * request runs as `anon` and is denied. `needsEmailConfirmation` says which case
  * you are in.
+ *
+ * No `emailRedirectTo`: confirmation is a six-digit code typed on
+ * `/auth/verify`, not a link to come back from.
  */
 export async function signUp(email: string, password: string, displayName?: string) {
   const supabase = createClient();
@@ -33,7 +36,6 @@ export async function signUp(email: string, password: string, displayName?: stri
     password,
     options: {
       data: displayName ? { full_name: displayName } : undefined,
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
     },
   });
 
@@ -72,11 +74,56 @@ export async function signOut() {
   return { error: error?.message ?? null };
 }
 
+/**
+ * Send a reset code.
+ *
+ * No `redirectTo`. The reset used to be a link that landed back on
+ * `/auth/reset-password` — the same form that had just sent it — so the flow
+ * had no end: nobody could actually change a password. It is a code now, and
+ * `verifyRecoveryCode` below is the other half.
+ */
 export async function resetPassword(email: string) {
   const supabase = createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/auth/reset-password`,
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  return { error: error?.message ?? null };
+}
+
+/**
+ * Confirm a signup with the six-digit code from the email.
+ *
+ * A code rather than a link because the email is so often opened on a different
+ * device from the one that signed up — a laptop signup read on a phone, which a
+ * link cannot bridge — and because scanners in front of some inboxes follow
+ * links, consuming a single-use one before the person ever sees it.
+ */
+export async function verifySignupCode(email: string, token: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: token.trim(),
+    type: 'signup',
   });
+  return error ? { user: null, error: error.message } : { user: data.user, error: null };
+}
+
+/**
+ * Confirm a password reset. Succeeding leaves a live session, which is what
+ * makes the `updateUserPassword` that follows it legal.
+ */
+export async function verifyRecoveryCode(email: string, token: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: token.trim(),
+    type: 'recovery',
+  });
+  return error ? { user: null, error: error.message } : { user: data.user, error: null };
+}
+
+/** A new code for the same address, when the first did not arrive. */
+export async function resendSignupCode(email: string) {
+  const supabase = createClient();
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
   return { error: error?.message ?? null };
 }
 

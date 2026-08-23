@@ -23,6 +23,7 @@ function registerPartials() {
     orderLines: 'order-lines.html',
     button: 'button.html',
     paymentBlock: 'payment-block.html',
+    otpCode: 'otp-code.html',
   };
 
   for (const [name, file] of Object.entries(partials)) {

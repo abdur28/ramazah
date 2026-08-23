@@ -430,6 +430,112 @@ ${d.requestsUrl}`,
   },
 
   // ── account ────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────── auth
+  //
+  // These five are the only templates whose data does not come from the
+  // database. Supabase Auth owns the token, and calls the Send Email Hook with
+  // it; the route puts the payload on the synthetic row these read from. Which
+  // is why every `build` here is a passthrough — inventing a code, or reading a
+  // stored one, would mean the email and the thing that verifies it could
+  // disagree.
+  //
+  // `transactional`, so no unsubscribe footer. Nobody may opt out of being able
+  // to get back into their own account.
+  verify_email: {
+    category: 'transactional',
+    eyebrow: 'Confirm your email',
+    subject: (d) => `${d.code} is your Ramazah Store confirmation code`,
+    preheader: () => 'Enter it on the page you left open.',
+    build: async (context) => ({ ...context.row.payload, codeLabel: 'Confirmation code' }),
+    text: (d) => `Confirm your email
+
+Enter this code on the page you left open to finish setting up your Ramazah
+Store account.
+
+  ${d.code}
+
+Expires in ${d.expiryMinutes} minutes. It can only be used once.
+
+We ask for this because an order's invoice goes to this address. If it is
+wrong, nothing reaches you.
+
+Did not sign up? Ignore this — the account is not usable until the code is
+entered.`,
+  },
+
+  password_reset: {
+    category: 'transactional',
+    eyebrow: 'Reset your password',
+    subject: (d) => `${d.code} is your Ramazah Store reset code`,
+    preheader: () => 'Enter it to choose a new password.',
+    build: async (context) => ({ ...context.row.payload, codeLabel: 'Reset code' }),
+    text: (d) => `Reset your password
+
+Someone asked to reset the password for ${d.email}. Enter this code to choose
+a new one.
+
+  ${d.code}
+
+Expires in ${d.expiryMinutes} minutes. It can only be used once.
+
+If it was not you, ignore this — your password has not changed and nobody can
+change it without this code.`,
+  },
+
+  magic_link: {
+    category: 'transactional',
+    eyebrow: 'Sign in',
+    subject: (d) => `${d.code} is your Ramazah Store sign-in code`,
+    preheader: () => 'No password needed.',
+    build: async (context) => ({ ...context.row.payload, codeLabel: 'Sign-in code' }),
+    text: (d) => `Your sign-in code
+
+Enter this to sign in to Ramazah Store. No password needed.
+
+  ${d.code}
+
+Expires in ${d.expiryMinutes} minutes. It can only be used once.
+
+If you did not ask to sign in, ignore this.`,
+  },
+
+  email_change: {
+    category: 'transactional',
+    eyebrow: 'Confirm your new address',
+    subject: (d) => `${d.code} confirms your new Ramazah Store address`,
+    preheader: () => 'Until this is confirmed, invoices go to the old one.',
+    build: async (context) => ({ ...context.row.payload, codeLabel: 'Confirmation code' }),
+    text: (d) => `Confirm your new address
+
+Your Ramazah Store account is being moved to ${d.email}. Enter this code to
+confirm it.
+
+  ${d.code}
+
+Expires in ${d.expiryMinutes} minutes. It can only be used once.
+
+Until this is confirmed, everything — invoices included — keeps going to the
+old address.`,
+  },
+
+  reauthentication: {
+    category: 'transactional',
+    eyebrow: 'Confirm it is you',
+    subject: (d) => `${d.code} is your Ramazah Store confirmation code`,
+    preheader: () => 'Something on your account needs confirming.',
+    build: async (context) => ({ ...context.row.payload, codeLabel: 'Confirmation code' }),
+    text: (d) => `Confirm it is you
+
+Something on your account is being changed and needs confirming first.
+
+  ${d.code}
+
+Expires in ${d.expiryMinutes} minutes. It can only be used once.
+
+If you are not making a change right now, do not enter this code, and change
+your password.`,
+  },
+
   welcome: {
     category: 'transactional',
     eyebrow: 'Welcome',

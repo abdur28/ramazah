@@ -76,6 +76,12 @@ export async function drainOutbox(
     .select('*')
     .eq('status', 'queued')
     .lte('send_after', new Date().toISOString())
+    // Priority before age. One table and one transport carry both the invoice
+    // and the newsletter, and every sending plan has a daily allowance — so
+    // without this, a campaign queued at nine drains ahead of an order
+    // confirmation queued at five past, and the invoice is what does not go
+    // when the allowance runs out. See migration 20260831000040.
+    .order('priority', { ascending: true })
     .order('send_after', { ascending: true })
     .limit(limit);
 

@@ -79,6 +79,19 @@ export interface EmailSettings {
   reviewInviteDays: number;
   /** Send the morning digest at all. */
   digestEnabled: boolean;
+  /**
+   * How many emails a campaign may take from one day's sending allowance.
+   *
+   * Not the plan's whole daily limit. The invoices share the transport, so a
+   * campaign that eats the day's quota is exactly the failure this exists to
+   * prevent — leave headroom. Zero means send the whole list at once, which is
+   * right on a plan with no daily cap.
+   *
+   * Free tiers sit around 100/day (Resend) to 300/day (Brevo); 80 leaves room
+   * for roughly ten orders' worth of transactional mail on the smaller of the
+   * two.
+   */
+  campaignDailyBudget: number;
 }
 
 export interface ShopSettings {
@@ -155,6 +168,7 @@ export const SETTINGS_DEFAULTS: Settings = {
     quoteReminderDays: 5,
     reviewInviteDays: 7,
     digestEnabled: true,
+    campaignDailyBudget: 80,
   },
 
   shop: {
