@@ -74,7 +74,14 @@ screen in terracotta.
   rather than shown empty.
 - **Money & shipping** — VAT, shipping, free-shipping threshold and the delivery
   lead time were all placeholders.
-- **Email** — sender name and address, and the reminder cadence.
+- **Email** — the sender identity and the reminder cadence. Three addresses to
+  set, all on the domain the sending provider has verified:
+  `orders@` for invoices and codes, `news@` for newsletters, and **Reply-to
+  `contact@`** — without that last one a customer's reply goes to an address
+  with no inbox behind it. Only `contact@` needs a forward at the registrar;
+  sending addresses need no mailbox.
+  Also here: **Campaign send budget**, which must sit *below* the plan's daily
+  limit because invoices go through the same account.
 
 ## In Admin → Pages
 

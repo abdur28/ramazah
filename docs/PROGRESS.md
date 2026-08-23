@@ -5,6 +5,78 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-24 — Two sending addresses, a reply that lands, and campaigns that spread
+
+The shop is on ramazah.com through Resend now, so the sending identity became
+something worth getting right rather than whatever `EMAIL_FROM` happened to be.
+
+**Every email had one From and no Reply-To.** `deliver()` hardcoded the name and
+took the address from the environment, and the three Settings fields meant to
+control that — `fromName`, `fromAddress`, `replyTo` — were read only by the
+admin form. Nothing in the sending path had ever looked at them.
+
+Reply-To is the one that mattered. Without it a reply goes to whichever address
+sent the mail, and the sending addresses deliberately have no inbox behind them.
+"I have paid, here is the receipt" is the most valuable email this shop
+receives, and it was going to bounce.
+
+**Two addresses now, split by category:**
+
+| | sends | replies go to |
+|---|---|---|
+| `orders@` | invoices, codes, dispatch, account | `contact@` |
+| `news@` | newsletters and promotions | `contact@` |
+
+Split because spam complaints attach to the sending identity, and people do
+mark newsletters as junk. Letting that land on the address invoices come from is
+how a promotion costs a payment. Only `contact@` needs a forwarding inbox — a
+sending address needs no mailbox at all, which is the part that makes this free.
+
+`senderFor()` guards the obvious failure: Settings is a text box, a provider
+rejects any From on a domain it has not verified, and someone will eventually
+type a gmail.com address into it. A mismatch falls back to `EMAIL_FROM` with a
+warning rather than failing, because an invoice from a slightly wrong address
+beats an invoice not sent.
+
+## Campaigns spread
+
+The other half of the migration applied yesterday, now wired.
+
+A campaign was one row per recipient with `send_after` defaulting to now — four
+hundred people meant four hundred emails in one burst. Every sending plan has a
+daily allowance and the free ones sit near a hundred. Bursting past it does not
+queue, it fails, and the failures land on the transactional mail sharing the
+transport.
+
+A newsletter is not urgent. Nobody notices whether new arrivals landed Tuesday
+or Thursday, so it goes out across days on a budget set in Settings — 80 by
+default, deliberately below Resend's 100, because the invoices share the
+account. The Campaigns screen says so before you send and again in the confirm
+dialog: *"250 recipients — this goes out over 4 days at 80 a day."*
+
+Verified against the live database, inside a rolled-back transaction: a
+250-person campaign spread over **4 days at 80/80/80/10**, with only 80 due
+immediately. And the ordering that started all this —
+
+```
+drained  template          priority  queued at
+      1  order_received           1     22:12
+      2  admin_new_order          3     22:13
+      3  review_invite            5     22:14
+      4  newsletter               9     22:07
+      5  newsletter               9     22:08
+```
+
+The order confirmation queued at 22:12 drains ahead of the newsletter queued at
+22:07, which is the entire point.
+
+Fifteen more checks on sender resolution and the spread arithmetic: each
+category to the right address, marketing falling back to the transactional
+address when it has none of its own, an off-domain address falling back rather
+than failing, and nothing configured at all still sending under the shop's name.
+
+---
+
 ## 2026-08-23 — Auth email, and two flows that had no end
 
 Asked to set up signup verification, with a note that Supabase's own email

@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/lib/email/render';
-import { deliver, mailerConfigured } from '@/lib/email/send';
+import { deliver, mailerConfigured, senderFor } from '@/lib/email/send';
+import { getSettings } from '@/lib/settings';
 
 /**
  * Supabase Auth's Send Email Hook.
@@ -191,6 +192,8 @@ export async function POST(request: NextRequest) {
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
+      // Always transactional. Nobody opts out of getting into their account.
+      sender: senderFor('transactional', await getSettings()),
     });
   } catch (error: any) {
     // Never log `code` — this is the one payload in the shop that is a

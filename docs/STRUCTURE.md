@@ -1,7 +1,7 @@
 # Structure
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind 4 · Supabase (Postgres 17) ·
-Cloudinary · nodemailer. 114 components, 40 migrations.
+Cloudinary · nodemailer. 114 components, 41 migrations.
 
 ## Architecture
 
@@ -87,7 +87,7 @@ emails/              34 templates + 5 partials (layout · button · order lines 
                      come from this database.
 
 supabase/
-├── migrations/      40 migrations (see below)
+├── migrations/      41 migrations (see below)
 └── seed.sql         Sample catalog
 scripts/             make-admin.js · seed.js · seed-demo-reviews.js
                      (demo customers, orders and reviews; --clean removes them)
@@ -135,6 +135,7 @@ vercel.json          Deliberately carries no cron block — pg_cron owns the
 | `...000037_customer_stats` | Spend per customer, for the customers on screen |
 | `...000038_review_distribution` | The star breakdown, over every approved review |
 | `...000039_campaign_paging` | `campaign_results()` takes a page |
+| `...000040_send_budget` | Queue priority, and a campaign spread across days |
 
 ## Key conventions
 
@@ -154,6 +155,14 @@ vercel.json          Deliberately carries no cron block — pg_cron owns the
 - **Anything a customer can type into a filter is escaped** before it reaches
   PostgREST's `or=(...)`, which is one comma-separated string: `searchPattern()`
   in `lib/paging.ts`.
+- **Transactional mail outranks marketing in the queue.** One table and one
+  transport carry both, so `email_outbox.priority` decides what drains first and a
+  campaign is spread across days on a budget rather than sent in one burst. An
+  invoice must never wait behind an advertisement, and a day's sending allowance
+  is finite.
+- **Two sending addresses.** `orders@` for transactional, `news@` for marketing,
+  both replying to `contact@` — spam complaints attach to the sending identity,
+  and only `contact@` needs an inbox behind it.
 - **Settings and page copy fall back to code.** `lib/settings-defaults.ts` and
   `lib/content-defaults.ts` hold literals, so an empty database renders a complete
   shop and the admin editors can import the defaults from the browser.

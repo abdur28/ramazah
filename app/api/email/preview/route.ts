@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminApi } from '@/lib/auth/api';
 import { renderEmail, EMAILS } from '@/lib/email/render';
-import { deliver, mailerConfigured } from '@/lib/email/send';
+import { deliver, mailerConfigured, senderFor } from '@/lib/email/send';
+import { getSettings } from '@/lib/settings';
+import { EMAILS as REGISTRY } from '@/lib/email/templates';
 
 /**
  * See a template before anybody else does, and send yourself one.
@@ -167,6 +169,9 @@ export async function POST(request: Request) {
     await deliver({
       to, toName: 'Test', subject: `[test] ${rendered.subject}`,
       html: rendered.html, text: rendered.text,
+      // The test goes out under the same identity the real one would, or the
+      // preview would not be showing you what customers see.
+      sender: senderFor(REGISTRY[template]?.category ?? 'transactional', await getSettings()),
     });
 
     return NextResponse.json({ ok: true, subject: rendered.subject });

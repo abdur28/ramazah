@@ -70,8 +70,27 @@ export interface PaymentSettings {
 export interface EmailSettings {
   /** The name an inbox shows in its sender column. */
   fromName: string;
-  /** Blank falls back to EMAIL_FROM, then EMAIL_USER. */
+  /**
+   * The address transactional and courtesy mail is sent from — invoices,
+   * codes, dispatch notices. Blank falls back to EMAIL_FROM, then EMAIL_USER.
+   */
   fromAddress: string;
+  /**
+   * The address marketing is sent from, kept apart on purpose.
+   *
+   * Spam complaints attach to the sending identity, and people do mark
+   * newsletters as junk. Letting that land on the address invoices come from
+   * is how a shop stops getting paid because of a promotion. Blank means both
+   * go out as `fromAddress`, which is the old behaviour.
+   */
+  marketingFromAddress: string;
+  /**
+   * Where a reply lands, on every email.
+   *
+   * The one field here that is not cosmetic. Without it a reply goes to
+   * whichever address sent the mail — and if that address has no forwarding
+   * behind it, "I have paid, here is the receipt" bounces.
+   */
   replyTo: string;
   paymentReminderDays: number;
   paymentSecondReminderDays: number;
@@ -162,6 +181,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   email: {
     fromName: 'Ramazah Store',
     fromAddress: '',
+    marketingFromAddress: '',
     replyTo: '',
     paymentReminderDays: 3,
     paymentSecondReminderDays: 7,

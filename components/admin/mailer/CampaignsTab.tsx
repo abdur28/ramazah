@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Check, Eye, Loader2, Megaphone, Package, Send, Sparkles, Users, X,
+  AlertTriangle, Check, Clock, Eye, Loader2, Megaphone, Package, Send, Sparkles, Users, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,12 @@ import EmptyState from "@/components/admin/ui/EmptyState";
 import Pager from "@/components/ui/Pager";
 import useScrollLock from "@/hooks/useScrollLock";
 import {
-  SEGMENTS, countAudience, getCampaigns, sendCampaign,
+  SEGMENTS, countAudience, getCampaigns, sendCampaign, spreadOver,
   type CampaignResult, type Segment,
 } from "@/lib/admin/campaigns";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/admin/format";
 import { describeError } from "@/lib/admin/errors";
+import { getAdminSettings } from "@/lib/admin/settings";
 import { cn } from "@/lib/utils";
 
 /**
@@ -80,6 +81,27 @@ export default function CampaignsTab() {
   const [campaignPage, setCampaignPage] = useState(1);
   const [campaignTotal, setCampaignTotal] = useState(0);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
+  // `email` is deliberately absent from the settings the layout hands to client
+  // components, so this admin screen reads it directly rather than widening
+  // what every storefront page carries.
+  const [dailyBudget, setDailyBudget] = useState(0);
+
+  useEffect(() => {
+    getAdminSettings().then(({ settings }) =>
+      setDailyBudget(settings.email.campaignDailyBudget ?? 0)
+    );
+  }, []);
+
+  /**
+   * How many days this list will take.
+   *
+   * A campaign is not urgent — nobody notices whether new arrivals landed
+   * Tuesday or Thursday — so it is spread across days rather than allowed to
+   * burn a whole day's sending allowance in one burst and take the invoices
+   * down with it. The budget is deliberately less than the plan's daily limit,
+   * because the transactional mail shares the transport.
+   */
+  const days = spreadOver(audience ?? 0, dailyBudget);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -160,14 +182,17 @@ export default function CampaignsTab() {
   const send = async () => {
     setSending(true);
     try {
-      const { recipients, error } = await sendCampaign({
+      const { recipients, days: over, error } = await sendCampaign({
         template: kind, subject: subject.trim(), segment, payload,
+        dailyBudget,
       });
       if (error) throw new Error(error);
 
       toast.success(
-        `Queued for ${formatNumber(recipients ?? 0)}. They go out on the next run — watch it in Notifications.`,
-        { duration: 8000 }
+        (over ?? 1) > 1
+          ? `Queued for ${formatNumber(recipients ?? 0)}, going out over ${over} days at ${formatNumber(dailyBudget)} a day. Watch it in Notifications.`
+          : `Queued for ${formatNumber(recipients ?? 0)}. They go out on the next run — watch it in Notifications.`,
+        { duration: 9000 }
       );
       setConfirming(false);
       setSubject(""); setHeadline(""); setBody(""); setCtaUrl("");
@@ -316,6 +341,17 @@ export default function CampaignsTab() {
                 Anyone who has unsubscribed is already out of this number, so it is what will
                 actually be written to.
               </p>
+
+              {days > 1 && (
+                <p className="mt-3 flex items-start gap-2 rounded-sm bg-terra/10 px-3 py-2 font-body text-xs leading-relaxed text-terra-ink">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    More than a day&rsquo;s sending allowance. This goes out over{" "}
+                    <strong>{days} days</strong> at {formatNumber(dailyBudget)} a day, so it cannot
+                    crowd out an invoice. Raise the budget in Settings if your plan allows more.
+                  </span>
+                </p>
+              )}
             </div>
           </SectionCard>
 
@@ -445,8 +481,19 @@ export default function CampaignsTab() {
               Send to {formatNumber(audience ?? 0)} {audience === 1 ? "person" : "people"}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              They are queued now and go out on the next run. Once somebody has received one
-              there is no taking it back — this is the moment to have used the preview.
+              {days > 1 ? (
+                <>
+                  They are queued now and go out over <strong>{days} days</strong>, {formatNumber(dailyBudget)} a
+                  day — more than that in one burst would use up the day&rsquo;s sending allowance
+                  and the invoices share it. Once somebody has received one there is no taking it
+                  back; this is the moment to have used the preview.
+                </>
+              ) : (
+                <>
+                  They are queued now and go out on the next run. Once somebody has received one
+                  there is no taking it back — this is the moment to have used the preview.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

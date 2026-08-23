@@ -436,16 +436,39 @@ export default function AdminSettingsPage() {
                   hint="What an inbox shows in the sender column — the most-read text in the whole system."
                 />
                 <TextField
-                  label="Sender address" type="email" value={email.fromAddress}
-                  onChange={(v) => patch("email", { fromAddress: v })}
-                  hint="Blank falls back to EMAIL_FROM, then EMAIL_USER."
+                  label="Reply-to" type="email" value={email.replyTo}
+                  onChange={(v) => patch("email", { replyTo: v })}
+                  hint="Where a reply lands, on every email. The addresses below have no inbox behind them, so without this a customer's reply goes nowhere."
                 />
               </div>
-              <TextField
-                label="Reply-to" type="email" value={email.replyTo}
-                onChange={(v) => patch("email", { replyTo: v })}
-                hint="Where a customer's reply lands. Several emails invite one."
-              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Sends invoices and codes" type="email" value={email.fromAddress}
+                  onChange={(v) => patch("email", { fromAddress: v })}
+                  hint="Orders, payment, dispatch, account. Blank falls back to EMAIL_FROM."
+                />
+                <TextField
+                  label="Sends newsletters" type="email" value={email.marketingFromAddress}
+                  onChange={(v) => patch("email", { marketingFromAddress: v })}
+                  hint="Blank means marketing goes out as the address on the left."
+                />
+              </div>
+
+              {/* The reason for two addresses, at the point of deciding. */}
+              <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
+                Two addresses because spam complaints attach to whoever sent the mail, and people
+                do mark newsletters as junk. Keeping that off the address your invoices come from
+                is what stops a promotion costing you a payment.
+              </p>
+
+              <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
+                Both have to be on the domain your sending provider has verified — the one in
+                <code className="mx-1 rounded-sm bg-wash px-1">EMAIL_FROM</code>. Anything else is
+                rejected by the provider, so an address on another domain is ignored and the
+                fallback is used instead.
+              </p>
+
               <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
                 The SMTP host, username and password stay in environment variables. A password in
                 a database row turns up in backups, in screenshots and in any admin's devtools.
@@ -488,6 +511,19 @@ export default function AdminSettingsPage() {
                 checked={email.digestEnabled}
                 onChange={(v) => patch("email", { digestEnabled: v })}
               />
+
+              <NumberField
+                label="Campaign send budget (per day)"
+                value={email.campaignDailyBudget}
+                onChange={(v) => patch("email", { campaignDailyBudget: v })}
+                hint="A newsletter bigger than this goes out over several days instead of all at once. Zero sends the whole list immediately."
+              />
+              <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
+                Set this <em>below</em> your plan's daily limit, not at it. Invoices and
+                confirmations go through the same account, so a campaign that uses the whole day's
+                allowance is a campaign that stops an order being confirmed. Resend's free tier
+                allows 100 a day, which is where the default of 80 comes from.
+              </p>
               <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
                 Changing a delay affects orders placed from now on. Anything already queued keeps
                 the date it was given — you can see and cancel those under Mailer.

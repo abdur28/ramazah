@@ -48,22 +48,44 @@ export async function countAudience(segment: Segment): Promise<number> {
   return (data ?? []).length;
 }
 
+/**
+ * How many days a list of this size will take to go out.
+ *
+ * Every sending plan has a daily allowance and the free ones sit around a
+ * hundred. Bursting past it does not queue, it fails — and the failures land on
+ * the transactional mail sharing the transport, which is how a newsletter takes
+ * the invoices down with it.
+ *
+ * A budget of zero means send at once, which is right on a plan with no daily
+ * cap.
+ */
+export function spreadOver(recipients: number, dailyBudget: number): number {
+  if (!dailyBudget || dailyBudget < 1) return 1;
+  return Math.max(1, Math.ceil(recipients / dailyBudget));
+}
+
 export async function sendCampaign(input: {
   template: string;
   subject: string;
   segment: Segment;
   payload: Record<string, any>;
-}): Promise<{ recipients?: number; error?: string }> {
+  /** From Settings. Zero or undefined sends the whole list at once. */
+  dailyBudget?: number;
+}): Promise<{ recipients?: number; days?: number; error?: string }> {
+  const budget = input.dailyBudget && input.dailyBudget > 0 ? input.dailyBudget : null;
+
   const { data, error } = await createClient().rpc('send_campaign', {
     p_template: input.template,
     p_subject: input.subject,
     p_segment: input.segment,
     p_payload: input.payload,
+    p_daily_budget: budget,
   });
 
   if (error) return { error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
-  return { recipients: row?.recipients ?? 0 };
+  const recipients = row?.recipients ?? 0;
+  return { recipients, days: spreadOver(recipients, budget ?? 0) };
 }
 
 export async function getCampaigns(page = 1): Promise<{

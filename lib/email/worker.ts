@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { renderEmail } from './render';
-import { deliver, mailerConfigured } from './send';
+import { deliver, mailerConfigured, senderFor } from './send';
+import { getSettings } from '@/lib/settings';
+import { EMAILS } from './templates';
 
 /**
  * Drains the outbox.
@@ -52,6 +54,10 @@ export async function drainOutbox(
     result.errors.push('Email is not configured — set EMAIL_USER and EMAIL_PASSWORD.');
     return result;
   }
+
+  // Once per drain rather than once per email: it is six rows, and a batch of
+  // fifty would otherwise be fifty round trips for the same answer.
+  const settings = await getSettings();
 
   // Anything scheduled rather than triggered — the abandoned basket, the daily
   // digest — is enqueued first, so one pass does both jobs. Skipped for a
@@ -147,6 +153,9 @@ export async function drainOutbox(
         html: rendered.html,
         text: rendered.text,
         unsubscribeUrl: await unsubscribeUrlFor(db, row.to_email),
+        // Marketing goes out under its own address so a newsletter's spam
+        // complaints cannot follow the invoices.
+        sender: senderFor(EMAILS[row.template]?.category ?? 'transactional', settings),
       });
 
       await db.from('email_outbox')
