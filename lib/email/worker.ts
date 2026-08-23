@@ -124,10 +124,25 @@ export async function drainOutbox(
         continue;
       }
 
-      const rendered = await renderEmail(
-        { db, row },
-        { unsubscribeUrl: await unsubscribeUrlFor(db, row.to_email) }
-      );
+      const category = EMAILS[row.template]?.category ?? 'transactional';
+
+      /**
+       * Only marketing gets an unsubscribe, in the body *and in the headers*.
+       *
+       * The renderer already withheld the link from transactional mail —
+       * "offering it there invites somebody to switch off their own invoices" —
+       * and then this passed the URL to `deliver()` regardless, which set
+       * `List-Unsubscribe` on every email a customer could be identified from.
+       * Every profile carries a token, so every invoice carried the header.
+       *
+       * That is a bulk-mail signal on the one message that most needs to look
+       * like correspondence rather than a mailing. It also cost two queries per
+       * email to build a URL that was then thrown away.
+       */
+      const unsubscribeUrl =
+        category === 'marketing' ? await unsubscribeUrlFor(db, row.to_email) : null;
+
+      const rendered = await renderEmail({ db, row }, { unsubscribeUrl });
 
       // The template decided this should no longer go: a reminder for an order
       // that has since been paid, a review invitation for one that was
@@ -155,10 +170,10 @@ export async function drainOutbox(
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
-        unsubscribeUrl: await unsubscribeUrlFor(db, row.to_email),
+        unsubscribeUrl,
         // Marketing goes out under its own address so a newsletter's spam
         // complaints cannot follow the invoices.
-        sender: senderFor(EMAILS[row.template]?.category ?? 'transactional', settings),
+        sender: senderFor(category, settings),
       });
 
       await db.from('email_outbox')
