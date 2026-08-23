@@ -75,7 +75,9 @@ export async function renderEmail(
   registerPartials();
 
   const site = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-  const settings = await getSettings();
+  // The context's client, not the default one: a worker render has no session
+  // and would otherwise read code defaults for any admin-only group.
+  const settings = await getSettings(context.db);
 
   const model = {
     ...data,

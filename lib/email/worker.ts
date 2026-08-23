@@ -57,7 +57,10 @@ export async function drainOutbox(
 
   // Once per drain rather than once per email: it is six rows, and a batch of
   // fifty would otherwise be fifty round trips for the same answer.
-  const settings = await getSettings();
+  //
+  // `db` rather than the default client: the sender identity lives in the
+  // admin-only `email` group, and the worker has no session.
+  const settings = await getSettings(db);
 
   // Anything scheduled rather than triggered — the abandoned basket, the daily
   // digest — is enqueued first, so one pass does both jobs. Skipped for a

@@ -171,7 +171,7 @@ export async function POST(request: Request) {
       html: rendered.html, text: rendered.text,
       // The test goes out under the same identity the real one would, or the
       // preview would not be showing you what customers see.
-      sender: senderFor(REGISTRY[template]?.category ?? 'transactional', await getSettings()),
+      sender: senderFor(REGISTRY[template]?.category ?? 'transactional', await getSettings(service())),
     });
 
     return NextResponse.json({ ok: true, subject: rendered.subject });

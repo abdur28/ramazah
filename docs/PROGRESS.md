@@ -70,6 +70,32 @@ drained  template          priority  queued at
 The order confirmation queued at 22:12 drains ahead of the newsletter queued at
 22:07, which is the entire point.
 
+**And then the first real email came back wrong**, which is the reason to check
+headers rather than trust a green tick.
+
+Authentication was perfect — `DKIM: PASS with domain ramazah.com`, SPF pass,
+DMARC pass, no "via" line. But the From said `contact@ramazah.com`, not
+`orders@`, and there was no Reply-To at all.
+
+The cause is a good one. RLS on `site_settings` makes the `email` group
+admin-only — it holds the sender identity and the reminder cadence, which no
+page needs:
+
+```sql
+settings public | r | ((key <> 'email') OR is_admin())
+```
+
+`getSettings()` used the cookie-based client, and the worker has no session. So
+it read every group except the one it needed, `mergeAll` filled the gap with
+code defaults, and the sender fell back to `EMAIL_FROM` — silently, with the
+configured addresses sitting in a row it could not see. Measured directly:
+`anon` gets `[]` from `site_settings`, the service key gets the `email` row.
+
+The policy is right; the client was wrong. `getSettings()` now takes one, and
+every caller without a session passes its privileged client — the worker, the
+auth hook, the preview, and `renderEmail`, which had the context's client
+available the whole time.
+
 Fifteen more checks on sender resolution and the spread arithmetic: each
 category to the right address, marketing falling back to the transactional
 address when it has none of its own, an off-domain address falling back rather

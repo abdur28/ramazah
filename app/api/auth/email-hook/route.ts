@@ -171,8 +171,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const admin = createAdminClient();
     const rendered = await renderEmail({
-      db: createAdminClient(),
+      db: admin,
       row: {
         id: `auth:${action}`,
         template,
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest) {
       html: rendered.html,
       text: rendered.text,
       // Always transactional. Nobody opts out of getting into their account.
-      sender: senderFor('transactional', await getSettings()),
+      sender: senderFor('transactional', await getSettings(admin)),
     });
   } catch (error: any) {
     // Never log `code` — this is the one payload in the shop that is a
