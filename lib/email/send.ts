@@ -2,6 +2,13 @@ import nodemailer from 'nodemailer';
 import type { EmailCategory } from './templates';
 import type { Settings } from '@/lib/settings-defaults';
 
+export interface Sender {
+  /** The line an inbox shows in its sender column. */
+  name: string;
+  address: string;
+  replyTo?: string;
+}
+
 /**
  * The transport.
  *
@@ -44,23 +51,40 @@ function getTransport() {
   return transport;
 }
 
-export interface Sender {
-  /** The line an inbox shows in its sender column. */
-  name: string;
-  address: string;
-  replyTo?: string;
-}
-
 const domainOf = (address: string) => address.split('@')[1]?.toLowerCase() ?? '';
+
+/**
+ * Which address a template belongs to.
+ *
+ * By subject, not by category: `verify_email` and `order_received` are both
+ * transactional but have nothing else in common, and an account confirmation
+ * arriving from `orders@` reads wrong to somebody who has never ordered.
+ *
+ * Prefixes rather than a list of thirty-four names, so a new template lands
+ * somewhere sensible without this needing an edit. Anything unrecognised falls
+ * to the default address, which is the safe direction.
+ */
+export type SenderTopic = 'orders' | 'account' | 'requests' | 'marketing' | 'default';
+
+const MARKETING = new Set([
+  'newsletter', 'new_arrivals', 'promotion',
+  'back_in_stock', 'collection_launch', 'abandoned_cart',
+]);
+
+export function topicOf(template: string): SenderTopic {
+  if (MARKETING.has(template)) return 'marketing';
+  if (/^(order_|payment_|refund_|review_)/.test(template)) return 'orders';
+  if (/^(request_|quote_)/.test(template)) return 'requests';
+  if (/^admin_/.test(template)) return 'default';   // internal; goes to the admins
+  return 'account';
+}
 
 /**
  * Who an email comes from, and where a reply to it goes.
  *
- * Two addresses, split by category. Spam complaints attach to the sending
- * identity, and people do mark newsletters as junk — letting that land on the
- * address invoices come from is how a shop stops getting paid because of a
- * promotion. Marketing falls back to the transactional address when no separate
- * one is set, which is the behaviour this replaced.
+ * The addresses are labels rather than mailboxes — the provider verified the
+ * whole domain, so any address on it sends. What they buy is legibility: the
+ * reader knows what an email is before opening it, and can filter.
  *
  * **The domain is checked against `EMAIL_FROM`.** A sending provider rejects
  * any From on a domain it has not verified, and Settings is a text box: someone
@@ -69,14 +93,19 @@ const domainOf = (address: string) => address.split('@')[1]?.toLowerCase() ?? ''
  * to work. A mismatch falls back to it rather than failing — an invoice sent
  * from a slightly wrong address beats an invoice not sent.
  */
-export function senderFor(category: EmailCategory, settings: Settings): Sender {
+export function senderFor(template: string, settings: Settings): Sender {
   const fallback = process.env.EMAIL_FROM || process.env.EMAIL_USER!;
   const email = settings.email;
 
-  const wanted =
-    (category === 'marketing' ? email.marketingFromAddress : '') ||
-    email.fromAddress ||
-    fallback;
+  const byTopic: Record<SenderTopic, string> = {
+    orders: email.orderFromAddress,
+    account: email.accountFromAddress,
+    requests: email.requestFromAddress,
+    marketing: email.marketingFromAddress,
+    default: '',
+  };
+
+  const wanted = byTopic[topicOf(template)]?.trim() || email.fromAddress?.trim() || fallback;
 
   const usable =
     domainOf(wanted) && domainOf(wanted) === domainOf(fallback) ? wanted : fallback;
@@ -89,7 +118,7 @@ export function senderFor(category: EmailCategory, settings: Settings): Sender {
   }
 
   // A Reply-To identical to the From is a header that says nothing. It earns
-  // its place on marketing, where the sending address has no inbox behind it.
+  // its place wherever the sending address has no inbox behind it.
   const replyTo = email.replyTo?.trim();
 
   return {

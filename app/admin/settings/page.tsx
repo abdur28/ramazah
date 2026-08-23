@@ -442,24 +442,45 @@ export default function AdminSettingsPage() {
                 />
               </div>
 
+              <TextField
+                label="Default sender address" type="email" value={email.fromAddress}
+                onChange={(v) => patch("email", { fromAddress: v })}
+                hint="Used for anything without its own address below, and for staff notifications. Blank falls back to EMAIL_FROM."
+              />
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField
-                  label="Sends invoices and codes" type="email" value={email.fromAddress}
-                  onChange={(v) => patch("email", { fromAddress: v })}
-                  hint="Orders, payment, dispatch, account. Blank falls back to EMAIL_FROM."
+                  label="Orders and payment" type="email" value={email.orderFromAddress}
+                  onChange={(v) => patch("email", { orderFromAddress: v })}
+                  hint="Invoices, reminders, dispatch, review invitations — 11 emails."
                 />
                 <TextField
-                  label="Sends newsletters" type="email" value={email.marketingFromAddress}
+                  label="Accounts" type="email" value={email.accountFromAddress}
+                  onChange={(v) => patch("email", { accountFromAddress: v })}
+                  hint="Confirmation codes, password resets, welcome — 9 emails."
+                />
+                <TextField
+                  label="Sourcing requests" type="email" value={email.requestFromAddress}
+                  onChange={(v) => patch("email", { requestFromAddress: v })}
+                  hint="Quotes and their reminders — 5 emails."
+                />
+                <TextField
+                  label="Newsletters" type="email" value={email.marketingFromAddress}
                   onChange={(v) => patch("email", { marketingFromAddress: v })}
-                  hint="Blank means marketing goes out as the address on the left."
+                  hint="Campaigns and promotions — 6 emails."
                 />
               </div>
 
-              {/* The reason for two addresses, at the point of deciding. */}
               <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
-                Two addresses because spam complaints attach to whoever sent the mail, and people
-                do mark newsletters as junk. Keeping that off the address your invoices come from
-                is what stops a promotion costing you a payment.
+                Each blank one falls back to the default above, so you can use one address for
+                everything or four. What separate addresses buy is legibility — the reader knows
+                what an email is before opening it, and can filter on it.
+              </p>
+
+              <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">
+                <strong className="text-foreground">Every address you use here should exist as a
+                forward.</strong> People reply to the From line even when Reply-to says otherwise,
+                and an address with nothing behind it bounces them.
               </p>
 
               <p className="max-w-[70ch] font-body text-xs leading-relaxed text-ink-muted">

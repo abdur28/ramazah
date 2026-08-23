@@ -76,13 +76,24 @@ export interface EmailSettings {
    */
   fromAddress: string;
   /**
-   * The address marketing is sent from, kept apart on purpose.
+   * Addresses by topic. Blank falls back to `fromAddress`.
    *
-   * Spam complaints attach to the sending identity, and people do mark
-   * newsletters as junk. Letting that land on the address invoices come from
-   * is how a shop stops getting paid because of a promotion. Blank means both
-   * go out as `fromAddress`, which is the old behaviour.
+   * These are labels, not mailboxes: the sending provider verified the whole
+   * domain, so any address on it sends without an inbox existing. What they buy
+   * is legibility — "orders@" above an invoice and "news@" above a newsletter
+   * tell the reader what they have before they open it, and let them filter.
+   *
+   * They do **not** buy much reputation separation. Receivers score the domain
+   * first and the address a distant second, so real isolation means a separate
+   * sending subdomain, not a different word before the @.
+   *
+   * The trap is replies. People reply to the From line even when Reply-To says
+   * otherwise, and an address with no forwarding behind it bounces them. Every
+   * address used here should exist as a forward at the registrar.
    */
+  orderFromAddress: string;
+  accountFromAddress: string;
+  requestFromAddress: string;
   marketingFromAddress: string;
   /**
    * Where a reply lands, on every email.
@@ -181,6 +192,9 @@ export const SETTINGS_DEFAULTS: Settings = {
   email: {
     fromName: 'Ramazah Store',
     fromAddress: '',
+    orderFromAddress: '',
+    accountFromAddress: '',
+    requestFromAddress: '',
     marketingFromAddress: '',
     replyTo: '',
     paymentReminderDays: 3,

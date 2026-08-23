@@ -5,6 +5,69 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-24 — Four sending addresses, and a correction
+
+Asked why the shop could not have `orders@`, `account@`, `news@` and so on. It
+can, and the argument I gave against it a few hours earlier was overstated.
+
+I said splitting further would dilute sender reputation. **Receivers score the
+domain first and the local part a distant second** — real reputation isolation
+means a separate sending *subdomain*, not a different word before the @. So
+`news@ramazah.com` and `orders@ramazah.com` share a reputation whatever I said,
+and the argument for keeping it to two was mostly an argument for keeping it
+simple.
+
+What separate addresses actually buy is legibility. The reader knows what an
+email is before opening it, and can filter on it. That is worth having.
+
+Routed by **subject rather than category**: `verify_email` and `order_received`
+are both transactional and have nothing else in common, and an account
+confirmation arriving from `orders@` reads wrong to somebody who has never
+ordered.
+
+| | | |
+|---|---|---|
+| `orders@` | 11 | invoices, reminders, dispatch, review invitations |
+| `account@` | 9 | codes, resets, welcome, suspension |
+| `requests@` | 5 | sourcing quotes and their reminders |
+| `news@` | 6 | campaigns and promotions |
+| `contact@` | 3 + fallback | staff notifications, and anything unmapped |
+
+Prefix matching rather than a list of thirty-four names, so a new template lands
+somewhere sensible without the mapping needing an edit. Each is blank by default
+and falls through to the default address, so one address or four both work.
+
+The trap, and it is in the Settings copy as well: **people reply to the From
+line**, so every address used here needs a forward at the registrar or those
+replies bounce.
+
+Seventeen checks — every topic to its address, blanks falling through to the
+default, nothing configured at all still sending as `EMAIL_FROM`, an off-domain
+address falling back rather than failing, and Reply-To appearing only where the
+sending address has no inbox behind it.
+
+## The Promotions tab
+
+The welcome email landed under Promotions, which turned out to be two separate
+things.
+
+**A real bug, which was not the cause.** `render.ts` withholds the unsubscribe
+link from transactional mail on purpose — "offering it there invites somebody to
+switch off their own invoices" — and the worker then handed the URL to
+`deliver()` regardless, setting `List-Unsubscribe` whenever the recipient could
+be identified. All five profiles carry a token, so **every real customer's
+invoice carried a bulk-mail header**. It is now computed from the category once
+and decides the body and the headers together, which also saves two queries per
+transactional email.
+
+**And the actual cause: I had been testing with the wrong template.** The
+welcome email is the most promotional thing in the set — *"brings things back
+from Egypt — veils, coffee, spices"* under a *Have a look* button. Gmail
+classified it correctly. An `order_received` carries an order number, line items
+and a payment block, and went straight to Primary.
+
+---
+
 ## 2026-08-24 — Two sending addresses, a reply that lands, and campaigns that spread
 
 The shop is on ramazah.com through Resend now, so the sending identity became

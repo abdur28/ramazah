@@ -173,7 +173,7 @@ export async function drainOutbox(
         unsubscribeUrl,
         // Marketing goes out under its own address so a newsletter's spam
         // complaints cannot follow the invoices.
-        sender: senderFor(category, settings),
+        sender: senderFor(row.template, settings),
       });
 
       await db.from('email_outbox')

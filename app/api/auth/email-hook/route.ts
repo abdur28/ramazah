@@ -193,8 +193,9 @@ export async function POST(request: NextRequest) {
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
-      // Always transactional. Nobody opts out of getting into their account.
-      sender: senderFor('transactional', await getSettings(admin)),
+      // Account mail, whatever the action was — these are the templates that
+      // get somebody into their own account.
+      sender: senderFor(template, await getSettings(admin)),
     });
   } catch (error: any) {
     // Never log `code` — this is the one payload in the shop that is a
