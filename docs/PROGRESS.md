@@ -5,6 +5,69 @@ next and [database-design.md](database-design.md) for schema decisions.
 
 ---
 
+## 2026-08-24 — A pre-delivery review, and two holes in SECURITY DEFINER
+
+Full review before handing over. The architecture held up: every table has RLS,
+no secret reaches the client bundle, every API route is guarded, `orders` has no
+INSERT policy, zero dependency vulnerabilities. Item prices were never
+tamperable.
+
+Two findings blocked delivery, and both were in `SECURITY DEFINER` — the one
+layer RLS does not cover. Neither was visible from reading the code. Both turned
+up by calling the database as an ordinary signed-in customer.
+
+**The mailing list was public.** `campaign_audience` is `security definer` and
+returns every opted-in customer's address and name; `authenticated` could
+execute it. Signed in as a demo customer:
+
+```
+select from profiles (RLS)        1 row     — its own, correct
+rpc('campaign_audience','all')    7 rows    — everybody's address and name
+```
+
+RLS was working perfectly on the table. The definer function walked past it,
+which is what `security definer` means and why each one needs its own guard. Now
+`is_admin()`, raising rather than silently returning nothing — a caller that
+gets an empty list learns nothing about why.
+
+**The total was the caller's to decide.** `create_order` read item prices from
+`product_prices`, so those could never be faked — and then took `p_tax_amount`
+and `p_shipping_cost` from the caller and added them to the total as given.
+Placed as a real customer with both zeroed:
+
+```
+RMZ-01024   subtotal ₦12,500   tax ₦0   shipping ₦0   TOTAL ₦12,500
+should have been                                           ₦15,937.50
+shortfall                                                   ₦3,437.50   (27.5%)
+```
+
+Accepted, written, invoiced. The protected part made the unprotected part easy
+to miss: prices being computed server-side reads like the money is handled.
+
+VAT and delivery are now worked out in `create_order` from the money settings,
+by the same rule the checkout shows the customer — VAT on the subtotal before
+discount, delivery waived above the free-shipping threshold or for collection.
+`money_setting()` mirrors the `email_setting()` that already existed.
+
+`create_manual_order` keeps its own figures and is untouched: it is already
+behind `is_admin()`, and waiving delivery for a regular on WhatsApp is a real
+thing to be able to do.
+
+A third thing fell out of it. `orders.tax_rate` exists so an order stays correct
+when the rate changes, and `lib/orders.ts` was sending `p_tax_rate: null` — 1 of
+13 orders had a rate recorded. It is now set from the same setting that computed
+the tax.
+
+Verified after: both attacks refused, the admin can still read the audience,
+free shipping above the threshold still applies, staff can still waive delivery
+on a manual order. 11 checks, and every row the testing created removed.
+
+Still open and reported rather than fixed: no test suite, blank bank details
+rendering as empty labels on the invoice, and the business address still reading
+Alexandria, Egypt.
+
+---
+
 ## 2026-08-24 — Four sending addresses, and a correction
 
 Asked why the shop could not have `orders@`, `account@`, `news@` and so on. It

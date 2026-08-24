@@ -128,9 +128,11 @@ export async function createOrder(orderData: CreateOrderData): Promise<{
           }
         : null,
       p_discount_code: orderData.discountCode ?? null,
-      p_shipping_cost: orderData.shippingCost,
-      p_tax_amount: orderData.tax,
-      p_tax_rate: null,
+      // VAT, delivery and the rate applied are worked out by `create_order`
+      // from the money settings — see migration 20260901000041. They used to be
+      // sent from here and trusted, which meant anyone calling the RPC directly
+      // could send zero for both. The parameters still exist so no caller
+      // breaks; nothing reads them.
       p_customer_notes: orderData.customerNotes?.trim() || null,
       p_idempotency_key:
         orderData.idempotencyKey ??

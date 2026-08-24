@@ -1,7 +1,7 @@
 # Structure
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind 4 · Supabase (Postgres 17) ·
-Cloudinary · nodemailer. 114 components, 41 migrations.
+Cloudinary · nodemailer. 114 components, 42 migrations.
 
 ## Architecture
 
@@ -92,7 +92,7 @@ emails/              34 templates + 5 partials (layout · button · order lines 
                      come from this database.
 
 supabase/
-├── migrations/      41 migrations (see below)
+├── migrations/      42 migrations (see below)
 └── seed.sql         Sample catalog
 scripts/             make-admin.js · seed.js · seed-demo-reviews.js
                      (demo customers, orders and reviews; --clean removes them)
@@ -141,6 +141,7 @@ vercel.json          Deliberately carries no cron block — pg_cron owns the
 | `...000038_review_distribution` | The star breakdown, over every approved review |
 | `...000039_campaign_paging` | `campaign_results()` takes a page |
 | `...000040_send_budget` | Queue priority, and a campaign spread across days |
+| `...000041_totals_and_audience` | The mailing list was public; the total was the caller's |
 
 ## Key conventions
 
@@ -149,7 +150,13 @@ vercel.json          Deliberately carries no cron block — pg_cron owns the
   (`product_listing`), never stored twice.
 - **Every product has at least one variant** — option-less products get a default one.
 - **Orders are created only through `create_order()`.** There is no INSERT policy on
-  `orders`, so a client cannot set its own prices.
+  `orders`, so a client cannot set its own prices — **or its own VAT and
+  delivery**, which it could until 20260901000041. Anything reaching the total
+  is computed in the function; the caller supplies variant ids and quantities.
+- **Every `SECURITY DEFINER` function needs its own guard.** RLS does not apply
+  inside one, so a function that reads other people's rows is public unless it
+  checks `is_admin()` itself. `campaign_audience` returned the whole mailing
+  list to any signed-in account for exactly this reason.
 - **Products are archived, never deleted**, so order history keeps its references.
 - **Category URLs use slugs**; `categories.path` is a display string and is
   trigger-maintained.
