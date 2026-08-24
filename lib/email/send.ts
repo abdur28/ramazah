@@ -146,13 +146,28 @@ export async function deliver(email: OutgoingEmail): Promise<void> {
     address: process.env.EMAIL_FROM || process.env.EMAIL_USER!,
   };
 
+  /**
+   * Drop the Reply-To when it is the recipient's own address.
+   *
+   * `REPLYTO_EQ_TO_ADDR` scores +5.00 in rspamd — it is a backscatter and
+   * spoofing signature — and it is what pushed a confirmation code to
+   * `X-Spam: Yes` on the way through a forwarder. Five of the 5.45 points came
+   * from that one rule. It happens whenever the shop writes to the address it
+   * asks people to reply to, which is not hypothetical: staff and support
+   * addresses receive mail here too.
+   */
+  const replyTo =
+    sender.replyTo && sender.replyTo.toLowerCase() !== email.to.toLowerCase()
+      ? sender.replyTo
+      : undefined;
+
   await getTransport().sendMail({
     // The shop's name, not the company's. This is the line an inbox shows in
     // the sender column, so it has to be the name people know the shop by.
     from: `${sender.name} <${sender.address}>`,
     // Without this a reply goes to whichever address sent the mail, and the
     // sending addresses deliberately have no inbox behind them.
-    replyTo: sender.replyTo,
+    replyTo,
     to: email.toName ? `${email.toName} <${email.to}>` : email.to,
     subject: email.subject,
     html: email.html,

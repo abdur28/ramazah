@@ -46,7 +46,7 @@ export default function VerifyEmailPage({
 
   const submit = async (event?: React.FormEvent) => {
     event?.preventDefault();
-    if (loading || code.length !== 6) return;
+    if (loading || code.length < 6) return;
 
     setError('');
     setNotice('');
@@ -128,7 +128,7 @@ export default function VerifyEmailPage({
 
         <Button
           type="submit"
-          disabled={loading || code.length !== 6}
+          disabled={loading || code.length < 6}
           className="h-12 w-full bg-sage-deep font-body font-semibold text-background transition-colors hover:bg-sage-deep/90 disabled:opacity-50"
         >
           {loading ? (
