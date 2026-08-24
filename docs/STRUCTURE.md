@@ -40,6 +40,11 @@ app/
 │                     reviews · addresses · preferences · settings
 ├── faq/, shipping/, returns/, privacy/, terms/, cookies/
 │                     Support and Legal, linked from the footer
+├── not-found.tsx     The 404. Reached often: seven routes call notFound(),
+│                     and archived products leave live URLs behind
+├── error.tsx         Page-level failures, with reset() and the digest
+├── global-error.tsx  When the root layout itself throws — brings its own
+│                     <html>, so every value in it is inline by necessity
 ├── checkout/ (+ success), product/, contact/, unsubscribe/
 
 components/          ui/ (shadcn + Pager), admin/, home/, layout/, navbar/,
@@ -164,6 +169,12 @@ vercel.json          Deliberately carries no cron block — pg_cron owns the
   replying to `contact@` — spam complaints attach to the sending identity, so the
   split that matters is marketing against everything else. Only `contact@` needs
   an inbox behind it.
+- **No root `app/loading.tsx`, deliberately.** `not-found.js` sits inside the
+  Suspense boundary a `loading.js` creates, and Next returns **200 for streamed
+  responses, 404 for non-streamed** — so a root loading file turns every
+  `notFound()` into a soft 404. Products are archived rather than deleted, so
+  their URLs stay live and need a real 404 for search engines to drop them.
+  `app/admin/loading.tsx` exists because the admin is not crawled.
 - **Settings and page copy fall back to code.** `lib/settings-defaults.ts` and
   `lib/content-defaults.ts` hold literals, so an empty database renders a complete
   shop and the admin editors can import the defaults from the browser.

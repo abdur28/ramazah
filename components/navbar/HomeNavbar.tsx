@@ -8,6 +8,7 @@ import SearchDialog from '@/components/navbar/SearchDialog';
 import DesktopNavigation from '@/components/navbar/DesktopNavigation';
 import CartSheet from '@/components/cart/CartSheet';
 import { useCartCount } from '@/hooks/useCart';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Home page navbar. Same contents as the site navbar — the difference is only
@@ -31,6 +32,11 @@ export default function HomeNavbar() {
 
   // Get cart count from the cart store
   const cartCount = useCartCount();
+  // An admin's own account page is the admin, not the customer dashboard. The
+  // menu sheet has offered both since it was built; on desktop there is no
+  // sheet, so this icon was the only way in and it went to the wrong one.
+  const { isAdmin } = useAuth();
+  const accountHref = isAdmin ? '/admin' : '/dashboard';
 
   // Watch the marker at the hero's end, not the hero.
   //
@@ -91,9 +97,9 @@ export default function HomeNavbar() {
                 <Search className="h-5 w-5" />
               </button>
               <Link
-                href="/dashboard"
+                href={accountHref}
                 className={`p-2 rounded-md transition-colors ${isScrolled ? 'hover:bg-foreground/5' : 'hover:bg-background/15'}`}
-                aria-label="dashboard"
+                aria-label={isAdmin ? 'Admin' : 'Your account'}
               >
                 <User className="h-5 w-5" />
               </Link>
